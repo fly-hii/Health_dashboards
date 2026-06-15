@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-slate-900 font-sans antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-300;
+}
+
+/* Status Badges - Preserving compatibility with other queue pages */
+.badge {
+  @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize;
+}
+
+.badge-blue      { @apply bg-cyan-50 text-cyan-700; }
+.badge-green     { @apply bg-emerald-50 text-emerald-700; }
+.badge-yellow    { @apply bg-orange-50 text-orange-700; }
+.badge-red       { @apply bg-rose-50 text-rose-700; }
+.badge-orange    { @apply bg-orange-50 text-orange-700; }
+.badge-gray      { @apply bg-slate-100 text-slate-600; }
+.badge-purple    { @apply bg-purple-50 text-purple-700; }
+
+.status-checked_in         { @apply bg-teal-50 text-teal-700; }
+.status-waiting_for_vitals { @apply bg-orange-50 text-orange-700; }
+.status-vitals_done        { @apply bg-emerald-50 text-emerald-700; }
+.status-with_doctor        { @apply bg-purple-50 text-purple-700; }
+.status-consultation_done  { @apply bg-slate-100 text-slate-600; }
+.status-cancelled          { @apply bg-rose-50 text-rose-700; }
+
+.priority-critical { @apply bg-rose-50 text-rose-700; }
+.priority-high     { @apply bg-orange-50 text-orange-700; }
+.priority-medium   { @apply bg-amber-50 text-amber-700; }
+.priority-low      { @apply bg-emerald-50 text-emerald-700; }
+
+/* Skeleton Pulse Animation */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.skeleton {
+  @apply bg-slate-100 rounded;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* React Toastify Overrides */
+.Toastify__toast {
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.875rem !important;
+  border-radius: 10px !important;
+}

@@ -1,0 +1,37 @@
+.patient-directory-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.directory-card {
+  padding: 24px !important;
+}
+
+.directory-toolbar {
+  margin-bottom: 20px;
+}
+
+.blood-group-badge {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.directory-header-actions {
+  margin-bottom: 16px;
+}
+
+.directory-history-container {
+  padding: 32px !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.empty-directory {
+  padding: 64px 32px !important;
+}

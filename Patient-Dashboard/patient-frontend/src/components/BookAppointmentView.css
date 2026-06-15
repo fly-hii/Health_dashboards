@@ -1,0 +1,459 @@
+.book-appointment-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.view-header {
+  margin-bottom: 8px;
+}
+
+.stepper-bar {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  padding: 16px 24px;
+  display: flex;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  position: relative;
+  color: var(--text-light);
+  flex-grow: 1;
+}
+
+.step-item.active {
+  color: var(--primary);
+}
+
+.step-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.step-item.active .step-number {
+  background-color: var(--primary);
+  color: var(--text-white);
+  border-color: var(--primary);
+}
+
+.step-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.step-connector {
+  height: 2px;
+  background-color: var(--border-color);
+  flex-grow: 1;
+  margin-left: 12px;
+}
+
+.step-item.active .step-connector {
+  background-color: var(--primary-border);
+}
+
+.step-container {
+  margin-top: 12px;
+}
+
+.step-title {
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.departments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.dept-card {
+  padding: 24px;
+  text-align: left;
+  height: 170px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s;
+}
+
+.dept-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary-border);
+  box-shadow: var(--shadow-md);
+}
+
+.dept-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg-teal { background-color: var(--primary-light); }
+.bg-red { background-color: var(--danger-light); }
+.bg-orange { background-color: var(--warning-light); }
+.bg-blue { background-color: var(--info-light); }
+.bg-green { background-color: var(--success-light); }
+.bg-indigo { background-color: #e0e7ff; }
+.bg-pink { background-color: #fce7f3; }
+.bg-sky { background-color: #e0f2fe; }
+
+.dept-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-top: 12px;
+}
+
+.dept-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.doctors-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.doctor-card {
+  padding: 20px;
+  transition: all 0.2s ease-in-out;
+}
+
+.doctor-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-border);
+}
+
+.doctor-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border-color);
+}
+
+.doctor-name-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.doctor-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.doctor-avail {
+  font-size: 12px;
+  color: var(--primary);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.appointment-scheduler-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .appointment-scheduler-grid {
+    grid-template-columns: 1.2fr 1fr;
+  }
+}
+
+.scheduler-section {
+  padding: 20px;
+  text-align: left;
+}
+
+.scheduler-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.scheduler-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 0;
+}
+
+.dates-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.date-btn-select {
+  padding: 12px 6px;
+  border: 1px solid var(--border-darker);
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+}
+
+.date-btn-select:hover {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+}
+
+.date-btn-select.active {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.date-weekday {
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.date-btn-select.active .date-weekday {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.date-day {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.time-group {
+  margin-bottom: 16px;
+}
+
+.time-group-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+}
+
+.time-slot-btn {
+  padding: 8px 4px;
+  border: 1px solid var(--border-darker);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  background-color: transparent;
+  transition: all 0.2s;
+}
+
+.time-slot-btn:hover {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+}
+
+.time-slot-btn.active {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.no-selection-prompt {
+  color: var(--text-light);
+  text-align: center;
+  padding: 24px;
+  font-size: 14px;
+}
+
+.confirm-card {
+  padding: 24px;
+  text-align: left;
+}
+
+.confirm-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.confirm-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 16px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.summary-lbl {
+  color: var(--text-muted);
+}
+
+.summary-val {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.success-banner {
+  padding: 32px 24px;
+  box-shadow: var(--shadow-premium);
+}
+
+.success-check-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.2);
+}
+
+.success-header {
+  font-size: 22px;
+}
+
+.success-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.success-receipt-card {
+  background-color: var(--bg-app);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px dashed var(--border-darker);
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.receipt-val {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.max-w-md {
+  max-width: 440px;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+/* ── Today Quick-Select Button ─────────────────────────────── */
+.today-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--primary);
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.today-quick-btn:hover {
+  background-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(14, 165, 164, 0.25);
+}
+
+.today-quick-btn.today-active {
+  background-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(14, 165, 164, 0.25);
+}
+
+/* ── Today Date Card in the grid ───────────────────────────── */
+.today-date-btn {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+  position: relative;
+  overflow: hidden;
+}
+
+.today-date-btn:not(.active) .date-today-badge {
+  color: var(--primary);
+}
+
+.today-date-btn.active .date-today-badge {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.date-today-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.today-date-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: var(--primary);
+  border-radius: 2px 2px 0 0;
+}

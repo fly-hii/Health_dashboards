@@ -1,0 +1,298 @@
+.consultation-outer-container {
+  display: flex;
+  width: 100%;
+  gap: 24px;
+  transition: all 0.3s ease;
+}
+
+.consultation-workstation {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.split-layout .medical-history-sidebar {
+  width: 440px;
+  background-color: var(--bg-card);
+  border-left: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+  height: calc(100vh - 110px);
+  position: sticky;
+  top: 90px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.3s ease forwards;
+}
+
+.sidebar-history-header {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.sidebar-history-header h3 {
+  font-size: 16px;
+}
+
+.close-sidebar-btn {
+  font-size: 24px;
+  color: var(--text-light);
+  line-height: 1;
+}
+
+.close-sidebar-btn:hover {
+  color: var(--danger);
+}
+
+.sidebar-history-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.workstation-header {
+  margin-bottom: 8px;
+}
+
+.token-pill {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-block;
+  border: 1px solid var(--primary-border);
+  margin-top: 2px;
+}
+
+.patient-demographic-card {
+  display: flex;
+  gap: 20px;
+  padding: 20px !important;
+}
+
+.demo-avatar-wrapper {
+  flex-shrink: 0;
+}
+
+.demo-avatar-placeholder {
+  width: 60px;
+  height: 60px;
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-family: var(--font-primary);
+  font-weight: 700;
+  font-size: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--primary-border);
+}
+
+.demo-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+
+.demo-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.demo-item.span-two {
+  grid-column: span 2;
+}
+
+.demo-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.demo-val {
+  font-size: 14px;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+
+.font-mono {
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.allergy-pill {
+  background-color: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.chronic-pill {
+  background-color: var(--warning-light);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.patient-vitals-card {
+  padding: 24px !important;
+}
+
+.vitals-header {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+
+.vitals-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 16px;
+}
+
+.vital-metric-card {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.vital-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.vital-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.vital-unit {
+  font-size: 11px;
+  color: var(--text-light);
+  margin-left: 2px;
+  font-weight: 500;
+}
+
+.vital-label {
+  font-size: 11px;
+  display: block;
+  margin-top: 4px;
+}
+
+.empty-vitals-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--warning-light);
+  border: 1px solid var(--warning-border);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-size: 13px;
+}
+
+.grid-two-cols {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 768px) {
+  .grid-two-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.prescription-section {
+  margin: 16px 0;
+  border-top: 1px solid var(--border-color);
+  padding-top: 20px;
+}
+
+.presc-header {
+  margin-bottom: 12px;
+}
+
+.add-med-btn {
+  gap: 4px;
+  padding: 6px 12px;
+}
+
+.prescription-grid {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.prescription-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.prescription-table th {
+  background-color: var(--bg-app);
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.prescription-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.prescription-table tr:last-child td {
+  border-bottom: none;
+}
+
+.btn-delete-med {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--danger-light);
+  color: var(--danger);
+  font-size: 20px;
+  transition: all 0.2s;
+}
+
+.btn-delete-med:hover {
+  background-color: var(--danger);
+  color: white;
+}
+
+.form-submit-actions {
+  border-top: 1px solid var(--border-color);
+  padding-top: 20px;
+  margin-top: 20px;
+}

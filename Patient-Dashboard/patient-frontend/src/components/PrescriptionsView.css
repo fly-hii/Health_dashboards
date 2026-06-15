@@ -1,0 +1,172 @@
+.prescriptions-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.view-header {
+  margin-bottom: 8px;
+}
+
+.table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.interactive-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.action-btn-link {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.action-btn-link:hover {
+  text-decoration: underline;
+}
+
+.text-success {
+  color: var(--success) !important;
+}
+
+.no-presc-text {
+  padding: 32px;
+  color: var(--text-light);
+}
+
+.pharmacy-warning-banner {
+  background-color: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  padding: 20px 24px;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.pharmacy-icon-wrapper {
+  background-color: #ffffff;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--primary-border);
+  flex-shrink: 0;
+}
+
+.banner-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary-hover);
+}
+
+.banner-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.pharmacy-bottles-art {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.pill-bottle {
+  width: 24px;
+  height: 38px;
+  background-color: var(--primary);
+  border-radius: 4px 4px 2px 2px;
+  position: relative;
+}
+
+.pill-capsule {
+  width: 14px;
+  height: 28px;
+  background-color: var(--success);
+  border-radius: 10px;
+  transform: rotate(45deg);
+}
+
+/* Modal classes */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 440px;
+  padding: 24px;
+}
+
+.close-modal-btn {
+  font-size: 24px;
+  color: var(--text-light);
+  line-height: 1;
+}
+
+.close-modal-btn:hover {
+  color: var(--text-main);
+}
+
+.medicine-prescribed-list-box {
+  background-color: var(--bg-app);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.medicine-prescribed-list-box h5 {
+  font-size: 13px;
+}
+
+.med-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.med-item {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.bullet-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  flex-shrink: 0;
+}
+
+.notes-box-details {
+  background-color: var(--warning-light);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  border-left: 3px solid var(--warning);
+}
+
+.notes-box-details h5 {
+  font-size: 13px;
+  color: var(--warning);
+  margin-bottom: 4px;
+}
+
+.clinical-notes-txt {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}

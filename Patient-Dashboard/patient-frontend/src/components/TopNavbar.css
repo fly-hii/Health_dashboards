@@ -1,0 +1,242 @@
+.top-navbar {
+  height: 70px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-header);
+  padding: 0 32px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  width: 100%;
+}
+
+.search-bar {
+  position: relative;
+  width: 360px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-light);
+  pointer-events: none;
+  width: 18px;
+  height: 18px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 16px 8px 40px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background-color: var(--bg-app);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  border-color: var(--primary);
+}
+
+.text-muted-icon {
+  color: var(--text-muted);
+}
+
+.bell-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.bell-button:hover {
+  background-color: var(--bg-app);
+}
+
+.bell-badge {
+  background-color: var(--danger);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-header);
+}
+
+.notifications-dropdown {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  width: 320px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  padding: 16px !important;
+  z-index: 50;
+}
+
+.profile-dropdown {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  width: 220px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  padding: 12px !important;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dropdown-profile-info {
+  padding: 8px 12px;
+  background-color: var(--primary-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.dropdown-profile-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.dropdown-profile-email {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.dropdown-link-btn {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+}
+
+.dropdown-link-btn:hover {
+  background-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.text-danger-btn {
+  color: var(--danger) !important;
+}
+
+.text-danger-btn:hover {
+  background-color: var(--danger-light) !important;
+}
+
+.dropdown-header {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.dropdown-header h3 {
+  font-size: 16px;
+}
+
+.mark-all-btn {
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.mark-all-btn:hover {
+  text-decoration: underline;
+}
+
+.dropdown-list {
+  max-height: 250px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.no-notifs {
+  text-align: center;
+  color: var(--text-light);
+  font-size: 13px;
+  padding: 16px;
+}
+
+.dropdown-item {
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.dropdown-item.unread {
+  background-color: var(--primary-light);
+}
+
+.notif-msg {
+  color: var(--text-main);
+  font-weight: 400;
+}
+
+.dropdown-item.unread .notif-msg {
+  font-weight: 500;
+}
+
+.delete-notif-btn {
+  color: var(--text-light);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.delete-notif-btn:hover {
+  color: var(--danger);
+}
+
+.notif-time {
+  font-size: 11px;
+  color: var(--text-light);
+  display: block;
+  margin-top: 4px;
+}
+
+.welcome-tag {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.profile-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--primary-border);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

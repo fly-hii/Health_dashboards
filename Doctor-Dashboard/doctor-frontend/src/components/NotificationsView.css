@@ -1,0 +1,107 @@
+.notifications-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.notifications-card {
+  padding: 24px !important;
+}
+
+.notifications-tabs-bar {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+.tab-filter-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-filter-btn:hover {
+  background-color: var(--bg-app);
+  color: var(--primary);
+}
+
+.tab-filter-btn.active {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+}
+
+.notifications-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notif-feed-item {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  transition: all 0.2s ease;
+}
+
+.notif-feed-item.unread {
+  background-color: var(--primary-light);
+  border-color: var(--primary-border);
+}
+
+.notif-feed-item.read {
+  opacity: 0.8;
+}
+
+.notif-feed-item:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.notif-badge-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.notif-badge-icon.read { background-color: var(--border-divider); color: var(--text-light); }
+.notif-badge-icon.info { background-color: var(--info-light); color: var(--info); }
+.notif-badge-icon.vitals { background-color: var(--success-light); color: var(--success); }
+.notif-badge-icon.critical { background-color: var(--danger-light); color: var(--danger); }
+
+.notif-feed-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-feed-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.notif-feed-message {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.notif-feed-time {
+  font-size: 11px;
+  color: var(--text-light);
+  margin-top: 4px;
+}
+
+.empty-notifications {
+  padding: 64px 32px;
+  text-align: center;
+}

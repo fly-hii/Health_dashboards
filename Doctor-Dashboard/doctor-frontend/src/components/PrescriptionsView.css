@@ -1,0 +1,68 @@
+.prescriptions-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.prescriptions-card {
+  padding: 24px !important;
+  border-radius: var(--radius-md) !important;
+}
+
+/* Pharmacy banner notice matching Patient Dashboard style exactly */
+.prescription-banner-notice {
+  margin-top: 32px;
+  background-color: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+}
+
+.pharmacy-icon-box {
+  width: 48px;
+  height: 48px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--primary-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.banner-notice-text {
+  font-size: 13px;
+  color: var(--primary-hover);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Modal Styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.4);
+  z-index: 999;
+}
+
+/* Premium EMR Modal Animations */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

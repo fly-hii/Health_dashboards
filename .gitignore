@@ -1,0 +1,77 @@
+# ===========================
+# Dependencies
+# ===========================
+node_modules/
+.pnp
+.pnp.js
+
+# ===========================
+# Build outputs
+# ===========================
+dist/
+build/
+out/
+.next/
+.nuxt/
+
+# ===========================
+# Environment variables
+# ===========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# ===========================
+# Logs
+# ===========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ===========================
+# Runtime / OS
+# ===========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===========================
+# Editor / IDE
+# ===========================
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# Keep .vscode/settings that are shared; ignore user-specific ones
+.vscode/*.code-snippets
+.vscode/launch.json
+
+# ===========================
+# Testing
+# ===========================
+coverage/
+.nyc_output/
+
+# ===========================
+# Vite / React
+# ===========================
+*.local
+
+# ===========================
+# Misc
+# ===========================
+*.tgz
+*.tar.gz
+.cache/
+.parcel-cache/
+tmp/
+temp/

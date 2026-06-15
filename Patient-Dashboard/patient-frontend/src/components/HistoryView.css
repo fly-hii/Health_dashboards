@@ -1,0 +1,183 @@
+.history-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.view-header {
+  margin-bottom: 8px;
+}
+
+.timeline-container {
+  position: relative;
+  padding-left: 20px;
+}
+
+.timeline-node {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.timeline-date-side {
+  width: 120px;
+  padding-right: 24px;
+  flex-shrink: 0;
+  padding-top: 16px;
+}
+
+.timeline-date-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+  background-color: var(--border-color);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.timeline-line-separator {
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.timeline-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  border: 3px solid var(--primary-border);
+  position: absolute;
+  top: 20px;
+  z-index: 5;
+}
+
+.timeline-vertical-line {
+  width: 2px;
+  background-color: var(--border-darker);
+  position: absolute;
+  top: 26px;
+  bottom: -32px;
+}
+
+.timeline-card-side {
+  flex-grow: 1;
+}
+
+.timeline-entry-card {
+  padding: 20px;
+}
+
+.entry-doctor {
+  font-size: 16px;
+  color: var(--text-main);
+}
+
+.entry-dept-badge {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.label-bold {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.val-text {
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.entry-notes {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.no-history-text {
+  color: var(--text-light);
+}
+
+/* Modal classes */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+}
+
+.modal-content {
+  width: 90%;
+  max-width: 440px;
+  padding: 24px;
+}
+
+.close-modal-btn {
+  font-size: 24px;
+  color: var(--text-light);
+  line-height: 1;
+}
+
+.close-modal-btn:hover {
+  color: var(--text-main);
+}
+
+.receipt-row-history {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.notes-box-details {
+  background-color: var(--bg-app);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.notes-box-details h5 {
+  font-size: 13px;
+}
+
+.clinical-notes-txt {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.recommendations-box {
+  border: 1px solid var(--success-border);
+  background-color: var(--success-light);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.recommendations-box h5 {
+  font-size: 13px;
+}
+
+.care-plan-list {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
