@@ -91,7 +91,9 @@ export default function TokensView({ token: initialToken, pastTokens: initialPas
   // Socket.IO real-time events
   useEffect(() => {
     if (!user?._id) return;
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5050';
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+    const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : 'http://localhost:5050';
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
     const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],

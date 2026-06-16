@@ -67,7 +67,9 @@ export default function App() {
   // Socket.IO Real-time Connection & Listener
   useEffect(() => {
     if (isAuthenticated && profile?._id) {
-      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5050';
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+      const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : 'http://localhost:5050';
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
       const socket = io(socketUrl, {
         withCredentials: true,
         transports: ['websocket', 'polling']
