@@ -1,12 +1,26 @@
-/**
- * Centralized application configuration.
- * All values are read from Vite environment variables (VITE_ prefix).
- * Fallbacks are provided for development convenience.
- */
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.startsWith('http')) {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined' && window.location.origin.includes('vercel.app')) {
+    return window.location.origin.replace('-frontend', '-backend').replace(/\/$/, '') + '/api';
+  }
+  return 'http://localhost:5002/api';
+};
+
+const getSocketUrl = () => {
+  const envSocket = import.meta.env.VITE_SOCKET_URL;
+  if (envSocket && envSocket.startsWith('http')) {
+    return envSocket;
+  }
+  return getApiBaseUrl().replace(/\/api$/, '');
+};
+
 const config = {
   // API & Socket
-  apiBaseUrl:       import.meta.env.VITE_API_BASE_URL       || '/api',
-  socketUrl:        import.meta.env.VITE_SOCKET_URL         || window.location.origin,
+  apiBaseUrl:       getApiBaseUrl(),
+  socketUrl:        getSocketUrl(),
 
   // Hospital branding
   hospitalName:     import.meta.env.VITE_HOSPITAL_NAME      || 'CarePlus',

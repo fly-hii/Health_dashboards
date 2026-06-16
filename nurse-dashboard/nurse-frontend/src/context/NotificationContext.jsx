@@ -30,8 +30,10 @@ export const NotificationProvider = ({ children }) => {
     fetchInitialNotifications();
 
     const socket = io(config.socketUrl, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
+      reconnectionAttempts: 3,
+      timeout: 5000,
     });
 
     socketRef.current = socket;

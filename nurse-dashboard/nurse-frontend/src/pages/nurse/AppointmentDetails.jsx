@@ -168,6 +168,8 @@ const AppointmentDetails = () => {
     const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
+      reconnectionAttempts: 3,
+      timeout: 5000,
     });
     socketRef.current = socket;
     socket.emit('join', user._id);
