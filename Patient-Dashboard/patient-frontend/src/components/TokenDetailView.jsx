@@ -38,7 +38,8 @@ export default function TokenDetailView({ tokenId, onBack }) {
   // Real-time updates
   useEffect(() => {
     if (!user?._id) return;
-    const socket = io('http://localhost:5050', {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5050';
+    const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
     });

@@ -6,7 +6,7 @@
 const config = {
   // API & Socket
   apiBaseUrl:       import.meta.env.VITE_API_BASE_URL       || '/api',
-  socketUrl:        import.meta.env.VITE_SOCKET_URL         || 'http://localhost:5000',
+  socketUrl:        import.meta.env.VITE_SOCKET_URL         || window.location.origin,
 
   // Hospital branding
   hospitalName:     import.meta.env.VITE_HOSPITAL_NAME      || 'CarePlus',

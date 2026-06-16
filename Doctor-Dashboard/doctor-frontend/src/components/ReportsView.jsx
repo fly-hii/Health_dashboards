@@ -221,8 +221,8 @@ export default function ReportsView() {
   useEffect(() => {
     fetchReportsData();
 
-    // Connect to Socket.io server
-    const socket = io('http://localhost:5051', {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5051';
+    const socket = io(socketUrl, {
       transports: ['websocket'],
       auth: {
         token: localStorage.getItem('doctor_token')

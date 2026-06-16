@@ -164,7 +164,8 @@ const AppointmentDetails = () => {
   /* socket */
   useEffect(() => {
     if (!user?._id) return;
-    const socket = io(config.socketUrl || 'http://localhost:5002', {
+    const socketUrl = config.socketUrl || window.location.origin;
+    const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
     });
