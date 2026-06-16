@@ -41,6 +41,7 @@ const masterDb = new Sequelize(
     host:    masterDbHost,
     port:    parseInt(masterDbPort),
     dialect: 'mysql',
+    dialectModule: require('mysql2'),
     logging: false,
     pool: { max: 5, min: 0, acquire: 30000, idle: 10000 },
     dialectOptions:
@@ -70,6 +71,7 @@ const sharedSaasDb = new Sequelize(
     host:    dbHost,
     port:    parseInt(dbPort),
     dialect: 'mysql',
+    dialectModule: require('mysql2'),
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: { max: 15, min: 2, acquire: 30000, idle: 10000 },
     dialectOptions:
@@ -166,6 +168,7 @@ async function getHospitalConnection(hospitalId) {
       host:    conn.host,
       port:    conn.port || 3306,
       dialect: 'mysql',
+      dialectModule: require('mysql2'),
       logging: false,
       pool: { max: 5, min: 0, acquire: 30000, idle: 10000 },
       dialectOptions: conn.ssl_enabled
@@ -206,7 +209,7 @@ async function getHospitalConnection(hospitalId) {
 async function testExternalConnection(connConfig) {
   const { host, port, database_name, username, password, ssl_enabled } = connConfig;
   const testDb = new Sequelize(database_name, username, password, {
-    host, port: port || 3306, dialect: 'mysql', logging: false,
+    host, port: port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
     dialectOptions: ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
   });
   await testDb.authenticate();

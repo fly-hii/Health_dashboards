@@ -3,6 +3,8 @@ import { api } from '../utils/api';
 import { ChevronRight, FileText, User } from 'lucide-react';
 import { format } from 'date-fns';
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
+
 export default function PatientMedicalHistory({ patientId, onBack, onViewRecord }) {
   const [patient, setPatient] = useState(null);
   const [records, setRecords] = useState([]);
@@ -14,7 +16,7 @@ export default function PatientMedicalHistory({ patientId, onBack, onViewRecord 
       setLoading(true);
       try {
         const [patientRes, recordsRes] = await Promise.all([
-          fetch(`/api/patients/${patientId}`, {
+          fetch(`${BASE_URL}/patients/${patientId}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('doctor_token')}` }
           }).then(r => r.json()),
           api.getPatientMedicalRecords(patientId)

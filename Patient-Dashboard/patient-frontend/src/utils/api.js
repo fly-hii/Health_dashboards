@@ -1,5 +1,7 @@
 // API fetch requests for CarePlus Hospital Patient Portal
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
+
 const handleResponse = async (response) => {
   if (!response.ok) {
     const errorText = await response.text();
@@ -29,40 +31,40 @@ const getHeaders = () => {
 export const api = {
   // Auth
   login: (data) =>
-    fetch('/api/auth/login', {
+    fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(handleResponse),
 
   register: (data) =>
-    fetch('/api/auth/register', {
+    fetch(`${BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(handleResponse),
 
   changePassword: (data) =>
-    fetch('/api/auth/change-password', {
+    fetch(`${BASE_URL}/auth/change-password`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then(handleResponse),
 
   // Profile
-  getProfile: () => fetch('/api/profile', { headers: getHeaders() }).then(handleResponse),
+  getProfile: () => fetch(`${BASE_URL}/profile`, { headers: getHeaders() }).then(handleResponse),
   updateProfile: (data) =>
-    fetch('/api/profile', {
+    fetch(`${BASE_URL}/profile`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then(handleResponse),
 
   // Doctors
-  getDoctors: () => fetch('/api/doctors', { headers: getHeaders() }).then(handleResponse),
+  getDoctors: () => fetch(`${BASE_URL}/doctors`, { headers: getHeaders() }).then(handleResponse),
 
   // Appointments
-  getAppointments: () => fetch('/api/appointments', { headers: getHeaders() }).then(handleResponse),
+  getAppointments: () => fetch(`${BASE_URL}/appointments`, { headers: getHeaders() }).then(handleResponse),
   getPatientAppointments: (filters = {}) => {
     const params = new URLSearchParams();
     Object.keys(filters).forEach(key => {
@@ -71,43 +73,43 @@ export const api = {
       }
     });
     const queryString = params.toString();
-    return fetch(`/api/patient/appointments${queryString ? `?${queryString}` : ''}`, {
+    return fetch(`${BASE_URL}/patient/appointments${queryString ? `?${queryString}` : ''}`, {
       headers: getHeaders(),
     }).then(handleResponse);
   },
   getAppointmentById: (id) =>
-    fetch(`/api/patient/appointments/${id}`, { headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/patient/appointments/${id}`, { headers: getHeaders() }).then(handleResponse),
   bookAppointment: (data) =>
-    fetch('/api/appointments', {
+    fetch(`${BASE_URL}/appointments`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then(handleResponse),
   rescheduleAppointment: (id, data) =>
-    fetch(`/api/appointments/${id}/reschedule`, {
+    fetch(`${BASE_URL}/appointments/${id}/reschedule`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then(handleResponse),
   cancelAppointment: (id, data) =>
-    fetch(`/api/appointments/${id}/cancel`, {
+    fetch(`${BASE_URL}/appointments/${id}/cancel`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
     }).then(handleResponse),
   deleteAppointment: (id) =>
-    fetch(`/api/appointments/${id}`, {
+    fetch(`${BASE_URL}/appointments/${id}`, {
       method: 'DELETE',
       headers: getHeaders(),
     }).then(handleResponse),
 
   // Tokens
-  getCurrentToken: () => fetch('/api/token/current', { headers: getHeaders() }).then(handleResponse),
-  getPastTokens: () => fetch('/api/token/past', { headers: getHeaders() }).then(handleResponse),
+  getCurrentToken: () => fetch(`${BASE_URL}/token/current`, { headers: getHeaders() }).then(handleResponse),
+  getPastTokens: () => fetch(`${BASE_URL}/token/past`, { headers: getHeaders() }).then(handleResponse),
   refreshCurrentToken: () =>
-    fetch('/api/token/refresh', { method: 'POST', headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/token/refresh`, { method: 'POST', headers: getHeaders() }).then(handleResponse),
   getTokenById: (id) =>
-    fetch(`/api/patient/tokens/${id}`, { headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/patient/tokens/${id}`, { headers: getHeaders() }).then(handleResponse),
   getTokenHistory: (filters = {}) => {
     const params = new URLSearchParams();
     Object.keys(filters).forEach(key => {
@@ -116,22 +118,22 @@ export const api = {
       }
     });
     const qs = params.toString();
-    return fetch(`/api/patient/tokens/history${qs ? `?${qs}` : ''}`, { headers: getHeaders() }).then(handleResponse);
+    return fetch(`${BASE_URL}/patient/tokens/history${qs ? `?${qs}` : ''}`, { headers: getHeaders() }).then(handleResponse);
   },
 
   // Vitals
-  getLatestVitals: () => fetch('/api/vitals/latest', { headers: getHeaders() }).then(handleResponse),
+  getLatestVitals: () => fetch(`${BASE_URL}/vitals/latest`, { headers: getHeaders() }).then(handleResponse),
 
   // Medical History
-  getHistory: () => fetch('/api/history', { headers: getHeaders() }).then(handleResponse),
+  getHistory: () => fetch(`${BASE_URL}/history`, { headers: getHeaders() }).then(handleResponse),
 
   // Prescriptions
-  getPrescriptions: () => fetch('/api/prescriptions', { headers: getHeaders() }).then(handleResponse),
+  getPrescriptions: () => fetch(`${BASE_URL}/prescriptions`, { headers: getHeaders() }).then(handleResponse),
 
   // Reports
-  getReports: () => fetch('/api/reports', { headers: getHeaders() }).then(handleResponse),
+  getReports: () => fetch(`${BASE_URL}/reports`, { headers: getHeaders() }).then(handleResponse),
   uploadReport: (data) =>
-    fetch('/api/reports', {
+    fetch(`${BASE_URL}/reports`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),
@@ -146,29 +148,29 @@ export const api = {
       }
     });
     const query = params.toString();
-    return fetch(`/api/patient/reports${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse);
+    return fetch(`${BASE_URL}/patient/reports${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse);
   },
   getReportById: (id) =>
-    fetch(`/api/patient/reports/${id}`, { headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/patient/reports/${id}`, { headers: getHeaders() }).then(handleResponse),
   uploadPatientReport: (formData) => {
     const token = localStorage.getItem('patient_token');
-    return fetch('/api/patient/reports/upload', {
+    return fetch(`${BASE_URL}/patient/reports/upload`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     }).then(handleResponse);
   },
   deletePatientReport: (id) =>
-    fetch(`/api/patient/reports/${id}`, { method: 'DELETE', headers: getHeaders() }).then(handleResponse),
-  getReportDownloadUrl: (id) => `/api/patient/reports/download/${id}`,
+    fetch(`${BASE_URL}/patient/reports/${id}`, { method: 'DELETE', headers: getHeaders() }).then(handleResponse),
+  getReportDownloadUrl: (id) => `${BASE_URL}/patient/reports/download/${id}`,
 
 
   // Notifications
-  getNotifications: () => fetch('/api/notifications', { headers: getHeaders() }).then(handleResponse),
+  getNotifications: () => fetch(`${BASE_URL}/notifications`, { headers: getHeaders() }).then(handleResponse),
   readAllNotifications: () =>
-    fetch('/api/notifications/read-all', { method: 'POST', headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/notifications/read-all`, { method: 'POST', headers: getHeaders() }).then(handleResponse),
   deleteNotification: (id) =>
-    fetch(`/api/notifications/${id}`, { method: 'DELETE', headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/notifications/${id}`, { method: 'DELETE', headers: getHeaders() }).then(handleResponse),
 
   // New patient specific notification APIs
   getPatientNotifications: (filters = {}) => {
@@ -179,14 +181,14 @@ export const api = {
       }
     });
     const query = params.toString();
-    return fetch(`/api/patient/notifications${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse);
+    return fetch(`${BASE_URL}/patient/notifications${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse);
   },
   getNotificationById: (id) =>
-    fetch(`/api/patient/notifications/${id}`, { headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/patient/notifications/${id}`, { headers: getHeaders() }).then(handleResponse),
   markNotificationAsRead: (id) =>
-    fetch(`/api/patient/notifications/${id}/read`, { method: 'PATCH', headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/patient/notifications/${id}/read`, { method: 'PATCH', headers: getHeaders() }).then(handleResponse),
   deletePatientNotification: (id) =>
-    fetch(`/api/patient/notifications/${id}`, { method: 'DELETE', headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/patient/notifications/${id}`, { method: 'DELETE', headers: getHeaders() }).then(handleResponse),
   getUnreadNotificationsCount: () =>
-    fetch('/api/patient/notifications/unread-count', { headers: getHeaders() }).then(handleResponse),
+    fetch(`${BASE_URL}/patient/notifications/unread-count`, { headers: getHeaders() }).then(handleResponse),
 };

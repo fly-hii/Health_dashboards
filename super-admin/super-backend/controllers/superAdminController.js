@@ -121,6 +121,7 @@ const createHospital = async (req, res) => {
         host: dbHost,
         port: parseInt(dbPort) || 3306,
         dialect: 'mysql',
+        dialectModule: require('mysql2'),
         logging: false,
         dialectOptions: (dbSsl === 'true' || dbSsl === true) ? { ssl: { require: true, rejectUnauthorized: false } } : {},
       });

@@ -1,0 +1,8 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://health-dashboards-admin-backend.vercel.app/api/:path*" },
+    { "source": "/socket.io/:path*", "destination": "https://health-dashboards-admin-backend.vercel.app/socket.io/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -26,6 +26,7 @@ const masterDb = new Sequelize(
     host:    masterDbHost,
     port:    parseInt(masterDbPort),
     dialect: 'mysql',
+    dialectModule: require('mysql2'),
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
     pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
     dialectOptions:

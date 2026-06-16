@@ -19,6 +19,7 @@ const sequelize = new Sequelize(
     host: dbHost,
     port: parseInt(dbPort),
     dialect: 'mysql',
+    dialectModule: require('mysql2'),
     logging: process.env.NODE_ENV === 'development' ? (sql) => console.log(`[SQL] ${sql}`) : false,
     pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
     dialectOptions: process.env.DB_SSL === 'true'

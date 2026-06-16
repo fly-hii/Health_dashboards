@@ -28,6 +28,7 @@ const sharedSaasDb = new Sequelize(
     host:    saasDbHost,
     port:    parseInt(saasDbPort),
     dialect: 'mysql',
+    dialectModule: require('mysql2'),
     logging: false,
     pool:    { max: 5, min: 0, acquire: 30000, idle: 10000 },
     dialectOptions:
@@ -43,7 +44,7 @@ const sharedSaasDb = new Sequelize(
  */
 async function testExternalConnection({ host, port = 3306, database_name, username, password, ssl_enabled = false }) {
   const db = new Sequelize(database_name, username, password, {
-    host, port: parseInt(port), dialect: 'mysql', logging: false,
+    host, port: parseInt(port), dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
     pool: { max: 1, min: 0, acquire: 15000, idle: 5000 },
     dialectOptions: ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
   });
