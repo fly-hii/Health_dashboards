@@ -10,7 +10,7 @@ export default function LoginPage({ defaultSignUp = false }) {
   const [success, setSuccess] = useState('');
 
   // Form states
-  const [loginForm, setLoginForm] = useState({ email: 'rohit@hospital.com', password: 'doctor123' });
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [signUpForm, setSignUpForm] = useState({
     name: '',
     email: '',

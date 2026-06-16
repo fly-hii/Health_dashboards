@@ -7,7 +7,7 @@ import { Mail, Lock, Eye, EyeOff, ShieldAlert, ArrowRight } from 'lucide-react';
 const LoginPage = () => {
   const { login }             = useAuth();
   const navigate              = useNavigate();
-  const [form, setForm]       = useState({ email: 'nurse@hospital.com', password: 'nurse123' });
+  const [form, setForm]       = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors]   = useState({});
   const [showPassword, setShowPassword] = useState(false);
