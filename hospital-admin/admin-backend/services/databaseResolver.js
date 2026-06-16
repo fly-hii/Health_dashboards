@@ -243,7 +243,7 @@ async function initConnections() {
     // Sync shared SaaS schema
     const { createModels } = require('./modelFactory');
     createModels(sharedSaasDb);
-    await sharedSaasDb.sync({ force: false, alter: process.env.NODE_ENV === 'development' });
+    await sharedSaasDb.sync({ force: false, alter: false });
     console.log('✅ [DB Resolver] hospitals_db schema synced');
   } catch (err) {
     console.error('❌ [DB Resolver] DB init failed:', err.message);

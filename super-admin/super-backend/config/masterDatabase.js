@@ -41,7 +41,7 @@ const connectMasterDB = async () => {
   try {
     await masterDb.authenticate();
     console.log('✅ careplus_master connected');
-    await masterDb.sync({ force: false, alter: process.env.NODE_ENV === 'development' });
+    await masterDb.sync({ force: false, alter: false });
     console.log('✅ careplus_master schema synced');
   } catch (err) {
     console.error('❌ careplus_master connection failed:', err.message);

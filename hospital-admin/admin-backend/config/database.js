@@ -33,7 +33,7 @@ const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log('✅ MySQL (AWS RDS) connected successfully');
-    await sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
+    await sequelize.sync({ alter: false });
     console.log('✅ Database synced');
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
