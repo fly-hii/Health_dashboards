@@ -22,13 +22,27 @@ const PORT = process.env.PORT || 5050;
 
 // ── HTTP Server & Socket.IO ─────────────────────────────────
 const server = http.createServer(app);
+
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:5180'
+].filter(Boolean);
+
 const io = new Server(server, {
   cors: {
-    origin: [
-      process.env.CLIENT_URL || 'http://localhost:5177',
-      'http://localhost:5173', 'http://localhost:5174',
-      'http://localhost:5175', 'http://localhost:5176',
-    ],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -83,11 +97,13 @@ const notifyNurse = (data) => {
 
 // ── Middleware ──────────────────────────────────────────────
 app.use(cors({
-  origin: [
-    process.env.CLIENT_URL || 'http://localhost:5177',
-    'http://localhost:5173', 'http://localhost:5174',
-    'http://localhost:5175', 'http://localhost:5176',
-  ],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));

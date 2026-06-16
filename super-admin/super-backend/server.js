@@ -12,9 +12,30 @@ const app    = express();
 const server = http.createServer(app);
 
 if (!process.env.CLIENT_URL) {
-  throw new Error('CLIENT_URL environment variable is required');
+  console.warn('⚠️ Warning: CLIENT_URL environment variable is not set. Defaulting to local and Vercel domains.');
 }
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:5180'
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));

@@ -21,8 +21,25 @@ const { protect, authorizeDoctor, tenantMiddleware } = require('./middleware/aut
 const app = express();
 const PORT = process.env.PORT || 5051;
 
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:5180'
+].filter(Boolean);
+
 app.use(cors({
-  origin: [process.env.CLIENT_URL || 'http://localhost:5176', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -79,7 +96,13 @@ app.use((err, req, res, next) => {
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: [process.env.CLIENT_URL || 'http://localhost:5176', 'http://localhost:5173'],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },

@@ -1,10 +1,27 @@
 let io;
 
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:5180'
+].filter(Boolean);
+
 const initSocket = (server) => {
   const { Server } = require('socket.io');
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL,
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+          callback(null, true);
+        } else {
+          callback(null, false);
+        }
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },

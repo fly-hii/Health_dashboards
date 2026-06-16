@@ -16,10 +16,27 @@ const notificationRoutes = require('./routes/nurse/notificationRoutes');
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:5176',
+  'http://localhost:5177',
+  'http://localhost:5180'
+].filter(Boolean);
+
 // Socket.IO with tenant-aware rooms
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5174',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -41,7 +58,16 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5174', credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
