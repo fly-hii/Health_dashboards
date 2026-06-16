@@ -53,14 +53,144 @@ const getDashboardStatsV2 = async (req, res) => {
     const today = new Date(); today.setHours(0,0,0,0);
     const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
-    const [todayAppointments, totalPatients, completedToday, pendingQueue] = await Promise.all([
+    const [todayAppointments, totalPatients, completedToday, pendingQueue, followUps] = await Promise.all([
       Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, date_time: { [Op.between]: [today, todayEnd] } } }),
       Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId }, distinct: true, col: 'patient_id' }),
       Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, status: 'Completed', date_time: { [Op.between]: [today, todayEnd] } } }),
-      Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, status: { [Op.in]: ['Pending','Confirmed'] }, date_time: { [Op.between]: [today, todayEnd] } } }),
+      Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, status: { [Op.in]: ['Pending','Confirmed','In-Progress'] }, date_time: { [Op.between]: [today, todayEnd] } } }),
+      Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, visit_type: 'Follow-Up', date_time: { [Op.between]: [today, todayEnd] } } }),
     ]);
 
-    res.json({ success: true, data: { todayAppointments, totalPatients, completedToday, pendingQueue } });
+    res.json({
+      success: true,
+      patientsInQueue: pendingQueue,
+      todayConsultations: todayAppointments,
+      completedToday: completedToday,
+      followUps: followUps,
+      data: {
+        patientsInQueue: pendingQueue,
+        todayConsultations: todayAppointments,
+        completedToday: completedToday,
+        followUps: followUps,
+        todayAppointments,
+        totalPatients,
+        pendingQueue,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/doctor/dashboard/schedule
+const getDashboardSchedule = async (req, res) => {
+  try {
+    const { Appointment, Patient } = req.models;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+
+    const appointments = await Appointment.findAll({
+      where: {
+        hospital_id: req.hospitalId,
+        doctor_id: req.user.id,
+        date_time: { [Op.between]: [today, todayEnd] }
+      },
+      include: [{ model: Patient, as: 'patient', attributes: ['full_name'] }],
+      order: [['date_time', 'ASC']],
+    });
+
+    const mapped = appointments.map(appt => {
+      const dt = new Date(appt.date_time);
+      let timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      
+      let status = 'waiting';
+      if (appt.status === 'In-Progress') status = 'in_progress';
+      else if (appt.status === 'Completed') status = 'completed';
+      else if (appt.status === 'Confirmed' || appt.status === 'Pending') status = 'waiting';
+      else status = appt.status.toLowerCase();
+
+      return {
+        _id: appt.id.toString(),
+        time: timeStr,
+        patientName: appt.patient?.full_name || 'Unknown Patient',
+        visitType: appt.visit_type === 'Follow-Up' ? 'Follow-up' : 'Consultation',
+        status: status
+      };
+    });
+
+    res.json(mapped);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/doctor/dashboard/chart
+const getDashboardChart = async (req, res) => {
+  try {
+    const { Appointment } = req.models;
+    const doctorId = req.user.id;
+    const hospitalId = req.hospitalId;
+
+    const [completed, pending, cancelled] = await Promise.all([
+      Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, status: 'Completed' } }),
+      Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] } } }),
+      Appointment.count({ where: { hospital_id: hospitalId, doctor_id: doctorId, status: 'Cancelled' } }),
+    ]);
+
+    const total = completed + pending + cancelled;
+    const completedPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const pendingPct = total > 0 ? Math.round((pending / total) * 100) : 0;
+    const cancelledPct = total > 0 ? Math.round((cancelled / total) * 100) : 0;
+
+    res.json({
+      total,
+      data: [
+        { name: 'Completed', value: completed, percentage: completedPct, color: '#0F9D8A' },
+        { name: 'Pending', value: pending, percentage: pendingPct, color: '#F59E0B' },
+        { name: 'Cancelled', value: cancelled, percentage: cancelledPct, color: '#EF4444' }
+      ]
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/doctor/patients
+const getPatients = async (req, res) => {
+  try {
+    const { Patient } = req.models;
+    const patients = await Patient.findAll({
+      where: { hospital_id: req.hospitalId },
+      order: [['full_name', 'ASC']],
+    });
+
+    const mapped = patients.map(p => {
+      let age = null;
+      if (p.dob) {
+        const birthDate = new Date(p.dob);
+        const today = new Date();
+        age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+      }
+
+      return {
+        _id: p.id,
+        id: p.id,
+        patientId: p.patient_id,
+        name: p.full_name,
+        phone: p.phone,
+        email: p.email,
+        age: age,
+        gender: p.gender?.toLowerCase(),
+        bloodGroup: p.blood_group,
+        status: p.status,
+      };
+    });
+
+    res.json({ success: true, patients: mapped });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -404,6 +534,9 @@ const changeDoctorPassword = async (req, res) => {
 module.exports = {
   login,
   getDashboardStatsV2,
+  getDashboardSchedule,
+  getDashboardChart,
+  getPatients,
   getPatientQueue,
   getPatientById,
   getPatientHistoryV2,

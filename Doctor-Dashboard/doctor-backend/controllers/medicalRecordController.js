@@ -1,161 +1,157 @@
-import MedicalRecord from '../models/MedicalRecord.js';
-import Patient from '../models/Patient.js';
-import User from '../models/User.js';
+const { Op } = require('sequelize');
 
-// Helper: resolve patient info from either Patient or User collection
-const resolvePatientInfo = async (doc, path = 'patientId') => {
-  if (!doc) return doc;
-
-  const target = doc[path];
+// Helper: calculate age from dob
+const calculateAge = (dobString) => {
+  if (!dobString) return null;
+  const birthDate = new Date(dobString);
+  if (isNaN(birthDate.getTime())) return null;
   
-  // If target is already populated (it's an object with name or fullName)
-  if (target && typeof target === 'object' && (target.name || target.fullName)) {
-    // Already populated — normalise fullName → name and mobile → phone
-    if (!target.name && target.fullName) {
-      target.name = target.fullName;
-    }
-    if (!target.phone && target.mobile) {
-      target.phone = target.mobile;
-    }
-    return doc;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
   }
-
-  // Get raw patient ID
-  const rawPatientId = target?._id || target;
-  if (!rawPatientId) return doc;
-
-  const calculateAge = (dobString) => {
-    if (!dobString) return null;
-    let birthDate;
-    if (dobString.includes('/')) {
-      const parts = dobString.split('/');
-      if (parts.length === 3) {
-        const day = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10) - 1;
-        const year = parseInt(parts[2], 10);
-        birthDate = new Date(year, month, day);
-      }
-    }
-    if (!birthDate || isNaN(birthDate.getTime())) {
-      birthDate = new Date(dobString);
-    }
-    if (isNaN(birthDate.getTime())) return null;
-    
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
-  try {
-    // 1. Try to find in Patient collection first
-    const patientDoc = await Patient.findById(rawPatientId).lean();
-    if (patientDoc) {
-      doc[path] = patientDoc;
-      if (!doc[path].name && doc[path].fullName) {
-        doc[path].name = doc[path].fullName;
-      }
-      if (!doc[path].phone && doc[path].mobile) {
-        doc[path].phone = doc[path].mobile;
-      }
-    } else {
-      // 2. Try to find in User collection
-      const userDoc = await User.findById(rawPatientId).lean();
-      if (userDoc) {
-        doc[path] = {
-          _id: userDoc._id,
-          name: userDoc.fullName || userDoc.name || 'Patient',
-          age: userDoc.age || calculateAge(userDoc.dob) || null,
-          gender: userDoc.gender || null,
-          patientId: userDoc.patientId || `P-USR-${userDoc._id.toString().slice(-4).toUpperCase()}`,
-          bloodGroup: userDoc.bloodGroup || null,
-          phone: userDoc.mobile || userDoc.phone || null,
-          email: userDoc.email || null,
-          _fromUser: true,
-        };
-      }
-    }
-  } catch (err) {
-    console.error('Error resolving patient info in medicalRecordController:', err);
-  }
-
-  return doc;
+  return age;
 };
 
-// @desc    Get all medical records (with pagination, filters, search)
-// @route   GET /api/medical-records
-// @access  Private
-export const getMedicalRecords = async (req, res) => {
+// GET /api/medical-records
+const getMedicalRecords = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, department, diagnosis, doctor, status, startDate, endDate } = req.query;
+    const { Consultation, Patient, User, Appointment, Prescription, PrescriptionMedicine, Report } = req.models;
+    const { page = 1, limit = 10, search, department, status } = req.query;
 
-    const query = {};
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-    // Filters
-    if (department) query.department = department;
-    if (diagnosis) query.diagnosis = new RegExp(diagnosis, 'i');
-    if (status) query.status = status;
-    if (startDate && endDate) {
-      query.visitDate = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    // Build where clause for Consultation
+    const consultationWhere = { hospital_id: req.hospitalId };
+    if (status) {
+      if (status === 'completed') consultationWhere.status = 'Completed';
+      else if (status === 'pending_reports') consultationWhere.status = 'Pending';
+      else if (status === 'follow_up') consultationWhere.status = 'In-Progress';
     }
 
-    // Search by Patient Name or Phone (requires lookup/populate or pre-filtering)
+    // Build where clause for Patient search
+    const patientWhere = {};
     if (search) {
-      const patients = await Patient.find({
-        $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { phone: { $regex: search, $options: 'i' } },
-          { patientId: { $regex: search, $options: 'i' } }
-        ]
-      }).select('_id');
-      
-      const users = await User.find({
-        role: 'patient',
-        $or: [
-          { fullName: { $regex: search, $options: 'i' } },
-          { name: { $regex: search, $options: 'i' } },
-          { mobile: { $regex: search, $options: 'i' } },
-          { phone: { $regex: search, $options: 'i' } }
-        ]
-      }).select('_id');
-
-      const patientIds = [...patients.map(p => p._id), ...users.map(u => u._id)];
-      
-      // Also search by diagnosis if no patient matches or additionally
-      if (query.$or) {
-        query.$or.push({ patientId: { $in: patientIds } });
-        query.$or.push({ diagnosis: { $regex: search, $options: 'i' } });
-      } else {
-        query.$or = [
-          { patientId: { $in: patientIds } },
-          { diagnosis: { $regex: search, $options: 'i' } }
-        ];
-      }
+      patientWhere[Op.or] = [
+        { full_name: { [Op.like]: `%${search}%` } },
+        { phone: { [Op.like]: `%${search}%` } },
+        { patient_id: { [Op.like]: `%${search}%` } }
+      ];
     }
 
-    const skip = (page - 1) * limit;
+    // Build where clause for Appointment department
+    const appointmentWhere = {};
+    if (department) {
+      appointmentWhere.department = department;
+    }
 
-    const records = await MedicalRecord.find(query)
-      .populate('doctorId', 'name department')
-      .sort({ visitDate: -1 })
-      .skip(skip)
-      .limit(Number(limit))
-      .lean();
+    const { count, rows } = await Consultation.findAndCountAll({
+      where: consultationWhere,
+      distinct: true,
+      include: [
+        {
+          model: Patient,
+          as: 'patient',
+          where: search ? patientWhere : undefined,
+          required: search ? true : false,
+        },
+        {
+          model: User,
+          as: 'doctor',
+          attributes: ['id', 'name', 'department'],
+        },
+        {
+          model: Appointment,
+          as: 'appointment',
+          where: department ? appointmentWhere : undefined,
+          required: department ? true : false,
+          include: [
+            { model: req.models.Vitals, as: 'vitals', required: false }
+          ]
+        },
+        {
+          model: Prescription,
+          as: 'prescription',
+          required: false,
+          include: [
+            { model: PrescriptionMedicine, as: 'medicines', required: false }
+          ]
+        }
+      ],
+      order: [['completed_at', 'DESC'], ['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset: offset,
+    });
 
-    const resolvedRecords = await Promise.all(records.map(r => resolvePatientInfo(r, 'patientId')));
+    // Bulk fetch reports for these appointments
+    const appointmentIds = rows.map(r => r.appointment_id).filter(Boolean);
+    const reports = appointmentIds.length > 0 ? await Report.findAll({
+      where: { appointment_id: appointmentIds, hospital_id: req.hospitalId, is_deleted: false }
+    }) : [];
 
-    const total = await MedicalRecord.countDocuments(query);
+    const reportsByAppt = {};
+    reports.forEach(rep => {
+      if (!reportsByAppt[rep.appointment_id]) reportsByAppt[rep.appointment_id] = [];
+      reportsByAppt[rep.appointment_id].push({
+        reportName: rep.title,
+        category: rep.report_type,
+        url: rep.file_url,
+      });
+    });
+
+    // Map to frontend expected shape
+    const formattedRecords = rows.map(c => {
+      let recStatus = 'completed';
+      if (c.status === 'Pending') recStatus = 'pending_reports';
+      else if (c.status === 'In-Progress') recStatus = 'follow_up';
+
+      const medicines = c.prescription?.medicines || [];
+      const formattedMeds = medicines.map(med => ({
+        medicineName: med.name,
+        dosage: med.dosage || '',
+        frequency: med.frequency || '',
+        duration: med.duration || '',
+        instructions: med.instructions || '',
+      }));
+
+      const apptReports = reportsByAppt[c.appointment_id] || [];
+
+      return {
+        _id: c.id.toString(),
+        visitDate: c.completed_at || c.created_at || new Date(),
+        patientId: c.patient ? {
+          _id: c.patient.id,
+          name: c.patient.full_name,
+          patientId: c.patient.patient_id,
+          phone: c.patient.phone,
+          email: c.patient.email,
+          gender: c.patient.gender?.toLowerCase(),
+          age: calculateAge(c.patient.dob),
+          bloodGroup: c.patient.blood_group,
+        } : null,
+        doctorId: c.doctor ? {
+          _id: c.doctor.id,
+          name: c.doctor.name,
+          department: c.doctor.department,
+        } : null,
+        department: c.appointment?.department || 'OPD',
+        diagnosis: c.diagnosis || '',
+        doctorNotes: c.notes || '',
+        prescriptions: formattedMeds,
+        reports: apptReports,
+        status: recStatus,
+      };
+    });
 
     res.json({
       success: true,
-      records: resolvedRecords,
+      records: formattedRecords,
       pagination: {
-        total,
+        total: count,
         page: Number(page),
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(count / limit)
       }
     });
   } catch (error) {
@@ -164,42 +160,186 @@ export const getMedicalRecords = async (req, res) => {
   }
 };
 
-// @desc    Get medical record by ID
-// @route   GET /api/medical-records/:id
-// @access  Private
-export const getMedicalRecordById = async (req, res) => {
+// GET /api/medical-records/:id
+const getMedicalRecordById = async (req, res) => {
   try {
-    const record = await MedicalRecord.findById(req.params.id)
-      .populate('doctorId', 'name department')
-      .populate('appointmentId')
-      .populate('vitals')
-      .lean();
+    const { Consultation, Patient, User, Appointment, Prescription, PrescriptionMedicine, Report } = req.models;
+    const record = await Consultation.findOne({
+      where: { id: req.params.id, hospital_id: req.hospitalId },
+      include: [
+        { model: Patient, as: 'patient' },
+        { model: User, as: 'doctor', attributes: ['id', 'name', 'department'] },
+        {
+          model: Appointment,
+          as: 'appointment',
+          include: [
+            { model: req.models.Vitals, as: 'vitals', required: false }
+          ]
+        },
+        {
+          model: Prescription,
+          as: 'prescription',
+          required: false,
+          include: [
+            { model: PrescriptionMedicine, as: 'medicines', required: false }
+          ]
+        }
+      ]
+    });
 
     if (!record) {
       return res.status(404).json({ success: false, message: 'Medical record not found' });
     }
 
-    const resolvedRecord = await resolvePatientInfo(record, 'patientId');
+    const reports = await Report.findAll({
+      where: { appointment_id: record.appointment_id, hospital_id: req.hospitalId, is_deleted: false }
+    });
 
-    res.json({ success: true, record: resolvedRecord });
+    const formattedReports = reports.map(rep => ({
+      reportName: rep.title,
+      category: rep.report_type,
+      url: rep.file_url,
+    }));
+
+    let recStatus = 'completed';
+    if (record.status === 'Pending') recStatus = 'pending_reports';
+    else if (record.status === 'In-Progress') recStatus = 'follow_up';
+
+    const medicines = record.prescription?.medicines || [];
+    const formattedMeds = medicines.map(med => ({
+      medicineName: med.name,
+      dosage: med.dosage || '',
+      frequency: med.frequency || '',
+      duration: med.duration || '',
+      instructions: med.instructions || '',
+    }));
+
+    const formattedRecord = {
+      _id: record.id.toString(),
+      visitDate: record.completed_at || record.created_at || new Date(),
+      patientId: record.patient ? {
+        _id: record.patient.id,
+        name: record.patient.full_name,
+        patientId: record.patient.patient_id,
+        phone: record.patient.phone,
+        email: record.patient.email,
+        gender: record.patient.gender?.toLowerCase(),
+        age: calculateAge(record.patient.dob),
+        bloodGroup: record.patient.blood_group,
+      } : null,
+      doctorId: record.doctor ? {
+        _id: record.doctor.id,
+        name: record.doctor.name,
+        department: record.doctor.department,
+      } : null,
+      department: record.appointment?.department || 'OPD',
+      diagnosis: record.diagnosis || '',
+      doctorNotes: record.notes || '',
+      prescriptions: formattedMeds,
+      reports: formattedReports,
+      status: recStatus,
+      vitals: record.appointment?.vitals || null,
+    };
+
+    res.json({ success: true, record: formattedRecord });
   } catch (error) {
     console.error('Get medical record error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get medical records by Patient ID
-// @route   GET /api/medical-records/patient/:patientId
-// @access  Private
-export const getPatientMedicalRecords = async (req, res) => {
+// GET /api/medical-records/patient/:patientId
+const getPatientMedicalRecords = async (req, res) => {
   try {
-    const records = await MedicalRecord.find({ patientId: req.params.patientId })
-      .populate('doctorId', 'name department')
-      .sort({ visitDate: -1 });
+    const { Consultation, Patient, User, Appointment, Prescription, PrescriptionMedicine, Report } = req.models;
+    const consultations = await Consultation.findAll({
+      where: { patient_id: req.params.patientId, hospital_id: req.hospitalId },
+      include: [
+        { model: Patient, as: 'patient' },
+        { model: User, as: 'doctor', attributes: ['id', 'name', 'department'] },
+        {
+          model: Appointment,
+          as: 'appointment',
+          include: [{ model: req.models.Vitals, as: 'vitals', required: false }]
+        },
+        {
+          model: Prescription,
+          as: 'prescription',
+          required: false,
+          include: [{ model: PrescriptionMedicine, as: 'medicines', required: false }]
+        }
+      ],
+      order: [['completed_at', 'DESC'], ['created_at', 'DESC']]
+    });
 
-    res.json({ success: true, records });
+    const appointmentIds = consultations.map(c => c.appointment_id).filter(Boolean);
+    const reports = appointmentIds.length > 0 ? await Report.findAll({
+      where: { appointment_id: appointmentIds, hospital_id: req.hospitalId, is_deleted: false }
+    }) : [];
+
+    const reportsByAppt = {};
+    reports.forEach(rep => {
+      if (!reportsByAppt[rep.appointment_id]) reportsByAppt[rep.appointment_id] = [];
+      reportsByAppt[rep.appointment_id].push({
+        reportName: rep.title,
+        category: rep.report_type,
+        url: rep.file_url,
+      });
+    });
+
+    const formattedRecords = consultations.map(c => {
+      let recStatus = 'completed';
+      if (c.status === 'Pending') recStatus = 'pending_reports';
+      else if (c.status === 'In-Progress') recStatus = 'follow_up';
+
+      const medicines = c.prescription?.medicines || [];
+      const formattedMeds = medicines.map(med => ({
+        medicineName: med.name,
+        dosage: med.dosage || '',
+        frequency: med.frequency || '',
+        duration: med.duration || '',
+        instructions: med.instructions || '',
+      }));
+
+      const apptReports = reportsByAppt[c.appointment_id] || [];
+
+      return {
+        _id: c.id.toString(),
+        visitDate: c.completed_at || c.created_at || new Date(),
+        patientId: c.patient ? {
+          _id: c.patient.id,
+          name: c.patient.full_name,
+          patientId: c.patient.patient_id,
+          phone: c.patient.phone,
+          email: c.patient.email,
+          gender: c.patient.gender?.toLowerCase(),
+          age: calculateAge(c.patient.dob),
+          bloodGroup: c.patient.blood_group,
+        } : null,
+        doctorId: c.doctor ? {
+          _id: c.doctor.id,
+          name: c.doctor.name,
+          department: c.doctor.department,
+        } : null,
+        department: c.appointment?.department || 'OPD',
+        diagnosis: c.diagnosis || '',
+        doctorNotes: c.notes || '',
+        prescriptions: formattedMeds,
+        reports: apptReports,
+        status: recStatus,
+        vitals: c.appointment?.vitals || null,
+      };
+    });
+
+    res.json({ success: true, records: formattedRecords });
   } catch (error) {
     console.error('Get patient medical records error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
+};
+
+module.exports = {
+  getMedicalRecords,
+  getMedicalRecordById,
+  getPatientMedicalRecords
 };
