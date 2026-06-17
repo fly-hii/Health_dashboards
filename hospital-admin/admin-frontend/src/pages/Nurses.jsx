@@ -8,7 +8,12 @@ import {
   Phone, 
   Clock, 
   Building,
-  X 
+  X,
+  Eye,
+  EyeOff,
+  CheckCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../services/api';
@@ -18,6 +23,7 @@ export default function Nurses() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNurse, setEditingNurse] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -26,6 +32,12 @@ export default function Nurses() {
   const [password, setPassword] = useState('nurse123'); // default
   const [department, setDepartment] = useState('IPD');
   const [shift, setShift] = useState('Morning');
+  const [employeeId, setEmployeeId] = useState('');
+  const [status, setStatus] = useState('Active');
+  
+  // Credentials block state
+  const [createdCredentials, setCreatedCredentials] = useState(null);
+  const [credentialsCopied, setCredentialsCopied] = useState(false);
 
   const fetchNurses = async () => {
     try {
@@ -53,6 +65,10 @@ export default function Nurses() {
     setPassword('nurse123');
     setDepartment('IPD');
     setShift('Morning');
+    setEmployeeId('');
+    setStatus('Active');
+    setShowPassword(false);
+    setCreatedCredentials(null);
     setIsModalOpen(true);
   };
 
@@ -64,6 +80,9 @@ export default function Nurses() {
     setPassword(''); // leave blank unless changing
     setDepartment(nurse.department || 'IPD');
     setShift(nurse.shift || 'Morning');
+    setEmployeeId(nurse.employeeId || '');
+    setStatus(nurse.status || 'Active');
+    setShowPassword(false);
     setIsModalOpen(true);
   };
 
@@ -79,7 +98,9 @@ export default function Nurses() {
       phone,
       role: 'NURSE',
       department,
-      shift
+      shift,
+      status,
+      employeeId: employeeId.trim() || undefined
     };
 
     if (password) payload.password = password;
@@ -96,6 +117,7 @@ export default function Nurses() {
         const res = await API.post('/users', payload);
         if (res.data.success) {
           toast.success(`${name} registered successfully as Nurse`);
+          setCreatedCredentials({ name, email, password, employeeId: employeeId.trim() || null });
         }
       }
       setIsModalOpen(false);
@@ -138,6 +160,57 @@ export default function Nurses() {
         </button>
       </div>
 
+      {/* CREATED CREDENTIALS BANNER */}
+      {createdCredentials && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm animate-fade-in">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <CheckCircle className="w-5 h-5 shrink-0" />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider">Account Created — Share These Credentials</p>
+                <p className="text-[11px] text-emerald-600 mt-0.5">The user can log in immediately with the details below.</p>
+              </div>
+            </div>
+            <button onClick={() => setCreatedCredentials(null)} className="text-emerald-400 hover:text-emerald-600 transition-all">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="mt-3 bg-white border border-emerald-100 rounded-lg p-3 font-mono text-xs text-slate-700 space-y-1.5">
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans font-semibold">Name</span>
+              <span className="font-semibold">{createdCredentials.name}</span>
+            </div>
+            {createdCredentials.employeeId && (
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-sans font-semibold">Employee ID</span>
+                <span className="font-semibold text-amber-600 tracking-widest">{createdCredentials.employeeId}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans font-semibold">Email</span>
+              <span className="font-semibold text-primary">{createdCredentials.email}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400 font-sans font-semibold">Password</span>
+              <span className="font-semibold tracking-widest">{createdCredentials.password}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const idLine = createdCredentials.employeeId ? `\nEmployee ID: ${createdCredentials.employeeId}` : '';
+              const text = `Name: ${createdCredentials.name}${idLine}\nEmail: ${createdCredentials.email}\nPassword: ${createdCredentials.password}`;
+              navigator.clipboard.writeText(text);
+              setCredentialsCopied(true);
+              setTimeout(() => setCredentialsCopied(false), 2500);
+            }}
+            className="mt-3 w-full flex items-center justify-center gap-2 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-lg transition-all"
+          >
+            {credentialsCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            <span>{credentialsCopied ? 'Copied to Clipboard!' : 'Copy Credentials'}</span>
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary"></div>
@@ -153,14 +226,31 @@ export default function Nurses() {
               
               <div>
                 <div className="flex items-center gap-3">
-                  <img
-                    src={nurse.profileImage || `https://api.dicebear.com/7.x/adventurer/svg?seed=${nurse.name}`}
-                    alt="Nurse Avatar"
-                    className="w-12 h-12 rounded-xl border border-slate-100"
-                  />
+                  <div className="relative">
+                    <img
+                      src={nurse.profileImage || `https://api.dicebear.com/7.x/adventurer/svg?seed=${nurse.name}`}
+                      alt="Nurse Avatar"
+                      className="w-12 h-12 rounded-xl border border-slate-100"
+                    />
+                    {nurse.status === 'Inactive' && (
+                      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-rose-500 border-2 border-white" title="Inactive" />
+                    )}
+                  </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-700 leading-tight">{nurse.name}</h3>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="text-sm font-bold text-slate-700 leading-tight">{nurse.name}</h3>
+                      {nurse.status === 'Inactive' && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-rose-50 text-rose-600 border border-rose-100 uppercase">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{nurse.email}</p>
+                    {nurse.employeeId && (
+                      <span className="inline-block mt-1 px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 font-mono text-[9px] font-bold rounded uppercase tracking-wider">
+                        {nurse.employeeId}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -215,7 +305,7 @@ export default function Nurses() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar-none">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Nurse Name*</label>
                 <input
@@ -281,15 +371,66 @@ export default function Nurses() {
                 </div>
               </div>
 
+              {/* Employee ID field */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={editingNurse ? 'Leave blank to retain current' : 'Default: nurse123'}
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Employee ID
+                  <span className="ml-1 text-slate-300 font-normal normal-case">(used as login ID on staff dashboards)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={employeeId}
+                    onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
+                    placeholder="e.g. NRS001"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-primary font-mono tracking-widest uppercase"
+                  />
+                  {employeeId && (
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      ID SET
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">💡 Leave blank to skip. Nurses use this ID to log into the Nurse Dashboard.</p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Security Password*</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={editingNurse ? 'Leave blank to retain current' : 'Default: nurse123'}
+                    className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+                {!editingNurse && (
+                  <p className="text-[10px] text-slate-400 mt-1">💡 Make sure to note or copy this password — you'll need it to share with the user.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Account Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-primary"
-                />
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
 
               <div className="flex gap-4 pt-4 border-t border-slate-100">

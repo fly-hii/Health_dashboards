@@ -23,6 +23,8 @@ const protect = async (req, res, next) => {
   try {
     const token   = auth.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!['SUPER_ADMIN', 'HOSPITAL_ADMIN', 'ADMIN'].includes(decoded.role))
+      return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
 
     const hospitalId = decoded.hospitalId;
     if (!hospitalId)
@@ -49,6 +51,9 @@ const protect = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('Auth error:', err.message);
+    if (err.message === 'Hospital account is suspended') {
+      return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
+    }
     return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
   }
 };

@@ -5,11 +5,30 @@
  */
 const bcrypt = require('bcryptjs');
 
+const getPasswordComplexityError = (password) => {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must contain at least one lowercase letter.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one number.';
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return 'Password must contain at least one special character (e.g. !, @, #, $, %, etc.).';
+  }
+  return null;
+};
+
 const getUsers = async (req, res) => {
   try {
     const { User } = req.models;
     const { role, department } = req.query;
-    const where = {};
+    const where = { hospital_id: req.hospitalId };
     if (role) where.role = role;
     if (department) where.department = department;
 
@@ -54,8 +73,18 @@ const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: 'User already exists' });
     }
 
+    let passwordToUse = password;
+    if (!passwordToUse) {
+      passwordToUse = 'CarePlus@' + Math.floor(1000 + Math.random() * 9000) + 'x!';
+    } else {
+      const pwdError = getPasswordComplexityError(passwordToUse);
+      if (pwdError) {
+        return res.status(400).json({ success: false, message: pwdError });
+      }
+    }
+
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password || 'password123', salt);
+    const hashedPassword = await bcrypt.hash(passwordToUse, salt);
 
     const user = await User.create({
       hospital_id: req.hospitalId,
@@ -106,7 +135,7 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { User, AuditLog } = req.models;
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -135,6 +164,10 @@ const updateUser = async (req, res) => {
     });
 
     if (req.body.password) {
+      const pwdError = getPasswordComplexityError(req.body.password);
+      if (pwdError) {
+        return res.status(400).json({ success: false, message: pwdError });
+      }
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(req.body.password, salt);
     }
@@ -159,7 +192,7 @@ const updateUser = async (req, res) => {
 const deleteUser = async (req, res) => {
   try {
     const { User, AuditLog } = req.models;
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }

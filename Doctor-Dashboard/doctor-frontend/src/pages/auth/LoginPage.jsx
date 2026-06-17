@@ -1,92 +1,132 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import './LoginPage.css';
 
-export default function LoginPage({ defaultSignUp = false }) {
-  const { login, register } = useAuth();
-  const [isSignUp, setIsSignUp] = useState(defaultSignUp);
+export default function LoginPage() {
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   // Form states
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [signUpForm, setSignUpForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    department: 'General Medicine',
-    agree: false
-  });
-
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const [isOtpMode, setIsOtpMode] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [countdown, setCountdown] = useState(0);
+
+  const inputRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null)
+  ];
+
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const handleChangeOtpDigit = (value, index) => {
+    const cleanValue = value.replace(/[^0-9]/g, '');
+    if (!cleanValue) {
+      const newOtp = [...otp];
+      newOtp[index] = '';
+      setOtp(newOtp);
+      return;
+    }
+
+    const newOtp = [...otp];
+    newOtp[index] = cleanValue.substring(cleanValue.length - 1);
+    setOtp(newOtp);
+
+    // Auto focus next box
+    if (index < 5 && cleanValue) {
+      inputRefs[index + 1].current.focus();
+    }
+  };
+
+  const handleKeyDownOtp = (e, index) => {
+    if (e.key === 'Backspace') {
+      if (!otp[index] && index > 0) {
+        const newOtp = [...otp];
+        newOtp[index - 1] = '';
+        setOtp(newOtp);
+        inputRefs[index - 1].current.focus();
+      } else {
+        const newOtp = [...otp];
+        newOtp[index] = '';
+        setOtp(newOtp);
+      }
+    }
+  };
+
+  const handlePasteOtp = (e) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').replace(/[^0-9]/g, '').substring(0, 6);
+    if (pasteData.length === 6) {
+      const newOtp = pasteData.split('');
+      setOtp(newOtp);
+      inputRefs[5].current.focus();
+    }
+  };
+
+  const handleSendOtp = () => {
+    if (!loginForm.email) {
+      setError('Please enter doctor ID or email to request OTP');
+      return;
+    }
+    setError('');
+    setCountdown(30);
+    setOtpSent(true);
+    setSuccessMsg('OTP code sent successfully! For testing, use: 123456');
+  };
 
   const handleLoginChange = (e) => {
     setLoginForm((p) => ({ ...p, [e.target.name]: e.target.value }));
     setError('');
-  };
-
-  const handleSignUpChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setSignUpForm((p) => ({
-      ...p,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-    setError('');
+    setSuccessMsg('');
   };
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!loginForm.email || !loginForm.password) {
-      setError('Please fill in all fields');
-      return;
-    }
     setError('');
-    setLoading(true);
-    try {
-      await login(loginForm.email, loginForm.password);
-    } catch (err) {
-      setError(err.message || 'Login failed. Check your credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignUpSubmit = async (e) => {
-    e.preventDefault();
-    if (!signUpForm.agree) {
-      setError('You must agree to the Terms of Service and Privacy Policy');
-      return;
-    }
-    if (signUpForm.password !== signUpForm.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    if (signUpForm.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return;
-    }
-
-    setError('');
-    setSuccess('');
-    setLoading(true);
-    try {
-      await register({
-        name: signUpForm.name,
-        email: signUpForm.email,
-        password: signUpForm.password,
-        phone: signUpForm.phone,
-        department: signUpForm.department,
-        role: 'doctor'
-      });
-      setSuccess('Doctor account registered successfully!');
-    } catch (err) {
-      setError(err.message || 'Registration failed.');
-    } finally {
-      setLoading(false);
+    setSuccessMsg('');
+    
+    if (isOtpMode) {
+      const combinedOtp = otp.join('');
+      if (!loginForm.email || combinedOtp.length !== 6) {
+        setError('Please fill in email and enter all 6 OTP digits');
+        return;
+      }
+      setLoading(true);
+      try {
+        await login(loginForm.email, undefined, combinedOtp);
+      } catch (err) {
+        setError(err.message || 'Login failed. Check your credentials.');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      if (!loginForm.email || !loginForm.password) {
+        setError('Please fill in all fields');
+        return;
+      }
+      setLoading(true);
+      try {
+        await login(loginForm.email, loginForm.password);
+      } catch (err) {
+        setError(err.message || 'Login failed. Check your credentials.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -108,12 +148,9 @@ export default function LoginPage({ defaultSignUp = false }) {
             </div>
 
             <div className="benefit-intro-section">
-              <h2>{isSignUp ? "Doctor Sign Up" : "Doctor Login"}</h2>
+              <h2>Doctor Login</h2>
               <p className="intro-desc">
-                {isSignUp 
-                  ? `Join ${import.meta.env.VITE_HOSPITAL_NAME || 'CarePlus'} ${import.meta.env.VITE_HOSPITAL_SUBTITLE || 'Hospital'} medical staff to consult patients and manage prescriptions.` 
-                  : "Welcome back! Please login to your clinical doctor account."
-                }
+                Welcome back! Please login to your clinical doctor account.
               </p>
             </div>
 
@@ -165,7 +202,7 @@ export default function LoginPage({ defaultSignUp = false }) {
               </div>
               <div className="ad-text">
                 <h5>Your Health, Our Priority</h5>
-                <p>Register your doctor account and collaborate to manage clinical outcomes.</p>
+                <p>Collaborate to manage clinical outcomes.</p>
               </div>
             </div>
           </div>
@@ -182,38 +219,38 @@ export default function LoginPage({ defaultSignUp = false }) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
-              <h3>{isSignUp ? "Doctor Sign Up" : "Login to your account"}</h3>
-              <p className="avatar-subtext">{isSignUp ? "Create a doctor staff account to get started" : "Please enter credentials to continue"}</p>
+              <h3>Login to your account</h3>
+              <p className="avatar-subtext">Please enter credentials to continue</p>
             </div>
 
             {error && <div className="auth-alert alert-error fade-in">{error}</div>}
-            {success && <div className="auth-alert alert-success fade-in">{success}</div>}
+            {successMsg && <div className="auth-alert alert-success fade-in">{successMsg}</div>}
 
-            {/* Render Sign In Form */}
-            {!isSignUp ? (
-              <form onSubmit={handleLoginSubmit} className="auth-form flex flex-col gap-4">
-                <div className="form-group">
-                  <label className="form-label">Doctor ID or Email</label>
-                  <div className="input-icon-wrapper">
-                    <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.378 0 2.4-1.1 3-2.5M12 14a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <input
-                      type="text"
-                      name="email"
-                      className="form-input"
-                      placeholder="Enter your doctor ID or email"
-                      value={loginForm.email}
-                      onChange={handleLoginChange}
-                      required
-                    />
-                  </div>
+            <form onSubmit={handleLoginSubmit} className="auth-form flex flex-col gap-4">
+              <div className="form-group">
+                <label className="form-label">Doctor ID or Email</label>
+                <div className="input-icon-wrapper">
+                  <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.378 0 2.4-1.1 3-2.5M12 14a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    name="email"
+                    className="form-input"
+                    placeholder="Enter your doctor ID or email"
+                    value={loginForm.email}
+                    onChange={handleLoginChange}
+                    required
+                  />
                 </div>
+              </div>
 
+              {/* Password / OTP */}
+              {!isOtpMode ? (
                 <div className="form-group">
                   <div className="flex justify-between items-center">
                     <label className="form-label">Password</label>
-                    <a href="#forgot" className="forgot-pass-link" onClick={(e) => { e.preventDefault(); console.log("Use doctor123 to login."); }}>Forgot Password?</a>
+                    <a href="#forgot" className="forgot-pass-link" onClick={(e) => { e.preventDefault(); setError("Please contact your IT administrator to reset your password."); }}>Forgot Password?</a>
                   </div>
                   <div className="input-icon-wrapper">
                     <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,167 +273,100 @@ export default function LoginPage({ defaultSignUp = false }) {
                       {showPassword ? (
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                       ) : (
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                       )}
                     </button>
                   </div>
                 </div>
-
-                <button type="submit" className="btn btn-primary auth-submit-btn" disabled={loading}>
-                  {loading ? <span className="loading-spinner-small"></span> : 'Login'}
-                </button>
-
-                <div className="auth-separator">or</div>
-
-                <button type="button" className="btn btn-secondary auth-social-btn" onClick={() => console.log("Google OTP verification placeholder.")}>
-                  Verify via Mobile OTP
-                </button>
-
-                <div className="prefilled-demo-box">
-                  <p className="demo-title">🔑 Demo Doctor Credentials:</p>
-                  <p>Email: <strong>rohit@hospital.com</strong></p>
-                  <p>Password: <strong>doctor123</strong></p>
-                </div>
-
-                <div className="auth-footer-text">
-                  Need a staff account? <button type="button" onClick={() => setIsSignUp(true)} className="link-btn">Register here</button>
-                </div>
-              </form>
-            ) : (
-              
-              /* Render Sign Up Form */
-              <form onSubmit={handleSignUpSubmit} className="auth-form flex flex-col gap-4">
-                
+              ) : (
                 <div className="form-group">
-                  <label className="form-label">Full Name</label>
-                  <div className="input-icon-wrapper">
-                    <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <input
-                      type="text"
-                      name="name"
-                      className="form-input"
-                      placeholder="Enter your full name"
-                      value={signUpForm.name}
-                      onChange={handleSignUpChange}
-                      required
-                    />
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="form-label">Verification Code</label>
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={countdown > 0}
+                      className="forgot-pass-link"
+                      style={{ border: 'none', background: 'none', cursor: 'pointer' }}
+                    >
+                      {countdown > 0 ? `Resend in ${countdown}s` : otpSent ? 'Resend OTP' : 'Send OTP'}
+                    </button>
                   </div>
-                </div>
 
-                <div className="form-group">
-                  <label className="form-label">Email Address</label>
-                  <div className="input-icon-wrapper">
-                    <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    <input
-                      type="email"
-                      name="email"
-                      className="form-input"
-                      placeholder="Enter your email address"
-                      value={signUpForm.email}
-                      onChange={handleSignUpChange}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid-2-cols">
-                  <div className="form-group">
-                    <label className="form-label">Contact Phone</label>
-                    <div className="input-icon-wrapper">
-                      <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                      <input
-                        type="text"
-                        name="phone"
-                        className="form-input"
-                        placeholder="Enter contact number"
-                        value={signUpForm.phone}
-                        onChange={handleSignUpChange}
-                        required
-                      />
+                  {otpSent ? (
+                    <div className="flex gap-2 justify-center items-center py-2" onPaste={handlePasteOtp}>
+                      {otp.map((digit, idx) => (
+                        <input
+                          key={idx}
+                          ref={inputRefs[idx]}
+                          type="text"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleChangeOtpDigit(e.target.value, idx)}
+                          onKeyDown={(e) => handleKeyDownOtp(e, idx)}
+                          disabled={loading}
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '18px',
+                            backgroundColor: '#f8fafc',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            outline: 'none',
+                            transition: 'all 0.15s'
+                          }}
+                          className="form-input-otp-box"
+                        />
+                      ))}
                     </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Clinical Specialization</label>
-                    <div className="input-icon-wrapper">
-                      <select name="department" className="form-select" value={signUpForm.department} onChange={handleSignUpChange} required>
-                        <option value="General Medicine">General Medicine</option>
-                        <option value="Cardiology">Cardiology</option>
-                        <option value="Orthopedics">Orthopedics</option>
-                        <option value="Pediatrics">Pediatrics</option>
-                        <option value="Neurology">Neurology</option>
-                        <option value="Emergency">Emergency</option>
-                      </select>
-                    </div>
-                  </div>
+                  ) : (
+                    <p style={{
+                      fontSize: '12.5px',
+                      color: '#64748b',
+                      textAlign: 'center',
+                      padding: '16px 0',
+                      border: '1px dashed #cbd5e1',
+                      borderRadius: '8px',
+                      backgroundColor: '#f8fafc'
+                    }}>
+                      Please request OTP code to verify your account
+                    </p>
+                  )}
                 </div>
+              )}
 
-                <div className="grid-2-cols">
-                  <div className="form-group">
-                    <label className="form-label">Password</label>
-                    <div className="input-icon-wrapper">
-                      <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        name="password"
-                        className="form-input"
-                        placeholder="Create password"
-                        value={signUpForm.password}
-                        onChange={handleSignUpChange}
-                        required
-                      />
-                    </div>
-                  </div>
+              <button type="submit" className="btn btn-primary auth-submit-btn" disabled={loading}>
+                {loading ? <span className="loading-spinner-small"></span> : isOtpMode ? 'Verify & Login' : 'Login'}
+              </button>
 
-                  <div className="form-group">
-                    <label className="form-label">Confirm Password</label>
-                    <div className="input-icon-wrapper">
-                      <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        name="confirmPassword"
-                        className="form-input"
-                        placeholder="Confirm password"
-                        value={signUpForm.confirmPassword}
-                        onChange={handleSignUpChange}
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setIsOtpMode(!isOtpMode);
+                  setOtpSent(false);
+                  setOtp(['', '', '', '', '', '']);
+                  setError('');
+                  setSuccessMsg('');
+                }}
+              >
+                {isOtpMode ? 'Login with Password' : 'Login with OTP'}
+              </button>
 
-                <div className="form-group checkbox-group">
-                  <label className="checkbox-label flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      name="agree"
-                      checked={signUpForm.agree}
-                      onChange={handleSignUpChange}
-                      required
-                    />
-                    <span>I agree to the Terms of Service and Privacy Policy</span>
-                  </label>
-                </div>
-
-                <button type="submit" className="btn btn-primary auth-submit-btn" disabled={loading}>
-                  {loading ? <span className="loading-spinner-small"></span> : 'Create Doctor Account'}
-                </button>
-
-                <div className="auth-footer-text">
-                  Already have an account? <button type="button" onClick={() => setIsSignUp(false)} className="link-btn">Login here</button>
-                </div>
-              </form>
-            )}
+              <div style={{ textAlign: 'center', fontSize: '13.5px', color: '#64748b', marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                <span>Need help?</span>
+                <svg viewBox="0 0 24 24" className="w-4 h-4 text-theme" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display: 'inline-block', verticalAlign: 'middle', color: 'var(--theme-primary)' }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <a href="mailto:support@hospital.com" className="support-link" onClick={(e) => { e.preventDefault(); console.log("Contact support at support@hospital.com"); }} style={{ color: 'var(--theme-primary)', fontWeight: '600', textDecoration: 'none' }}>
+                  Contact IT Support
+                </a>
+              </div>
+            </form>
           </div>
         </div>
 

@@ -42,6 +42,12 @@ const tenantDatabase = async (req, res, next) => {
     next();
   } catch (err) {
     console.error(`[tenantDatabase] Failed to resolve DB for hospital ${hospitalId}:`, err.message);
+    if (err.message === 'Hospital account is suspended') {
+      return res.status(403).json({
+        success: false,
+        message: 'Hospital account is suspended. Contact CarePlus support.',
+      });
+    }
     return res.status(503).json({
       success: false,
       message: 'Database connection failed for this hospital.',

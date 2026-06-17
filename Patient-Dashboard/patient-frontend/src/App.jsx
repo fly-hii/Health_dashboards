@@ -3,6 +3,9 @@ import { useAuth } from './context/AuthContext';
 import './App.css';
 import { io } from 'socket.io-client';
 import LoginPage from './pages/auth/LoginPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import OtpVerificationPage from './pages/auth/OtpVerificationPage';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import TopNavbar from './components/TopNavbar';
 import DashboardView from './components/DashboardView';
@@ -61,8 +64,14 @@ export default function App() {
 
     handleUrlRoute();
     window.addEventListener('popstate', handleUrlRoute);
-    return () => window.removeEventListener('popstate', handleUrlRoute);
   }, []);
+
+  // URL cleanup on authentication
+  useEffect(() => {
+    if (isAuthenticated && ['/login', '/register', '/otp-verification', '/forgot-password'].includes(window.location.pathname)) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [isAuthenticated]);
 
   // Socket.IO Real-time Connection & Listener
   useEffect(() => {
@@ -303,7 +312,18 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <>
+        <ToastContainer />
+        <Routes>
+          <Route path="/login" element={<LoginPage defaultSignUp={false} />} />
+          <Route path="/register" element={<LoginPage defaultSignUp={true} />} />
+          <Route path="/otp-verification" element={<OtpVerificationPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </>
+    );
   }
 
   if (loading) {

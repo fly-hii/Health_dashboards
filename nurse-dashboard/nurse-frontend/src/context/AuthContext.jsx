@@ -36,8 +36,8 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const res = await authService.login({ email, password });
+  const login = useCallback(async (email, password, otp) => {
+    const res = await authService.login({ email, password, otp });
     const { token: newToken, user: userData } = res.data;
     localStorage.setItem('nurse_token', newToken);
     setToken(newToken);

@@ -9,7 +9,8 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  Eye, 
+  Eye,
+  EyeOff,
   Download, 
   X, 
   Mail, 
@@ -108,6 +109,7 @@ export default function Doctors() {
   const [docBio, setDocBio] = useState('');
   const [docPhoto, setDocPhoto] = useState('');
   const [docPassword, setDocPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [docAddress, setDocAddress] = useState('');
 
   // Form Fields - Book Appointment
@@ -371,6 +373,7 @@ export default function Doctors() {
     setDocPhoto('');
     setDocPassword('doctor123');
     setDocAddress('');
+    setShowPassword(false);
     setIsDoctorModalOpen(true);
   };
 
@@ -394,6 +397,7 @@ export default function Doctors() {
     setDocPhoto(doc.profilePhoto || '');
     setDocPassword('');
     setDocAddress(doc.address || '');
+    setShowPassword(false);
     setIsDoctorModalOpen(true);
   };
 
@@ -631,8 +635,8 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Doctors</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.totalDoctors?.count || 62}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.totalDoctors?.growth || '+12.5%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.totalDoctors?.count ?? 62}</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.totalDoctors?.growth ?? '+12.5%'}</span>
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -646,8 +650,8 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Active Doctors</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.activeDoctors?.count || 56}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.activeDoctors?.growth || '+8.3%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.activeDoctors?.count ?? 56}</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.activeDoctors?.growth ?? '+8.3%'}</span>
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -661,8 +665,8 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">On Leave</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.onLeave?.count || 4}</span>
-              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">{stats.onLeave?.growth || '-2.1%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.onLeave?.count ?? 4}</span>
+              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">{stats.onLeave?.growth ?? '-2.1%'}</span>
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -676,8 +680,8 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Departments</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.departments?.count || 12}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.departments?.growth || '+10.2%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.departments?.count ?? 12}</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.departments?.growth ?? '+10.2%'}</span>
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -691,8 +695,8 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Today's Consults</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.todayConsultations?.count || 248}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.todayConsultations?.growth || '+15.7%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.todayConsultations?.count ?? 248}</span>
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.todayConsultations?.growth ?? '+15.7%'}</span>
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from yesterday</span>
           </div>
@@ -1575,13 +1579,26 @@ export default function Doctors() {
                 {!editingDoctor && (
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Doctor Portal Password (new)*</label>
-                    <input
-                      type="password"
-                      value={docPassword}
-                      onChange={(e) => setDocPassword(e.target.value)}
-                      placeholder="Default password is doctor123"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-primary"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={docPassword}
+                        onChange={(e) => setDocPassword(e.target.value)}
+                        placeholder="Default password is doctor123"
+                        className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

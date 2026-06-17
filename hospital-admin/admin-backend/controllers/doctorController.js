@@ -1,11 +1,9 @@
 const { Op } = require('sequelize');
-const { sequelize } = require('../config/database');
 const bcrypt = require('bcryptjs');
-const { User, Appointment, Prescription, PrescriptionMedicine, Notification, AuditLog, Patient, Report } = require('../models');
 
 // Generate employee ID scoped to hospital
-const generateEmployeeId = async (prefix, hospitalId) => {
-  const latest = await User.findOne({
+const generateEmployeeId = async (prefix, hospitalId, UserModel) => {
+  const latest = await UserModel.findOne({
     where: { hospital_id: hospitalId, employee_id: { [Op.like]: `${prefix}%` } },
     order: [['employee_id', 'DESC']],
   });
@@ -14,11 +12,34 @@ const generateEmployeeId = async (prefix, hospitalId) => {
   return `${prefix}${num + 1}`;
 };
 
+// Map database User record to frontend-compatible format
+const mapDoctor = (doc) => {
+  if (!doc) return null;
+  const json = typeof doc.toJSON === 'function' ? doc.toJSON() : doc;
+  return {
+    ...json,
+    _id: json.id,
+    employeeId: json.employee_id,
+    profilePhoto: json.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${json.name}`,
+    availabilityStatus: json.availability_status,
+    workingHours: {
+      start: json.schedule_start || '10:00',
+      end: json.schedule_end || '18:00'
+    },
+    availableDays: json.schedule_days || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    consultationFee: json.consultationFee || 800,
+    licenseNumber: json.licenseNumber || 'MC123456',
+    bio: json.bio || 'Experienced doctor.',
+    address: json.address || 'Hospital premises.'
+  };
+};
+
 // GET /api/doctors
 const getDoctors = async (req, res) => {
   try {
     const { search, department, specialization, status, experience, sortBy = 'created_at', sortOrder = 'DESC', page = 1, limit = 10, export: isExport } = req.query;
     const hospitalId = req.hospitalId;
+    const { User } = req.models;
     const where = { hospital_id: hospitalId, role: 'DOCTOR' };
 
     if (search?.trim()) {
@@ -31,7 +52,9 @@ const getDoctors = async (req, res) => {
     }
     if (department && department !== 'all') where.department = department;
     if (specialization && specialization !== 'all') where.specialization = { [Op.like]: `%${specialization}%` };
-    if (status && status !== 'all') where.status = status;
+    if (status && status !== 'all') {
+      where.status = status === 'active' ? 'Active' : (status === 'inactive' ? 'Inactive' : status);
+    }
     if (experience && experience !== 'all') {
       if (experience.includes('< 5')) where.experience = { [Op.lt]: 5 };
       else if (experience.includes('5-10')) where.experience = { [Op.between]: [5, 10] };
@@ -44,13 +67,15 @@ const getDoctors = async (req, res) => {
 
     if (isExport === 'true') {
       const doctors = await User.findAll({ where, order: [[orderField, orderDir]], attributes: { exclude: ['password'] } });
-      return res.json({ success: true, count: doctors.length, data: doctors });
+      const mapped = doctors.map(mapDoctor);
+      return res.json({ success: true, count: mapped.length, data: mapped });
     }
 
     const pageNum = parseInt(page); const limitNum = parseInt(limit);
     const { count, rows } = await User.findAndCountAll({ where, order: [[orderField, orderDir]], limit: limitNum, offset: (pageNum - 1) * limitNum, attributes: { exclude: ['password'] } });
 
-    res.json({ success: true, count: rows.length, data: rows, pagination: { total: count, page: pageNum, limit: limitNum, totalPages: Math.ceil(count / limitNum) } });
+    const mapped = rows.map(mapDoctor);
+    res.json({ success: true, count: mapped.length, data: mapped, pagination: { total: count, page: pageNum, limit: limitNum, totalPages: Math.ceil(count / limitNum) } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -59,9 +84,10 @@ const getDoctors = async (req, res) => {
 // GET /api/doctors/:id
 const getDoctorById = async (req, res) => {
   try {
+    const { User } = req.models;
     const doctor = await User.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId, role: 'DOCTOR' }, attributes: { exclude: ['password'] } });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
-    res.json({ success: true, data: doctor });
+    res.json({ success: true, data: mapDoctor(doctor) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -71,14 +97,25 @@ const getDoctorById = async (req, res) => {
 const createDoctor = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
-    const { name, email, phone, department = 'OPD', specialization, qualification, experience, password, status = 'Active', profilePhoto, bio } = req.body;
+    const { User, AuditLog } = req.models;
+    const { name, email, phone, department = 'OPD', specialization, qualification, experience, password, status = 'Active', profilePhoto, bio, availableDays, workingHours } = req.body;
 
     const existing = await User.findOne({ where: { email } });
     if (existing) return res.status(409).json({ success: false, message: 'Doctor with this email already exists' });
 
-    const employeeId = req.body.employeeId || await generateEmployeeId('DOC', hospitalId);
+    const employeeId = req.body.employeeId || await generateEmployeeId('DOC', hospitalId, User);
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password || 'Doctor@123', salt);
+
+    let dbStatus = 'Active';
+    let dbAvailability = 'Available';
+    if (status === 'inactive') {
+      dbStatus = 'Inactive';
+      dbAvailability = 'Busy';
+    } else if (status === 'On Leave') {
+      dbStatus = 'Active';
+      dbAvailability = 'On Leave';
+    }
 
     const doctor = await User.create({
       hospital_id: hospitalId,
@@ -87,9 +124,12 @@ const createDoctor = async (req, res) => {
       employee_id: employeeId,
       password: hashedPassword,
       role: 'DOCTOR',
-      status: status === 'active' ? 'Active' : status,
+      status: dbStatus,
       profile_image: profilePhoto || `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}`,
-      availability_status: 'Available',
+      availability_status: dbAvailability,
+      schedule_days: availableDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      schedule_start: workingHours?.start || '10:00',
+      schedule_end: workingHours?.end || '18:00',
     });
 
     await AuditLog.create({
@@ -107,8 +147,7 @@ const createDoctor = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.to(`hospital_${hospitalId}`).emit('doctor_created', { id: doctor.id, name, department });
 
-    const { password: _, ...doctorData } = doctor.toJSON();
-    res.status(201).json({ success: true, data: doctorData });
+    res.status(201).json({ success: true, data: mapDoctor(doctor) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -117,11 +156,37 @@ const createDoctor = async (req, res) => {
 // PUT /api/doctors/:id
 const updateDoctor = async (req, res) => {
   try {
+    const { User, AuditLog } = req.models;
     const doctor = await User.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId, role: 'DOCTOR' } });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
     const oldData = { name: doctor.name, status: doctor.status };
-    const { password, ...updateFields } = req.body;
+    const { password, availableDays, workingHours, profilePhoto, status, ...updateFields } = req.body;
+    
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      updateFields.password = await bcrypt.hash(password, salt);
+    }
+    if (availableDays !== undefined) updateFields.schedule_days = availableDays;
+    if (workingHours?.start !== undefined) updateFields.schedule_start = workingHours.start;
+    if (workingHours?.end !== undefined) updateFields.schedule_end = workingHours.end;
+    if (profilePhoto !== undefined) updateFields.profile_image = profilePhoto;
+    
+    if (status !== undefined) {
+      if (status === 'inactive') {
+        updateFields.status = 'Inactive';
+        updateFields.availability_status = 'Busy';
+      } else if (status === 'On Leave') {
+        updateFields.status = 'Active';
+        updateFields.availability_status = 'On Leave';
+      } else if (status === 'Active' || status === 'active') {
+        updateFields.status = 'Active';
+        updateFields.availability_status = 'Available';
+      } else {
+        updateFields.status = status;
+      }
+    }
+
     await doctor.update(updateFields);
 
     await AuditLog.create({
@@ -140,8 +205,7 @@ const updateDoctor = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.to(`hospital_${req.hospitalId}`).emit('doctor_updated', { id: doctor.id });
 
-    const { password: _, ...doctorData } = doctor.toJSON();
-    res.json({ success: true, data: doctorData });
+    res.json({ success: true, data: mapDoctor(doctor) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -150,6 +214,7 @@ const updateDoctor = async (req, res) => {
 // DELETE /api/doctors/:id
 const deleteDoctor = async (req, res) => {
   try {
+    const { User, AuditLog } = req.models;
     const doctor = await User.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId, role: 'DOCTOR' } });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
@@ -171,12 +236,25 @@ const deleteDoctor = async (req, res) => {
 // GET /api/doctors/:id/appointments
 const getDoctorAppointments = async (req, res) => {
   try {
+    const { Appointment, Patient } = req.models;
     const appointments = await Appointment.findAll({
       where: { doctor_id: req.params.id, hospital_id: req.hospitalId },
       include: [{ model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id', 'phone'] }],
       order: [['date_time', 'DESC']],
     });
-    res.json({ success: true, count: appointments.length, data: appointments });
+
+    const mapped = appointments.map(appt => {
+      const json = appt.toJSON();
+      json._id = json.id;
+      if (json.patient) {
+        json.patient._id = json.patient.id;
+        json.patient.fullName = json.patient.full_name;
+        json.patient.patientId = json.patient.patient_id;
+      }
+      return json;
+    });
+
+    res.json({ success: true, count: mapped.length, data: mapped });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -185,6 +263,7 @@ const getDoctorAppointments = async (req, res) => {
 // GET /api/doctors/:id/patients
 const getDoctorPatients = async (req, res) => {
   try {
+    const { Appointment, Patient } = req.models;
     const appointments = await Appointment.findAll({
       where: { doctor_id: req.params.id, hospital_id: req.hospitalId },
       include: [{ model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id', 'phone', 'gender', 'dob'] }],
@@ -203,7 +282,18 @@ const getDoctorPatients = async (req, res) => {
       }
     });
 
-    res.json({ success: true, count: patientMap.size, data: Array.from(patientMap.values()) });
+    const mapped = Array.from(patientMap.values()).map(p => {
+      const patientJson = p.patient.toJSON();
+      patientJson._id = patientJson.id;
+      patientJson.fullName = patientJson.full_name;
+      patientJson.patientId = patientJson.patient_id;
+      return {
+        ...p,
+        patient: patientJson
+      };
+    });
+
+    res.json({ success: true, count: mapped.length, data: mapped });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -213,6 +303,7 @@ const getDoctorPatients = async (req, res) => {
 const getDoctorStats = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
+    const { User, Appointment } = req.models;
     const todayStart = new Date(); todayStart.setHours(0,0,0,0);
     const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
@@ -239,7 +330,8 @@ const getDoctorStats = async (req, res) => {
 const sendDoctorNotification = async (req, res) => {
   try {
     const { title, message, priority = 'medium' } = req.body;
-    const doctor = await User.findByPk(req.params.id, { attributes: ['id', 'name', 'hospital_id'] });
+    const { User, Notification } = req.models;
+    const doctor = await User.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId, role: 'DOCTOR' }, attributes: ['id', 'name', 'hospital_id'] });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
     const notification = await Notification.create({
@@ -263,12 +355,26 @@ const sendDoctorNotification = async (req, res) => {
 // GET /api/doctors/:id/prescriptions
 const getDoctorPrescriptions = async (req, res) => {
   try {
+    const { Prescription, Patient } = req.models;
     const prescriptions = await Prescription.findAll({
       where: { doctor_id: req.params.id, hospital_id: req.hospitalId },
       include: [{ model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id', 'phone'] }],
       order: [['created_at', 'DESC']],
     });
-    res.json({ success: true, count: prescriptions.length, data: prescriptions });
+
+    const mapped = prescriptions.map(presc => {
+      const json = presc.toJSON();
+      json._id = json.id;
+      json.date = json.createdAt;
+      if (json.patient) {
+        json.patient._id = json.patient.id;
+        json.patient.fullName = json.patient.full_name;
+        json.patient.patientId = json.patient.patient_id;
+      }
+      return json;
+    });
+
+    res.json({ success: true, count: mapped.length, data: mapped });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -277,12 +383,25 @@ const getDoctorPrescriptions = async (req, res) => {
 // GET /api/doctors/:id/reports
 const getDoctorReports = async (req, res) => {
   try {
+    const { Report, Patient } = req.models;
     const reports = await Report.findAll({
       where: { uploaded_by: req.params.id, hospital_id: req.hospitalId, is_deleted: false },
       include: [{ model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id'] }],
       order: [['created_at', 'DESC']],
     });
-    res.json({ success: true, count: reports.length, data: reports });
+
+    const mapped = reports.map(rep => {
+      const json = rep.toJSON();
+      json._id = json.id;
+      if (json.patient) {
+        json.patient._id = json.patient.id;
+        json.patient.fullName = json.patient.full_name;
+        json.patient.patientId = json.patient.patient_id;
+      }
+      return json;
+    });
+
+    res.json({ success: true, count: mapped.length, data: mapped });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -294,6 +413,7 @@ const createDoctorPrescription = async (req, res) => {
     const { patient_id, diagnosis, instructions, valid_until, medicines = [] } = req.body;
     const doctorId = req.params.id;
     const hospitalId = req.hospitalId;
+    const { Prescription, PrescriptionMedicine } = req.models;
 
     const prescription = await Prescription.create({
       hospital_id: hospitalId,
@@ -326,6 +446,7 @@ const assignDoctorPatient = async (req, res) => {
   try {
     const { patientId } = req.body;
     const doctorId = req.params.id;
+    const { User, Patient, AuditLog } = req.models;
 
     const doctor = await User.findOne({ where: { id: doctorId, role: 'DOCTOR', hospital_id: req.hospitalId } });
     const patient = await Patient.findOne({ where: { id: patientId, hospital_id: req.hospitalId } });

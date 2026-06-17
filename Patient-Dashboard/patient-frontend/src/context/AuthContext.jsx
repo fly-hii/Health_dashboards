@@ -29,8 +29,14 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const res = await api.login({ email, password });
+  const login = useCallback(async (emailOrCredentials, password) => {
+    let credentials;
+    if (typeof emailOrCredentials === 'object' && emailOrCredentials !== null) {
+      credentials = emailOrCredentials;
+    } else {
+      credentials = { email: emailOrCredentials, password };
+    }
+    const res = await api.login(credentials);
     const { token: newToken, user: userData } = res;
     localStorage.setItem('patient_token', newToken);
     setToken(newToken);

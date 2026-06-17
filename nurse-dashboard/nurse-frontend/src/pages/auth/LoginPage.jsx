@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -12,10 +12,95 @@ const LoginPage = () => {
   const [errors, setErrors]   = useState({});
   const [showPassword, setShowPassword] = useState(false);
 
+  const [isOtpMode, setIsOtpMode] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [countdown, setCountdown] = useState(0);
+
+  const inputRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null)
+  ];
+
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const handleChangeOtpDigit = (value, index) => {
+    const cleanValue = value.replace(/[^0-9]/g, '');
+    if (!cleanValue) {
+      const newOtp = [...otp];
+      newOtp[index] = '';
+      setOtp(newOtp);
+      return;
+    }
+
+    const newOtp = [...otp];
+    newOtp[index] = cleanValue.substring(cleanValue.length - 1);
+    setOtp(newOtp);
+
+    // Auto focus next box
+    if (index < 5 && cleanValue) {
+      inputRefs[index + 1].current.focus();
+    }
+  };
+
+  const handleKeyDownOtp = (e, index) => {
+    if (e.key === 'Backspace') {
+      if (!otp[index] && index > 0) {
+        const newOtp = [...otp];
+        newOtp[index - 1] = '';
+        setOtp(newOtp);
+        inputRefs[index - 1].current.focus();
+      } else {
+        const newOtp = [...otp];
+        newOtp[index] = '';
+        setOtp(newOtp);
+      }
+    }
+  };
+
+  const handlePasteOtp = (e) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').replace(/[^0-9]/g, '').substring(0, 6);
+    if (pasteData.length === 6) {
+      const newOtp = pasteData.split('');
+      setOtp(newOtp);
+      inputRefs[5].current.focus();
+    }
+  };
+
+  const handleSendOtp = () => {
+    if (!form.email) {
+      setErrors({ email: 'Email is required to request OTP' });
+      return;
+    }
+    setCountdown(30);
+    setOtpSent(true);
+    toast.info('OTP code sent successfully! For testing, use: 123456');
+  };
+
   const validate = () => {
     const errs = {};
     if (!form.email)    errs.email    = 'Email is required';
-    if (!form.password) errs.password = 'Password is required';
+    if (!isOtpMode) {
+      if (!form.password) errs.password = 'Password is required';
+    } else {
+      const combinedOtp = otp.join('');
+      if (!otpSent) {
+        errs.otp = 'Please request and enter OTP';
+      } else if (combinedOtp.length !== 6) {
+        errs.otp = 'OTP must be a 6-digit number';
+      }
+    }
     return errs;
   };
 
@@ -25,7 +110,11 @@ const LoginPage = () => {
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
     try {
-      await login(form.email, form.password);
+      if (isOtpMode) {
+        await login(form.email, undefined, otp.join(''));
+      } else {
+        await login(form.email, form.password);
+      }
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Login failed. Check your credentials.');
@@ -86,46 +175,96 @@ const LoginPage = () => {
             )}
           </div>
 
-          {/* Password field */}
-          <div className="flex flex-col text-left">
-            <div className="flex justify-between items-center mb-1.5 pl-1">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Password</label>
-              <button
-                type="button"
-                className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
-                onClick={(e) => { e.preventDefault(); toast.info("Please contact your IT administrator to reset your password."); }}
-              >
-                Forgot Password?
-              </button>
+          {/* Password / OTP field */}
+          {!isOtpMode ? (
+            <div className="flex flex-col text-left">
+              <div className="flex justify-between items-center mb-1.5 pl-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Password</label>
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                  onClick={(e) => { e.preventDefault(); toast.info("Please contact your IT administrator to reset your password."); }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              <div className="relative flex items-center">
+                <span className="absolute left-4 text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className={`w-full pl-11 pr-11 py-3 bg-slate-50 border ${
+                    errors.password ? 'border-danger focus:ring-danger/10' : 'border-slate-200 focus:border-primary/50 focus:ring-primary/10'
+                  } rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-4 transition-all duration-200`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                </button>
+              </div>
+              {errors.password && (
+                <span className="text-danger text-[11px] font-medium mt-1 pl-1 flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3" /> {errors.password}
+                </span>
+              )}
             </div>
-            <div className="relative flex items-center">
-              <span className="absolute left-4 text-slate-400">
-                <Lock className="w-4 h-4" />
-              </span>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                className={`w-full pl-11 pr-11 py-3 bg-slate-50 border ${
-                  errors.password ? 'border-danger focus:ring-danger/10' : 'border-slate-200 focus:border-primary/50 focus:ring-primary/10'
-                } rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-4 transition-all duration-200`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none"
-              >
-                {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
-              </button>
+          ) : (
+            <div className="flex flex-col text-left space-y-2">
+              <div className="flex justify-between items-center pl-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Verification Code</label>
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={countdown > 0}
+                  className={`text-[11px] font-bold transition-all focus:outline-none ${
+                    countdown > 0
+                      ? 'text-slate-400 cursor-not-allowed'
+                      : 'text-primary hover:underline'
+                  }`}
+                >
+                  {countdown > 0 ? `Resend in ${countdown}s` : otpSent ? 'Resend OTP' : 'Send OTP'}
+                </button>
+              </div>
+
+              {otpSent ? (
+                <div className="flex gap-2.5 justify-center items-center py-2" onPaste={handlePasteOtp}>
+                  {otp.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={inputRefs[idx]}
+                      type="text"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleChangeOtpDigit(e.target.value, idx)}
+                      onKeyDown={(e) => handleKeyDownOtp(e, idx)}
+                      disabled={loading}
+                      className={`w-11 h-11 text-center font-bold text-lg bg-slate-50 border rounded-lg outline-none transition-all duration-150 text-slate-800 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 ${
+                        errors.otp ? 'border-danger' : 'border-slate-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 text-center py-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                  Please request OTP code to verify your account
+                </p>
+              )}
+
+              {errors.otp && (
+                <span className="text-danger text-[11px] font-medium mt-1 pl-1 flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3" /> {errors.otp}
+                </span>
+              )}
             </div>
-            {errors.password && (
-              <span className="text-danger text-[11px] font-medium mt-1 pl-1 flex items-center gap-1">
-                <ShieldAlert className="w-3 h-3" /> {errors.password}
-              </span>
-            )}
-          </div>
+          )}
 
           {/* Submit button */}
           <button
@@ -140,23 +279,26 @@ const LoginPage = () => {
               </>
             ) : (
               <>
-                <span>Sign In to Dashboard</span>
+                <span>{isOtpMode ? 'Verify & Sign In' : 'Sign In to Dashboard'}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
-        </form>
 
-        {/* Demo credentials */}
-        <div className="mt-6 p-4 bg-primary/5 border border-primary/10 rounded-xl text-left">
-          <p className="text-[11px] font-bold text-primary-dark uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            🔑 Demo Credentials
-          </p>
-          <div className="space-y-1 text-xs text-teal-950 font-medium">
-            <p>Email: <strong className="font-bold">nurse@hospital.com</strong></p>
-            <p>Password: <strong className="font-bold">nurse123</strong></p>
-          </div>
-        </div>
+          {/* Toggle Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsOtpMode(!isOtpMode);
+              setOtpSent(false);
+              setOtp(['', '', '', '', '', '']);
+              setErrors({});
+            }}
+            className="w-full py-2.5 border border-primary/30 hover:bg-primary/5 text-primary font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 focus:outline-none"
+          >
+            {isOtpMode ? 'Sign In with Password' : 'Sign In with OTP'}
+          </button>
+        </form>
 
         {/* Footer info */}
         <p className="text-center mt-6 text-[10px] text-slate-400 font-semibold uppercase tracking-wider">

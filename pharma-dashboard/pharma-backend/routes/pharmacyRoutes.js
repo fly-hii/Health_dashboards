@@ -5,6 +5,25 @@ const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const { protect } = require('../middleware/authMiddleware');
 
+const getPasswordComplexityError = (password) => {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must contain at least one lowercase letter.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one number.';
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return 'Password must contain at least one special character (e.g. !, @, #, $, %, etc.).';
+  }
+  return null;
+};
+
 const mapOrderResponse = (order) => {
   const json = order.toJSON();
   const patientDob = order.patient?.dob;
@@ -59,7 +78,7 @@ router.post('/auth/send-otp', async (req, res) => {
   try {
     const { storeId } = req.body;
     if (!storeId) {
-      return res.status(400).json({ message: 'Store ID is required.' });
+      return res.status(400).json({ message: 'Store ID or Email is required.' });
     }
     res.json({
       success: true,
@@ -76,22 +95,74 @@ router.post('/auth/send-otp', async (req, res) => {
 router.post('/auth/login', async (req, res) => {
   try {
     const { storeId, password, otp } = req.body;
+    const hospitalCode = req.body.hospitalCode || req.headers['x-hospital-code'] || process.env.HOSPITAL_CODE;
+
     if (!storeId) return res.status(400).json({ message: 'Store ID or Email is required.' });
 
-    // Use default DB connection to look up the user
-    const { sequelize } = require('../config/db');
+    const { masterDb, getHospitalConnection } = require('../services/databaseResolver');
     const { createModels } = require('../services/modelFactory');
-    const models = createModels(sequelize);
-    const { User } = models;
 
-    const user = await User.findOne({
-      where: {
-        [Op.or]: [
-          { employee_id: storeId },
-          { email: storeId.toLowerCase() }
-        ]
+    let resolvedHospitalId;
+    let db, models;
+    let user;
+
+    if (hospitalCode) {
+      // Step 1: Resolve hospital from master DB
+      const [hospRows] = await masterDb.query(
+        'SELECT id, status, database_type FROM hospitals WHERE code = ? LIMIT 1',
+        { replacements: [hospitalCode.toUpperCase()] }
+      );
+      const hospital = hospRows?.[0];
+      if (!hospital?.id) {
+        return res.status(404).json({ message: `Hospital code "${hospitalCode}" not found` });
       }
-    });
+      if (hospital.status === 'suspended') {
+        return res.status(403).json({ message: 'Hospital account is suspended. Contact CarePlus support.' });
+      }
+      resolvedHospitalId = hospital.id;
+
+      // Step 2: Resolve tenant DB
+      db = await getHospitalConnection(resolvedHospitalId);
+      models = createModels(db);
+      const { User } = models;
+      user = await User.findOne({
+        where: {
+          [Op.or]: [
+            { employee_id: storeId },
+            { email: storeId.toLowerCase() }
+          ]
+        }
+      });
+    } else {
+      // Fallback: use default DB connection
+      const { sequelize } = require('../config/db');
+      const staticModels = createModels(sequelize);
+      const { User: StaticUser } = staticModels;
+
+      user = await StaticUser.findOne({
+        where: {
+          [Op.or]: [
+            { employee_id: storeId },
+            { email: storeId.toLowerCase() }
+          ]
+        }
+      });
+
+      if (user) {
+        resolvedHospitalId = user.hospital_id;
+        // Verify hospital status in master registry
+        const [hospRows] = await masterDb.query(
+          'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
+          { replacements: [resolvedHospitalId] }
+        );
+        const hospital = hospRows?.[0];
+        if (hospital?.status === 'suspended') {
+          return res.status(403).json({ message: 'Hospital account is suspended. Contact CarePlus support.' });
+        }
+        db = await getHospitalConnection(resolvedHospitalId);
+        models = createModels(db);
+      }
+    }
 
     if (!user) return res.status(404).json({ message: 'User not found' });
     if (user.status === 'Inactive') return res.status(403).json({ message: 'Account deactivated' });
@@ -193,6 +264,12 @@ router.put('/settings', protect, async (req, res) => {
 router.put('/change-password', protect, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
+
+    const pwdError = getPasswordComplexityError(newPassword);
+    if (pwdError) {
+      return res.status(400).json({ message: pwdError });
+    }
+
     const { User } = req.models;
     const user = await User.findByPk(req.user.id);
     const isMatch = await bcrypt.compare(currentPassword, user.password);

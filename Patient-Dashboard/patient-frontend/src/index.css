@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* CSS Design System for CarePlus Hospital Patient Portal */
 
 :root {

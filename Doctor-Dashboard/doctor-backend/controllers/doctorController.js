@@ -2,6 +2,25 @@ const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+const getPasswordComplexityError = (password) => {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must contain at least one lowercase letter.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one number.';
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return 'Password must contain at least one special character (e.g. !, @, #, $, %, etc.).';
+  }
+  return null;
+};
+
 // Static imports only for the public login endpoint
 const { User: StaticUser, AuditLog: StaticAuditLog } = require('../models');
 
@@ -14,10 +33,56 @@ const generateToken = (user) => jwt.sign(
 // POST /api/auth/login
 const login = async (req, res) => {
   const { email, password } = req.body;
+  const hospitalCode = req.body.hospitalCode || req.headers['x-hospital-code'] || process.env.HOSPITAL_CODE;
+
   try {
     if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password required' });
 
-    const user = await StaticUser.findOne({ where: { email } });
+    const { masterDb, getHospitalConnection } = require('../services/databaseResolver');
+    const { createModels } = require('../services/modelFactory');
+
+    let resolvedHospitalId;
+    let db, models;
+    let user;
+
+    if (hospitalCode) {
+      // Step 1: Resolve hospital from master DB
+      const [hospRows] = await masterDb.query(
+        'SELECT id, status, database_type FROM hospitals WHERE code = ? LIMIT 1',
+        { replacements: [hospitalCode.toUpperCase()] }
+      );
+      const hospital = hospRows?.[0];
+      if (!hospital?.id) {
+        return res.status(404).json({ success: false, message: `Hospital code "${hospitalCode}" not found` });
+      }
+      if (hospital.status === 'suspended') {
+        return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
+      }
+      resolvedHospitalId = hospital.id;
+
+      // Step 2: Resolve tenant DB
+      db = await getHospitalConnection(resolvedHospitalId);
+      models = createModels(db);
+      user = await models.User.findOne({ where: { email } });
+    } else {
+      // Fallback: look up in shared database
+      user = await StaticUser.findOne({ where: { email } });
+      if (user) {
+        resolvedHospitalId = user.hospital_id;
+        // Verify hospital status in master registry
+        const [hospRows] = await masterDb.query(
+          'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
+          { replacements: [resolvedHospitalId] }
+        );
+        const hospital = hospRows?.[0];
+        if (hospital?.status === 'suspended') {
+          return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
+        }
+        db = await getHospitalConnection(resolvedHospitalId);
+        models = createModels(db);
+      }
+    }
+
     if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
     if (!['DOCTOR', 'HOSPITAL_ADMIN'].includes(user.role)) return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
     if (user.status === 'Inactive') return res.status(403).json({ success: false, message: 'Account deactivated' });
@@ -27,14 +92,15 @@ const login = async (req, res) => {
 
     await user.update({ last_login: new Date() });
 
-    await StaticAuditLog.create({
-      hospital_id: user.hospital_id,
+    const AuditLog = models?.AuditLog || StaticAuditLog;
+    await AuditLog.create({
+      hospital_id: resolvedHospitalId || user.hospital_id,
       user_id: user.id,
       action: 'LOGIN',
       module: 'Auth',
       description: `Doctor ${user.name} logged in`,
       ip_address: req.ip,
-    });
+    }).catch(console.error);
 
     const token = generateToken(user);
     const { password: _, ...userData } = user.toJSON();
@@ -519,6 +585,12 @@ const changeDoctorPassword = async (req, res) => {
   try {
     const { User } = req.models;
     const { currentPassword, newPassword } = req.body;
+
+    const pwdError = getPasswordComplexityError(newPassword);
+    if (pwdError) {
+      return res.status(400).json({ success: false, message: pwdError });
+    }
+
     const user = await User.findByPk(req.user.id);
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ success: false, message: 'Current password is incorrect' });

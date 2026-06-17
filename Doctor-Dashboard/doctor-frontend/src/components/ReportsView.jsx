@@ -225,7 +225,7 @@ export default function ReportsView() {
     const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : 'http://localhost:5051';
     const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
     const socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: 3,
       timeout: 5000,
       auth: {

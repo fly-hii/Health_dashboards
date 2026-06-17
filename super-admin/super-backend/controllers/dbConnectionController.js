@@ -28,20 +28,26 @@ const upsertDbConfig = async (req, res) => {
     const { host, port = 3306, database_name, username, password, ssl_enabled = false, notes } = req.body;
     const hospitalId = parseInt(req.params.id);
 
-    if (!host || !database_name || !username || !password) {
+    const existingConn = await DbConnection.findOne({ where: { hospital_id: hospitalId } });
+    let finalPassword = password;
+    if (existingConn && !password) {
+      finalPassword = decrypt(existingConn.password_encrypted);
+    }
+
+    if (!host || !database_name || !username || !finalPassword) {
       await t.rollback();
       return res.status(400).json({ success: false, message: 'host, database_name, username, password required' });
     }
 
     // Test before saving
     try {
-      await testExternalConnection({ host, port, database_name, username, password, ssl_enabled });
+      await testExternalConnection({ host, port, database_name, username, password: finalPassword, ssl_enabled });
     } catch (err) {
       await t.rollback();
       return res.status(400).json({ success: false, message: `Connection test failed: ${err.message}` });
     }
 
-    const encPwd = encrypt(password);
+    const encPwd = encrypt(finalPassword);
 
     const [conn, created] = await DbConnection.findOrCreate({
       where: { hospital_id: hospitalId },
@@ -94,7 +100,14 @@ const testDbConnection = async (req, res) => {
     // If body has credentials, test those directly
     if (req.body.host) {
       const { host, port = 3306, database_name, username, password, ssl_enabled } = req.body;
-      await testExternalConnection({ host, port, database_name, username, password, ssl_enabled });
+      let finalPassword = password;
+      if (!finalPassword) {
+        const conn = await DbConnection.findOne({ where: { hospital_id: hospitalId } });
+        if (conn) {
+          finalPassword = decrypt(conn.password_encrypted);
+        }
+      }
+      await testExternalConnection({ host, port, database_name, username, password: finalPassword, ssl_enabled });
       return res.json({ success: true, message: '✅ Connection successful — credentials are valid' });
     }
 
@@ -160,4 +173,43 @@ const listDbConnections = async (req, res) => {
   }
 };
 
-module.exports = { getDbConfig, upsertDbConfig, testDbConnection, toggleDbConnection, listDbConnections };
+// ── DELETE /api/super/hospitals/:id/db-config ──────────────────
+const deleteDbConfig = async (req, res) => {
+  const t = await masterDb.transaction();
+  try {
+    const hospitalId = parseInt(req.params.id);
+
+    // 1. Delete DbConnection record
+    const deletedCount = await DbConnection.destroy({
+      where: { hospital_id: hospitalId },
+      transaction: t,
+    });
+
+    if (deletedCount === 0) {
+      await t.rollback();
+      return res.status(404).json({ success: false, message: 'No external DB configuration found for this hospital' });
+    }
+
+    // 2. Set database_type back to 'shared'
+    await Hospital.update({ database_type: 'shared' }, { where: { id: hospitalId }, transaction: t });
+
+    // 3. Invalidate cached connection
+    invalidateCache(hospitalId);
+
+    // 4. Create Audit Log
+    await AuditLog.create({
+      admin_id: req.user?.id, hospital_id: hospitalId,
+      action: 'DELETE', module: 'DbConnection',
+      description: `DB config deleted for hospital ${hospitalId}. Switched back to shared database.`,
+      ip_address: req.ip,
+    }, { transaction: t });
+
+    await t.commit();
+    res.json({ success: true, message: 'External DB config deleted successfully. Switched back to shared database.' });
+  } catch (error) {
+    await t.rollback();
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { getDbConfig, upsertDbConfig, testDbConnection, toggleDbConnection, listDbConnections, deleteDbConfig };

@@ -90,13 +90,19 @@ async function getHospitalConfig(hospitalId) {
   if (cached && (Date.now() - cached.ts) < CONFIG_TTL) return cached.data;
 
   const [rows] = await masterDb.query(
-    'SELECT id, database_type FROM hospitals WHERE id = ? LIMIT 1',
+    'SELECT id, database_type, status FROM hospitals WHERE id = ? LIMIT 1',
     { replacements: [hospitalId] }
   );
 
   const hospital = rows?.[0];
   if (!hospital?.id) {
     throw new Error(`Hospital ${hospitalId} not found in master registry`);
+  }
+
+  if (hospital.status === 'suspended') {
+    const err = new Error('Hospital account is suspended');
+    err.status = 403;
+    throw err;
   }
 
   configCache.set(hospitalId, { data: hospital, ts: Date.now() });

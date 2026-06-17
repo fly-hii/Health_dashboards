@@ -44,6 +44,13 @@ export const api = {
       body: JSON.stringify(data),
     }).then(handleResponse),
 
+  sendOtp: (data) =>
+    fetch(`${BASE_URL}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(handleResponse),
+
   changePassword: (data) =>
     fetch(`${BASE_URL}/auth/change-password`, {
       method: 'PUT',
@@ -52,13 +59,13 @@ export const api = {
     }).then(handleResponse),
 
   // Profile
-  getProfile: () => fetch(`${BASE_URL}/profile`, { headers: getHeaders() }).then(handleResponse),
+  getProfile: () => fetch(`${BASE_URL}/profile`, { headers: getHeaders() }).then(handleResponse).then(res => res.user || res),
   updateProfile: (data) =>
     fetch(`${BASE_URL}/profile`, {
       method: 'PUT',
       headers: getHeaders(),
       body: JSON.stringify(data),
-    }).then(handleResponse),
+    }).then(handleResponse).then(res => res.user || res),
 
   // Doctors
   getDoctors: () => fetch(`${BASE_URL}/doctors`, { headers: getHeaders() }).then(handleResponse),
@@ -122,22 +129,22 @@ export const api = {
   },
 
   // Vitals
-  getLatestVitals: () => fetch(`${BASE_URL}/vitals/latest`, { headers: getHeaders() }).then(handleResponse),
+  getLatestVitals: () => fetch(`${BASE_URL}/vitals/latest`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res),
 
   // Medical History
-  getHistory: () => fetch(`${BASE_URL}/history`, { headers: getHeaders() }).then(handleResponse),
+  getHistory: () => fetch(`${BASE_URL}/history`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res),
 
   // Prescriptions
-  getPrescriptions: () => fetch(`${BASE_URL}/prescriptions`, { headers: getHeaders() }).then(handleResponse),
+  getPrescriptions: () => fetch(`${BASE_URL}/prescriptions`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res),
 
   // Reports
-  getReports: () => fetch(`${BASE_URL}/reports`, { headers: getHeaders() }).then(handleResponse),
+  getReports: () => fetch(`${BASE_URL}/reports`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res),
   uploadReport: (data) =>
     fetch(`${BASE_URL}/reports`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(data),
-    }).then(handleResponse),
+    }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res),
 
   // Patient-specific report endpoints
   getPatientReports: (filters = {}) => {
@@ -148,7 +155,7 @@ export const api = {
       }
     });
     const query = params.toString();
-    return fetch(`${BASE_URL}/patient/reports${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse);
+    return fetch(`${BASE_URL}/patient/reports${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res);
   },
   getReportById: (id) =>
     fetch(`${BASE_URL}/patient/reports/${id}`, { headers: getHeaders() }).then(handleResponse),
@@ -158,7 +165,7 @@ export const api = {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
-    }).then(handleResponse);
+    }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res);
   },
   deletePatientReport: (id) =>
     fetch(`${BASE_URL}/patient/reports/${id}`, { method: 'DELETE', headers: getHeaders() }).then(handleResponse),
@@ -166,7 +173,7 @@ export const api = {
 
 
   // Notifications
-  getNotifications: () => fetch(`${BASE_URL}/notifications`, { headers: getHeaders() }).then(handleResponse),
+  getNotifications: () => fetch(`${BASE_URL}/notifications`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res),
   readAllNotifications: () =>
     fetch(`${BASE_URL}/notifications/read-all`, { method: 'POST', headers: getHeaders() }).then(handleResponse),
   deleteNotification: (id) =>
@@ -181,7 +188,7 @@ export const api = {
       }
     });
     const query = params.toString();
-    return fetch(`${BASE_URL}/patient/notifications${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse);
+    return fetch(`${BASE_URL}/patient/notifications${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res);
   },
   getNotificationById: (id) =>
     fetch(`${BASE_URL}/patient/notifications/${id}`, { headers: getHeaders() }).then(handleResponse),

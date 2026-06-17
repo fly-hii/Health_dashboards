@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getHospitals, createHospital, suspendHospital, activateHospital, updateHospitalPlan, testDbConnection } from '../utils/api';
+import { Eye, EyeOff } from 'lucide-react';
 
 const STATUS_BADGE = { active: 'success', suspended: 'danger', trial: 'cyan', expired: 'warning' };
 const PLAN_BADGE   = { trial: 'cyan', basic: 'primary', professional: 'amber', enterprise: 'green' };
@@ -18,6 +19,8 @@ function CreateModal({ onClose, onCreated }) {
   const [error, setError] = useState('');
   const [testStatus, setTestStatus] = useState('');
   const [testingConn, setTestingConn] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [showDbPassword, setShowDbPassword] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -81,7 +84,34 @@ function CreateModal({ onClose, onCreated }) {
             </div>
             <div className="form-group">
               <label>Admin Password *</label>
-              <input type="password" value={form.adminPassword} onChange={e => set('adminPassword', e.target.value)} placeholder="Min 8 chars" required />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input 
+                  type={showAdminPassword ? "text" : "password"} 
+                  value={form.adminPassword} 
+                  onChange={e => set('adminPassword', e.target.value)} 
+                  placeholder="Min 8 chars" 
+                  required 
+                  style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px',
+                    color: '#94a3b8'
+                  }}
+                >
+                  {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
           </div>
           <div className="grid-2">
@@ -150,7 +180,34 @@ function CreateModal({ onClose, onCreated }) {
               <div className="grid-2">
                 <div className="form-group">
                   <label>Database Password *</label>
-                  <input type="password" value={form.dbPassword} onChange={e => set('dbPassword', e.target.value)} placeholder="Password" required={form.useExternalDb} />
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input 
+                      type={showDbPassword ? "text" : "password"} 
+                      value={form.dbPassword} 
+                      onChange={e => set('dbPassword', e.target.value)} 
+                      placeholder="Password" 
+                      required={form.useExternalDb} 
+                      style={{ width: '100%', paddingRight: '40px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowDbPassword(!showDbPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '8px',
+                        color: '#94a3b8'
+                      }}
+                    >
+                      {showDbPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
                 <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 12 }}>

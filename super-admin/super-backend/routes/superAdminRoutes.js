@@ -12,7 +12,7 @@ const {
 
 const {
   getDbConfig, upsertDbConfig, testDbConnection,
-  toggleDbConnection, listDbConnections,
+  toggleDbConnection, listDbConnections, deleteDbConfig,
 } = require('../controllers/dbConnectionController');
 
 // All routes require Super Admin JWT
@@ -33,6 +33,7 @@ router.get   ('/hospitals/:id/db-config',      getDbConfig);
 router.put   ('/hospitals/:id/db-config',      upsertDbConfig);
 router.post  ('/hospitals/:id/test-db',        testDbConnection);
 router.patch ('/hospitals/:id/db-config/toggle', toggleDbConnection);
+router.delete('/hospitals/:id/db-config',       deleteDbConfig);
 
 // ── Analytics & Audit ─────────────────────────────────────────
 router.get   ('/analytics',                    getAnalytics);

@@ -15,7 +15,7 @@ const {
 } = require('./models');
 
 const { protect } = require('./middleware/authMiddleware');
-const { register, login, getProfile, updateProfile, changePassword } = require('./controllers/authController');
+const { register, login, getProfile, updateProfile, changePassword, sendOtp, verifyOtp } = require('./controllers/authController');
 
 const app = express();
 const PORT = process.env.PORT || 5050;
@@ -114,6 +114,8 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // ────────────────────────────────────────────────────────────
 app.post('/api/auth/login', login);
 app.post('/api/auth/register', register);
+app.post('/api/auth/send-otp', sendOtp);
+app.post('/api/auth/verify-otp', verifyOtp);
 app.put('/api/auth/change-password', protect, changePassword);
 
 // ────────────────────────────────────────────────────────────

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getHospital, suspendHospital, activateHospital, updateHospitalPlan } from '../utils/api';
+import {
+  getHospital, suspendHospital, activateHospital, updateHospitalPlan,
+  getDbConfig, upsertDbConfig, deleteDbConfig, testDbConnection
+} from '../utils/api';
 
 const STATUS_BADGE = { active: 'success', suspended: 'danger', trial: 'cyan', expired: 'warning' };
 const PLAN_BADGE   = { trial: 'cyan', basic: 'primary', professional: 'amber', enterprise: 'green' };
@@ -15,12 +18,40 @@ export default function HospitalDetailPage() {
   const [showPlanEdit, setShowPlanEdit] = useState(false);
   const [msg, setMsg] = useState('');
 
+  // DB connection states
+  const [dbConfig, setDbConfig] = useState(null);
+  const [dbForm, setDbForm] = useState({ host: '', port: 3306, database_name: '', username: '', password: '', ssl_enabled: false, notes: '' });
+  const [showDbModal, setShowDbModal] = useState(false);
+  const [dbTesting, setDbTesting] = useState(false);
+  const [dbMsg, setDbMsg] = useState('');
+  const [showDbPassword, setShowDbPassword] = useState(false);
+
   const fetchHospital = async () => {
     setLoading(true);
     try {
       const { data } = await getHospital(id);
       setHospital(data.data);
       setPlanForm(p => ({ ...p, plan: data.data.plan }));
+      if (data.data.database_type === 'external') {
+        const connRes = await getDbConfig(id).catch(() => null);
+        if (connRes && connRes.data && connRes.data.success) {
+          setDbConfig(connRes.data.data);
+          setDbForm({
+            host: connRes.data.data.host || '',
+            port: connRes.data.data.port || 3306,
+            database_name: connRes.data.data.database_name || '',
+            username: connRes.data.data.username || '',
+            password: '',
+            ssl_enabled: !!connRes.data.data.ssl_enabled,
+            notes: connRes.data.data.notes || ''
+          });
+        } else {
+          setDbConfig(null);
+        }
+      } else {
+        setDbConfig(null);
+        setDbForm({ host: '', port: 3306, database_name: '', username: '', password: '', ssl_enabled: false, notes: '' });
+      }
     } catch { navigate('/hospitals'); }
     finally { setLoading(false); }
   };
@@ -54,6 +85,57 @@ export default function HospitalDetailPage() {
     } catch (err) { setMsg('❌ ' + (err.response?.data?.message || 'Failed')); }
     finally { setActionLoading(false); }
   };
+
+  const handleDbSave = async (e) => {
+    e.preventDefault();
+    setActionLoading(true);
+    setDbMsg('');
+    try {
+      const res = await upsertDbConfig(id, dbForm);
+      setDbMsg('✅ ' + res.data.message);
+      setShowDbModal(false);
+      await fetchHospital();
+    } catch (err) {
+      setDbMsg('❌ ' + (err.response?.data?.message || 'Failed to save DB configuration'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTestConnection = async (testFormValues = null) => {
+    setDbTesting(true);
+    setDbMsg('');
+    try {
+      const res = await testDbConnection(id, testFormValues);
+      setDbMsg(res.data.message || '✅ Connection successful');
+      if (!testFormValues) {
+        await fetchHospital();
+      }
+    } catch (err) {
+      setDbMsg(err.response?.data?.message || '❌ Connection test failed');
+    } finally {
+      setDbTesting(false);
+    }
+  };
+
+  const handleDbDelete = async () => {
+    if (!confirm('⚠️ Are you sure you want to remove these external database credentials? This will switch the hospital database back to the shared SaaS database. Any data must be migrated beforehand.')) {
+      return;
+    }
+    setActionLoading(true);
+    setDbMsg('');
+    try {
+      const res = await deleteDbConfig(id);
+      setDbMsg('✅ ' + res.data.message);
+      setDbConfig(null);
+      await fetchHospital();
+    } catch (err) {
+      setDbMsg('❌ ' + (err.response?.data?.message || 'Failed to delete configuration'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
 
   if (loading) return (
     <div><div className="topbar"><div className="topbar-left"><h1>Hospital Details</h1></div></div>
@@ -182,6 +264,104 @@ export default function HospitalDetailPage() {
           </div>
         </div>
 
+        {/* Database Connection Settings */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <h3>🔌 Database Connection</h3>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {h.database_type === 'external' ? (
+                <>
+                  <button className="btn btn-ghost btn-sm" onClick={() => handleTestConnection()} disabled={dbTesting || actionLoading}>
+                    {dbTesting ? '⏳ Testing...' : '⚡ Test Connection'}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => {
+                    setDbForm({
+                      host: dbConfig?.host || '',
+                      port: dbConfig?.port || 3306,
+                      database_name: dbConfig?.database_name || '',
+                      username: dbConfig?.username || '',
+                      password: '',
+                      ssl_enabled: !!dbConfig?.ssl_enabled,
+                      notes: dbConfig?.notes || ''
+                    });
+                    setShowDbPassword(false);
+                    setShowDbModal(true);
+                  }}>
+                    ✏️ Edit Credentials
+                  </button>
+                  <button className="btn btn-danger-outline btn-sm" onClick={handleDbDelete} disabled={actionLoading}>
+                    🗑️ Delete Credentials
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-primary btn-sm" onClick={() => {
+                  setDbForm({ host: '', port: 3306, database_name: '', username: '', password: '', ssl_enabled: false, notes: '' });
+                  setShowDbPassword(false);
+                  setShowDbModal(true);
+                }}>
+                  🔌 Configure External DB
+                </button>
+              )}
+            </div>
+          </div>
+          <div style={{ padding: 20 }}>
+            {dbMsg && (
+              <div className={`alert ${dbMsg.includes('❌') || dbMsg.includes('failed') ? 'alert-error' : 'alert-success'}`} style={{ marginBottom: 16 }}>
+                {dbMsg}
+              </div>
+            )}
+
+            {h.database_type === 'external' ? (
+              <div>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                  This tenant is configured to run on an isolated external database instance (BYOD - Bring Your Own Database).
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
+                  <div style={{ background: 'var(--surface2)', padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Host</div>
+                    <div style={{ fontWeight: 600, fontSize: 14, wordBreak: 'break-all' }}>{dbConfig?.host || '—'}</div>
+                  </div>
+                  <div style={{ background: 'var(--surface2)', padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Port</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{dbConfig?.port || '3306'}</div>
+                  </div>
+                  <div style={{ background: 'var(--surface2)', padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Database Name</div>
+                    <div style={{ fontWeight: 600, fontSize: 14, wordBreak: 'break-all' }}>{dbConfig?.database_name || '—'}</div>
+                  </div>
+                  <div style={{ background: 'var(--surface2)', padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Username</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{dbConfig?.username || '—'}</div>
+                  </div>
+                </div>
+                {dbConfig && (
+                  <div style={{ display: 'flex', gap: 20, marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+                    <span>SSL Enabled: <strong>{dbConfig.ssl_enabled ? 'Yes' : 'No'}</strong></span>
+                    <span>Test Status: <strong style={{ color: dbConfig.test_status === 'success' ? 'var(--success)' : 'var(--danger)' }}>{dbConfig.test_status || 'Never Tested'}</strong></span>
+                    {dbConfig.last_tested_at && (
+                      <span>Last Tested: <strong>{new Date(dbConfig.last_tested_at).toLocaleString()}</strong></span>
+                    )}
+                  </div>
+                )}
+                {dbConfig?.notes && (
+                  <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 8, fontSize: 13 }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Notes: </span>
+                    {dbConfig.notes}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>☁️</div>
+                <h4 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Shared Database Deployment</h4>
+                <p className="text-muted" style={{ fontSize: 13, maxWidth: 500, margin: '0 auto' }}>
+                  This hospital is currently using the primary shared multi-tenant SaaS database. All schemas and resources are isolated logically via row-level client keys.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Payment History */}
         <div className="card">
           <div className="card-header"><h3>💰 Payment History</h3></div>
@@ -209,6 +389,143 @@ export default function HospitalDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* DB Configuration Modal */}
+      {showDbModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 600 }}>
+            <h2>🔌 {h.database_type === 'external' ? 'Edit' : 'Configure'} External Database Connection</h2>
+            <form onSubmit={handleDbSave}>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Host *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. database.example.com"
+                    value={dbForm.host}
+                    onChange={e => setDbForm({ ...dbForm, host: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Port *</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="3306"
+                    value={dbForm.port}
+                    onChange={e => setDbForm({ ...dbForm, port: parseInt(e.target.value) || 3306 })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Database Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. careplus_hospital_db"
+                    value={dbForm.database_name}
+                    onChange={e => setDbForm({ ...dbForm, database_name: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Username *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. admin"
+                    value={dbForm.username}
+                    onChange={e => setDbForm({ ...dbForm, username: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Password {h.database_type === 'external' ? '(Leave blank to keep existing)' : '*'}</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showDbPassword ? 'text' : 'password'}
+                    required={h.database_type !== 'external'}
+                    placeholder="••••••••"
+                    value={dbForm.password}
+                    onChange={e => setDbForm({ ...dbForm, password: e.target.value })}
+                    style={{ paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDbPassword(!showDbPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      padding: '0'
+                    }}
+                  >
+                    {showDbPassword ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: 'auto' }}
+                    checked={dbForm.ssl_enabled}
+                    onChange={e => setDbForm({ ...dbForm, ssl_enabled: e.target.checked })}
+                  />
+                  Require SSL Connection
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Optional deployment details, server location, instance size..."
+                  value={dbForm.notes || ''}
+                  onChange={e => setDbForm({ ...dbForm, notes: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', marginTop: 20 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={dbTesting || actionLoading}
+                  onClick={() => handleTestConnection(dbForm)}
+                >
+                  {dbTesting ? '⏳ Testing...' : '⚡ Test Connection'}
+                </button>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={dbTesting || actionLoading}
+                    onClick={() => setShowDbModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={dbTesting || actionLoading}
+                  >
+                    {actionLoading ? '⏳ Saving...' : 'Save Configuration'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

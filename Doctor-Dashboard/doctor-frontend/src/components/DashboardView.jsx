@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 import { 
   Users, 
   Stethoscope, 
@@ -12,6 +13,10 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 
 export default function DashboardView({ onDiagnosePatient, onQueueFetched, setActiveTab }) {
+  const { user } = useAuth();
+  const rawName = user?.fullName || user?.name || 'Arjun';
+  const displayName = rawName.startsWith('Dr.') ? rawName : `Dr. ${rawName}`;
+
   const [stats, setStats] = useState({
     patientsInQueue: 12,
     todayConsultations: 18,
@@ -124,7 +129,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex flex-col text-left">
           <h1 className="text-3xl font-bold text-[#0B1F3A]">Dashboard</h1>
-          <p className="text-sm text-[#64748B] mt-1">Welcome back, Dr. Arjun! Here's your overview.</p>
+          <p className="text-sm text-[#64748B] mt-1">Welcome back, {displayName}! Here's your overview.</p>
         </div>
         {/* Date Selector Card */}
         <div className="flex items-center gap-2 bg-white border border-[#E5E7EB] hover:border-slate-300 transition-all rounded-2xl px-5 py-3 shadow-sm w-fit">

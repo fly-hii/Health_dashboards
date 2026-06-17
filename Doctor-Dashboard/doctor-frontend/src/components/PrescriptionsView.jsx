@@ -25,22 +25,26 @@ export default function PrescriptionsView() {
       setLoading(true);
       const res = await api.getPrescriptions();
       if (res.success) {
-        // Filter: Only display Cardiology prescriptions since the doctor is a Cardiologist
-        const list = res.appointments
-          .filter(apt => !apt.department || apt.department.toLowerCase().includes('cardio'))
-          .map(apt => ({
-            _id: apt._id,
-            id: `RXN${apt.tokenNumber ? apt.tokenNumber.split('-').pop() : '1024'}`,
-            patient: apt.patient?.name || 'Unknown Patient',
-            date: new Date(apt.appointmentDate).toLocaleDateString(undefined, {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric'
-            }),
-            department: apt.department || 'Cardiology',
-            medicines: apt.prescription || [],
-            notes: apt.clinicalNotes || 'None'
-          }));
+        const dataList = res.data || res.appointments || [];
+        const list = dataList.map(item => ({
+          _id: item.id || item._id,
+          id: item.id ? `RXN${item.id}` : `RXN1024`,
+          patient: item.patient?.full_name || item.patient?.name || 'Unknown Patient',
+          date: new Date(item.createdAt || item.created_at || item.appointmentDate || Date.now()).toLocaleDateString(undefined, {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+          }),
+          department: item.department || 'Cardiology',
+          medicines: (item.medicines || item.prescription || []).map(m => ({
+            medicineName: m.name || m.medicineName || '',
+            dosage: m.dosage || '',
+            frequency: m.frequency || '',
+            duration: m.duration || '',
+            instructions: m.instructions || ''
+          })),
+          notes: item.instructions || item.clinicalNotes || 'None'
+        }));
         
         // Add fallback mockup items if empty
         if (list.length === 0) {

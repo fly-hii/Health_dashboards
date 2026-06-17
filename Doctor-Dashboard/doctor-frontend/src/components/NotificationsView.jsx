@@ -12,10 +12,19 @@ export default function NotificationsView({ onDiagnosePatient }) {
       setLoading(true);
       const res = await api.getNotifications();
       if (res.success) {
-        setNotifications(res.notifications);
+        const rawNotifications = res.data || res.notifications || [];
+        const normalized = rawNotifications.map(n => ({
+          ...n,
+          _id: n.id || n._id,
+          isRead: n.status === 'read' || n.isRead || false
+        }));
+        setNotifications(normalized);
+      } else {
+        setNotifications([]);
       }
     } catch (err) {
       console.error("Failed to load notifications:", err);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -33,7 +42,7 @@ export default function NotificationsView({ onDiagnosePatient }) {
       const res = await api.markNotificationRead(id);
       if (res.success) {
         setNotifications(prev => 
-          prev.map(n => n._id === id ? { ...n, isRead: true } : n)
+          prev.map(n => (n._id === id || n.id === id) ? { ...n, isRead: true, status: 'read' } : n)
         );
       }
     } catch (err) {

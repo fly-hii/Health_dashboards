@@ -101,49 +101,6 @@ export default function Sidebar({ isMinimized }) {
               </NavLink>
             );
           })}
-
-          {/* User Portals Section */}
-          <div className="pt-2">
-            <button
-              onClick={() => setIsUserPortalsOpen(!isUserPortalsOpen)}
-              title={isMinimized ? "User Management" : ""}
-              className={`flex items-center justify-between w-full text-sm font-medium rounded-xl hover:bg-sidebar-hover hover:text-white transition-all text-left ${isMinimized ? 'px-0 justify-center gap-0 py-3.5' : 'px-4 py-3'
-                }`}
-            >
-              <div className={`flex items-center ${isMinimized ? 'justify-center gap-0' : 'gap-3'}`}>
-                <SlidersHorizontal className="w-5 h-5 text-slate-400 shrink-0" />
-                <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${isMinimized ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                  User Management
-                </span>
-              </div>
-              {!isMinimized && (isUserPortalsOpen ? (
-                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-              ))}
-            </button>
-
-            {isUserPortalsOpen && !isMinimized && (
-              <div className="pl-9 pr-2 mt-1 space-y-1">
-                {userPortals.map((portal) => {
-                  const targetPath = `/admin/user-management?role=${portal.role}`;
-                  const isPortalActive = location.pathname === '/admin/user-management' && new URLSearchParams(location.search).get('role') === portal.role;
-                  return (
-                    <NavLink
-                      key={portal.name}
-                      to={targetPath}
-                      className={`block px-4 py-2 text-xs font-medium rounded-lg transition-all ${isPortalActive
-                          ? 'bg-primary/20 text-primary border-l-2 border-primary font-semibold'
-                          : 'text-slate-400 hover:bg-sidebar-hover hover:text-white'
-                        }`}
-                    >
-                      {portal.name}
-                    </NavLink>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </nav>
       </div>
 

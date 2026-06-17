@@ -29,8 +29,8 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const res = await api.login({ email, password });
+  const login = useCallback(async (email, password, otp) => {
+    const res = await api.login({ email, password, otp });
     const newToken = res.token;
     const userData = res.user || res.profile || res.data;
     localStorage.setItem('doctor_token', newToken);

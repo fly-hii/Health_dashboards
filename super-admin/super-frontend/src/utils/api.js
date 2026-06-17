@@ -39,6 +39,10 @@ export const activateHospital = (id) => API.patch(`/super/hospitals/${id}/activa
 export const updateHospitalPlan = (id, data) => API.put(`/super/hospitals/${id}/plan`, data);
 export const deleteHospital = (id) => API.delete(`/super/hospitals/${id}`);
 export const testDbConnection = (id, data) => API.post(`/super/hospitals/${id}/test-db`, data);
+export const getDbConfig = (id) => API.get(`/super/hospitals/${id}/db-config`);
+export const upsertDbConfig = (id, data) => API.put(`/super/hospitals/${id}/db-config`, data);
+export const deleteDbConfig = (id) => API.delete(`/super/hospitals/${id}/db-config`);
+
 
 // ── Analytics ───────────────────────────────────────────────
 export const getAnalytics = () => API.get('/super/analytics');

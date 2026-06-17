@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Store, Lock, Eye, EyeOff, Shield, FileText, Pill, Search, HelpCircle, LogIn } from 'lucide-react';
 import api from '../services/api';
@@ -11,7 +11,59 @@ export default function PharmacyLogin() {
   // Form states
   const [storeId, setStoreId] = useState('');
   const [password, setPassword] = useState('');
-  const [otp, setOtp] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const inputRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null)
+  ];
+
+  const handleChangeOtpDigit = (value, index) => {
+    const cleanValue = value.replace(/[^0-9]/g, '');
+    if (!cleanValue) {
+      const newOtp = [...otp];
+      newOtp[index] = '';
+      setOtp(newOtp);
+      return;
+    }
+
+    const newOtp = [...otp];
+    newOtp[index] = cleanValue.substring(cleanValue.length - 1);
+    setOtp(newOtp);
+
+    // Auto focus next box
+    if (index < 5 && cleanValue) {
+      inputRefs[index + 1].current.focus();
+    }
+  };
+
+  const handleKeyDownOtp = (e, index) => {
+    if (e.key === 'Backspace') {
+      if (!otp[index] && index > 0) {
+        const newOtp = [...otp];
+        newOtp[index - 1] = '';
+        setOtp(newOtp);
+        inputRefs[index - 1].current.focus();
+      } else {
+        const newOtp = [...otp];
+        newOtp[index] = '';
+        setOtp(newOtp);
+      }
+    }
+  };
+
+  const handlePasteOtp = (e) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').replace(/[^0-9]/g, '').substring(0, 6);
+    if (pasteData.length === 6) {
+      const newOtp = pasteData.split('');
+      setOtp(newOtp);
+      inputRefs[5].current.focus();
+    }
+  };
   const [isOtpMode, setIsOtpMode] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -51,15 +103,16 @@ export default function PharmacyLogin() {
   const validateForm = () => {
     const newErrors = {};
     if (!storeId.trim()) {
-      newErrors.storeId = 'Store ID is required';
+      newErrors.storeId = 'Store ID or Email is required';
     }
 
     if (isOtpMode) {
+      const combinedOtp = otp.join('');
       if (!otpSent) {
         newErrors.otp = 'Please request and enter OTP';
-      } else if (!otp.trim()) {
+      } else if (!combinedOtp.trim()) {
         newErrors.otp = 'OTP is required';
-      } else if (otp.length !== 6 || !/^\d+$/.test(otp)) {
+      } else if (combinedOtp.length !== 6 || !/^\d+$/.test(combinedOtp)) {
         newErrors.otp = 'OTP must be a 6-digit number';
       }
     } else {
@@ -76,7 +129,7 @@ export default function PharmacyLogin() {
   const handleSendOtp = async (e) => {
     e.preventDefault();
     if (!storeId.trim()) {
-      setErrors({ storeId: 'Store ID is required to send OTP' });
+      setErrors({ storeId: 'Store ID or Email is required to send OTP' });
       return;
     }
 
@@ -91,7 +144,7 @@ export default function PharmacyLogin() {
       }
     } catch (err) {
       console.error(err);
-      const errMsg = err.response?.data?.message || 'Failed to send OTP. Please check your Store ID.';
+      const errMsg = err.response?.data?.message || 'Failed to send OTP. Please check your Store ID or email.';
       setApiError(errMsg);
       toast.error(errMsg);
     } finally {
@@ -107,7 +160,7 @@ export default function PharmacyLogin() {
     setLoading(true);
     setApiError('');
     try {
-      const payload = isOtpMode ? { storeId, otp } : { storeId, password };
+      const payload = isOtpMode ? { storeId, otp: otp.join('') } : { storeId, password };
       const res = await api.post('/api/pharmacy/auth/login', payload);
 
       if (res.data.success) {
@@ -140,7 +193,7 @@ export default function PharmacyLogin() {
     setErrors({});
     // Reset password & OTP values when switching
     setPassword('');
-    setOtp('');
+    setOtp(['', '', '', '', '', '']);
     setOtpSent(false);
   };
 
@@ -258,7 +311,7 @@ export default function PharmacyLogin() {
                 {/* Store ID input */}
                 <div className="flex flex-col text-left">
                   <label className="text-[13px] font-semibold text-[#374151] mb-1.5" htmlFor="store-id">
-                    Store ID
+                    Store ID or Email
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -270,7 +323,7 @@ export default function PharmacyLogin() {
                       className={`block w-full pl-11 pr-4 py-2.5 border rounded-[8px] leading-5 bg-white text-[15px] text-[#111827] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2E7D32]/20 focus:border-[#2E7D32] transition-all duration-200 ${
                         errors.storeId ? 'border-red-300 focus:ring-red-200 focus:border-red-500' : 'border-[#DDE7DF]'
                       }`}
-                      placeholder="Enter your store ID"
+                      placeholder="Enter your store ID or email"
                       value={storeId}
                       onChange={(e) => handleInputChange('storeId', e.target.value, setStoreId)}
                       disabled={loading || otpLoading}
@@ -332,49 +385,61 @@ export default function PharmacyLogin() {
 
                 {/* OTP field (OTP mode) */}
                 {isOtpMode && (
-                  <div className="flex flex-col text-left">
-                    <label className="text-[13px] font-semibold text-[#374151] mb-1.5" htmlFor="otp">
-                      OTP Code
-                    </label>
-                    <div className="flex gap-2.5">
-                      <div className="relative flex-1">
-                        <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                          <Shield className="h-4.5 w-4.5 text-gray-400" />
-                        </span>
-                        <input
-                          id="otp"
-                          type="text"
-                          maxLength={6}
-                          className={`block w-full pl-11 pr-4 py-2.5 border rounded-[8px] leading-5 bg-white text-[15px] text-[#111827] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2E7D32]/20 focus:border-[#2E7D32] transition-all duration-200 ${
-                            errors.otp ? 'border-red-300 focus:ring-red-200 focus:border-red-500' : 'border-[#DDE7DF]'
-                          }`}
-                          placeholder="6-digit OTP code"
-                          value={otp}
-                          onChange={(e) => handleInputChange('otp', e.target.value.replace(/\D/g, ''), setOtp)}
-                          disabled={loading || !otpSent}
-                        />
-                      </div>
+                  <div className="flex flex-col text-left space-y-3.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[13px] font-semibold text-[#374151]">
+                        Verification Code
+                      </label>
+                      
+                      {/* Send OTP button positioned inline on the top right of the OTP section */}
                       <button
                         type="button"
                         onClick={handleSendOtp}
                         disabled={otpLoading || countdown > 0}
-                        className={`px-4 h-[44px] rounded-[8px] text-[13px] font-bold border transition-all cursor-pointer ${
+                        className={`text-[12px] font-bold transition-all cursor-pointer focus:outline-none ${
                           countdown > 0
-                            ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-[#F4FAF5] border-[#2E7D32]/25 text-[#2E7D32] hover:bg-emerald-100/60'
+                            ? 'text-gray-400 cursor-not-allowed'
+                            : 'text-[#2E7D32] hover:underline'
                         }`}
                       >
                         {otpLoading 
                           ? 'Sending...' 
                           : countdown > 0 
-                            ? `Resend (${countdown}s)` 
+                            ? `Resend in ${countdown}s` 
                             : otpSent 
                               ? 'Resend OTP' 
                               : 'Send OTP'}
                       </button>
                     </div>
+
+                    {otpSent && (
+                      <div className="flex gap-2.5 justify-center items-center py-2" onPaste={handlePasteOtp}>
+                        {otp.map((digit, idx) => (
+                          <input
+                            key={idx}
+                            ref={inputRefs[idx]}
+                            type="text"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handleChangeOtpDigit(e.target.value, idx)}
+                            onKeyDown={(e) => handleKeyDownOtp(e, idx)}
+                            disabled={loading}
+                            className={`w-11 h-11 text-center font-bold text-lg bg-slate-50 border rounded-lg outline-none transition-all duration-150 text-[#111827] focus:ring-2 focus:ring-[#2E7D32]/20 focus:border-[#2E7D32] ${
+                              errors.otp ? 'border-red-300' : 'border-[#DDE7DF]'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {!otpSent && (
+                      <p className="text-xs text-gray-500 text-center py-4 bg-slate-50 border border-dashed border-[#DDE7DF] rounded-[8px]">
+                        Please request OTP code to verify your account
+                      </p>
+                    )}
+
                     {errors.otp && (
-                      <span className="text-red-500 text-[12px] font-medium mt-1 pl-1">
+                      <span className="text-red-500 text-[12px] font-medium pl-1 text-center block">
                         {errors.otp}
                       </span>
                     )}

@@ -470,7 +470,7 @@ export default function Dashboard() {
                   </tr>
                 ) : (
                   recentAppointments.map((appt) => (
-                    <tr key={appt._id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-all">
+                    <tr key={appt.id || appt._id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-all">
                       <td className="py-3 font-semibold text-slate-700">{appt.patient?.name || 'Unknown Patient'}</td>
                       <td className="py-3 text-slate-500">{appt.doctor?.name || 'Unassigned Doctor'}</td>
                       <td className="py-3 text-slate-500">
@@ -539,7 +539,7 @@ export default function Dashboard() {
               <p className="text-xs text-slate-400 text-center py-8">No recent activity logs available</p>
             ) : (
               activities.map((act) => (
-                <div key={act._id} className="flex items-start gap-3 text-xs pb-3 border-b border-slate-50 last:border-0 hover:bg-slate-50/30 p-1 rounded transition-all">
+                <div key={act.id || act._id} className="flex items-start gap-3 text-xs pb-3 border-b border-slate-50 last:border-0 hover:bg-slate-50/30 p-1 rounded transition-all">
                   <div className="p-1 rounded bg-slate-100 text-slate-500 mt-0.5">
                     <Activity className="w-3.5 h-3.5 text-primary" />
                   </div>

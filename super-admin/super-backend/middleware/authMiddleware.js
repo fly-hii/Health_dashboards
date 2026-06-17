@@ -10,6 +10,8 @@ const protect = async (req, res, next) => {
   try {
     const token   = auth.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role !== 'SUPER_ADMIN')
+      return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
 
     const admin = await SuperAdmin.findByPk(decoded.id, {
       attributes: { exclude: ['password'] },

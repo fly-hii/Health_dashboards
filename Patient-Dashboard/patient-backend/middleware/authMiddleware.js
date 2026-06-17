@@ -14,6 +14,9 @@ const protect = async (req, res, next) => {
     return res.status(401).json({ success: false, message: 'Not authorized, no token' });
   try {
     const decoded    = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET);
+    if (decoded.role !== 'PATIENT')
+      return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
+
     const hospitalId = decoded.hospitalId;
     if (!hospitalId)
       return res.status(401).json({ success: false, message: 'Token missing hospitalId' });
@@ -35,6 +38,9 @@ const protect = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('[AuthMiddleware] Error:', err.message);
+    if (err.message === 'Hospital account is suspended') {
+      return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
+    }
     return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
   }
 };

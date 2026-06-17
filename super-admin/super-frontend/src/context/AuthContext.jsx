@@ -9,10 +9,10 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
 
-  const login = async (email, password) => {
+  const login = async (email, password, otp) => {
     setLoading(true);
     try {
-      const { data } = await apiLogin({ email, password });
+      const { data } = await apiLogin({ email, password, otp });
       if (data.success) {
         localStorage.setItem('sa_token', data.token);
         localStorage.setItem('sa_user', JSON.stringify(data.user));
