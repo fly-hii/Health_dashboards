@@ -18,6 +18,64 @@ const bcrypt = require('bcryptjs');
 const { masterDb }          = require('../services/databaseResolver');
 const { getHospitalConnection } = require('../services/databaseResolver');
 const { createModels }      = require('../services/modelFactory');
+const { decrypt } = require('../services/encryptionService');
+
+const checkUserInOtherPortals = async (email, password, otp) => {
+  try {
+    const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (superAdmins && superAdmins.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, superAdmins[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  const { sharedSaasDb } = require('../services/databaseResolver');
+  try {
+    const [users] = await sharedSaasDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (users && users.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  try {
+    const [patients] = await sharedSaasDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (patients && patients.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  try {
+    const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+    const { getHospitalConnection } = require('../services/databaseResolver');
+    const { Sequelize } = require('sequelize');
+    for (const conn of connections) {
+      try {
+        const decryptedPassword = decrypt(conn.password_encrypted);
+        const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+          host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+          dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+        });
+        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (users && users.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (patients && patients.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        await externalDb.close();
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  return false;
+};
 
 const genToken = (id, hospitalId, role) =>
   jwt.sign({ id, hospitalId, role }, process.env.JWT_SECRET, {
@@ -86,12 +144,22 @@ const login = async (req, res) => {
     const { User, AuditLog } = models;
     const user = await User.findOne({ where: { email } });
 
-    if (!user)
+    if (!user) {
+      const existsElsewhere = await checkUserInOtherPortals(email, password, otp);
+      if (existsElsewhere) {
+        return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+      }
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
 
     // Restrict access to administrative roles
     if (user.role !== 'SUPER_ADMIN' && user.role !== 'HOSPITAL_ADMIN' && user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, message: 'Access denied. Only administrative users can access this portal.' });
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, user.password);
+      if (ok) {
+        return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+      } else {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
     }
 
     if (user.status === 'Inactive')

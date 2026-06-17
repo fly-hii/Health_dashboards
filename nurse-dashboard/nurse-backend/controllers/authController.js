@@ -1,6 +1,65 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
+const { masterDb } = require('../services/databaseResolver');
+
+const checkUserInOtherPortals = async (email, password, otp) => {
+  try {
+    const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (superAdmins && superAdmins.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, superAdmins[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  const { sharedSaasDb } = require('../services/databaseResolver');
+  try {
+    const [users] = await sharedSaasDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (users && users.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  try {
+    const [patients] = await sharedSaasDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (patients && patients.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  try {
+    const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+    const { decrypt } = require('../services/encryptionService');
+    const { getHospitalConnection } = require('../services/databaseResolver');
+    const { Sequelize } = require('sequelize');
+    for (const conn of connections) {
+      try {
+        const decryptedPassword = decrypt(conn.password_encrypted);
+        const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+          host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+          dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+        });
+        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (users && users.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (patients && patients.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        await externalDb.close();
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  return false;
+};
 
 const getPasswordComplexityError = (password) => {
   if (!password || password.length < 8) {
@@ -81,8 +140,23 @@ const login = async (req, res) => {
       }
     }
 
-    if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    if (!['NURSE', 'HOSPITAL_ADMIN'].includes(user.role)) return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
+    if (!user) {
+      const existsElsewhere = await checkUserInOtherPortals(email, password, otp);
+      if (existsElsewhere) {
+        return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+      }
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    if (!['NURSE', 'HOSPITAL_ADMIN'].includes(user.role)) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, user.password);
+      if (ok) {
+        return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+      } else {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
+    }
+
     if (user.status === 'Inactive') return res.status(403).json({ success: false, message: 'Account deactivated' });
 
     if (otp) {

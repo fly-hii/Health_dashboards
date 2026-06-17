@@ -4,6 +4,65 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const { protect } = require('../middleware/authMiddleware');
+const { masterDb } = require('../services/databaseResolver');
+const { decrypt } = require('../services/encryptionService');
+
+const checkUserInOtherPortals = async (email, password, otp) => {
+  try {
+    const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (superAdmins && superAdmins.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, superAdmins[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  const { sharedSaasDb } = require('../services/databaseResolver');
+  try {
+    const [users] = await sharedSaasDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (users && users.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  try {
+    const [patients] = await sharedSaasDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (patients && patients.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  try {
+    const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+    const { getHospitalConnection } = require('../services/databaseResolver');
+    const { Sequelize } = require('sequelize');
+    for (const conn of connections) {
+      try {
+        const decryptedPassword = decrypt(conn.password_encrypted);
+        const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+          host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+          dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+        });
+        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (users && users.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (patients && patients.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        await externalDb.close();
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  return false;
+};
 
 const getPasswordComplexityError = (password) => {
   if (!password || password.length < 8) {
@@ -164,7 +223,23 @@ router.post('/auth/login', async (req, res) => {
       }
     }
 
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      const existsElsewhere = await checkUserInOtherPortals(storeId, password, otp);
+      if (existsElsewhere) {
+        return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+      }
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!['PHARMACIST', 'HOSPITAL_ADMIN'].includes(user.role)) {
+      const ok = password ? await bcrypt.compare(password, user.password) : (otp === '123456');
+      if (ok) {
+        return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+      } else {
+        return res.status(400).json({ message: 'Incorrect password.' });
+      }
+    }
+
     if (user.status === 'Inactive') return res.status(403).json({ message: 'Account deactivated' });
 
     if (password) {
@@ -184,6 +259,7 @@ router.post('/auth/login', async (req, res) => {
 
     const json = user.toJSON();
     res.json({
+      success: true,
       token,
       user: {
         _id: json.id,
@@ -271,7 +347,8 @@ router.put('/change-password', protect, async (req, res) => {
     }
 
     const { User } = req.models;
-    const user = await User.findByPk(req.user.id);
+    const user = await User.findOne({ where: { id: req.user.id, hospital_id: req.hospitalId } });
+    if (!user) return res.status(404).json({ message: 'User not found' });
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Incorrect current password' });
 
@@ -373,7 +450,7 @@ router.put('/prescriptions/:id/status', protect, async (req, res) => {
     await order.save();
 
     if (req.io) {
-      req.io.emit('orderStatusUpdated', order.toJSON());
+      req.io.to(`hospital_${req.hospitalId}`).emit('orderStatusUpdated', order.toJSON());
     }
 
     res.json({ message: `Status updated to ${status}`, order });
@@ -473,7 +550,7 @@ router.patch('/orders/:id/status', protect, async (req, res) => {
     await order.save();
 
     if (req.io) {
-      req.io.emit('orderStatusUpdated', order.toJSON());
+      req.io.to(`hospital_${req.hospitalId}`).emit('orderStatusUpdated', order.toJSON());
     }
 
     res.json(order);

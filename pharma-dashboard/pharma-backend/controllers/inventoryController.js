@@ -74,7 +74,7 @@ const updateStock = async (req, res) => {
 
       // If low stock, emit notification
       if (item.status === 'Low Stock' || item.status === 'Out of Stock') {
-        if (req.io) req.io.emit('lowStockAlert', mappedItem);
+        if (req.io) req.io.to(`hospital_${req.hospitalId}`).emit('lowStockAlert', mappedItem);
         try {
           const notification = await Notification.create({
             hospital_id: req.hospitalId,
@@ -93,7 +93,7 @@ const updateStock = async (req, res) => {
             message: notification.message,
             isRead: false,
           };
-          if (req.io) req.io.emit('newNotification', mappedNotification);
+          if (req.io) req.io.to(`hospital_${req.hospitalId}`).emit('newNotification', mappedNotification);
         } catch (err) {
           console.error('Failed to create low stock notification:', err.message);
         }

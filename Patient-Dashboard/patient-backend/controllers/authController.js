@@ -2,6 +2,51 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const { Patient, Hospital, AuditLog } = require('../models');
+const { masterDb } = require('../services/databaseResolver');
+
+const checkUserInOtherPortals = async (email, password) => {
+  try {
+    const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (superAdmins && superAdmins.length > 0) {
+      const ok = await bcrypt.compare(password, superAdmins[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  const { sharedSaasDb } = require('../services/databaseResolver');
+  try {
+    const [users] = await sharedSaasDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (users && users.length > 0) {
+      const ok = await bcrypt.compare(password, users[0].password);
+      if (ok) return true;
+    }
+  } catch (_) {}
+
+  try {
+    const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+    const { decrypt } = require('../services/encryptionService');
+    const { getHospitalConnection } = require('../services/databaseResolver');
+    const { Sequelize } = require('sequelize');
+    for (const conn of connections) {
+      try {
+        const decryptedPassword = decrypt(conn.password_encrypted);
+        const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+          host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+          dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+        });
+        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (users && users.length > 0) {
+          const ok = await bcrypt.compare(password, users[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        await externalDb.close();
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  return false;
+};
 
 const generateToken = (patient) =>
   jwt.sign(
@@ -186,8 +231,15 @@ const login = async (req, res) => {
       }
     }
 
-    if (!patient)
+    if (!patient) {
+      if (email) {
+        const existsElsewhere = await checkUserInOtherPortals(email, password);
+        if (existsElsewhere) {
+          return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+        }
+      }
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
     if (patient.status === 'Inactive')
       return res.status(403).json({ success: false, message: 'Account is deactivated' });
 

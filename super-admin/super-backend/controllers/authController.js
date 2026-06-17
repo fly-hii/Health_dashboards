@@ -3,6 +3,65 @@
 const jwt    = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { SuperAdmin, AuditLog } = require('../models');
+const { masterDb } = require('../config/masterDatabase');
+const { sharedSaasDb } = require('../services/databaseResolver');
+
+const checkUserInOtherPortals = async (email, password, otp) => {
+  const { sharedSaasDb } = require('../services/databaseResolver');
+  try {
+    const [users] = await sharedSaasDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (users && users.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+      if (ok) return true;
+    }
+  } catch (err) {
+    console.error("Error checking sharedSaasDb.users:", err);
+  }
+
+  try {
+    const [patients] = await sharedSaasDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+    if (patients && patients.length > 0) {
+      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+      if (ok) return true;
+    }
+  } catch (err) {
+    console.error("Error checking sharedSaasDb.patients:", err);
+  }
+
+  try {
+    const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+    const { decrypt } = require('../services/encryptionService');
+    const { Sequelize } = require('sequelize');
+    for (const conn of connections) {
+      try {
+        const decryptedPassword = decrypt(conn.password_encrypted);
+        const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+          host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+          dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+        });
+        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (users && users.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+        if (patients && patients.length > 0) {
+          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+          await externalDb.close();
+          if (ok) return true;
+        }
+        await externalDb.close();
+      } catch (err) {
+        console.error(`Error checking external connection ${conn.database_name}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("Error querying external db_connections:", err);
+  }
+
+  return false;
+};
 
 const getPasswordComplexityError = (password) => {
   if (!password || password.length < 8) {
@@ -36,8 +95,13 @@ const login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and password or OTP required' });
 
     const admin = await SuperAdmin.findOne({ where: { email } });
-    if (!admin)
+    if (!admin) {
+      const existsElsewhere = await checkUserInOtherPortals(email, password, otp);
+      if (existsElsewhere) {
+        return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
+      }
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
 
     if (!admin.is_active)
       return res.status(403).json({ success: false, message: 'Account is deactivated' });

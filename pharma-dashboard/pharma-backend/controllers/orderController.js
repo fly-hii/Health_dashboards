@@ -156,9 +156,9 @@ const updateOrderStatus = async (req, res) => {
       await order.save();
       const updatedMapped = mapOrderResponse(order);
       
-      // Emit socket event
+      // Emit socket event to this hospital's room only
       if (req.io) {
-        req.io.emit('orderStatusUpdated', updatedMapped);
+        req.io.to(`hospital_${req.hospitalId}`).emit('orderStatusUpdated', updatedMapped);
       }
       
       res.json(updatedMapped);
@@ -195,7 +195,7 @@ const updateOrderMedicines = async (req, res) => {
     if (order) {
       const updatedMapped = mapOrderResponse(order);
       if (req.io) {
-        req.io.emit('orderStatusUpdated', updatedMapped);
+        req.io.to(`hospital_${req.hospitalId}`).emit('orderStatusUpdated', updatedMapped);
       }
       res.json(updatedMapped);
     } else {
