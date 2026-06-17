@@ -7,6 +7,7 @@ import HospitalsPage from './pages/HospitalsPage';
 import HospitalDetailPage from './pages/HospitalDetailPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
+import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="/hospitals/:id" element={<HospitalDetailPage />} />
             <Route path="/analytics"   element={<AnalyticsPage />} />
             <Route path="/audit"       element={<AuditLogsPage />} />
+            <Route path="/settings"    element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

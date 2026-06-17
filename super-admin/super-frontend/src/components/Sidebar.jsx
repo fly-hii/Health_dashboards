@@ -44,16 +44,19 @@ export default function Sidebar() {
         ))}
 
         <div className="nav-section-title" style={{ marginTop: 16 }}>System</div>
-        <div className="nav-item" style={{ cursor: 'default', opacity: 0.6 }}>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
           <span className="icon">⚙️</span> Settings
-        </div>
+        </NavLink>
       </nav>
 
       <div className="sidebar-footer">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <div style={{
             width: 36, height: 36, borderRadius: '50%',
-            background: 'linear-gradient(135deg,#6366f1,#06b6d4)',
+            background: 'var(--gradient)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700, color: 'white', fontSize: 14,
           }}>

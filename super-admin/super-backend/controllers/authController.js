@@ -62,4 +62,75 @@ const getMe = async (req, res) => {
   res.json({ success: true, user: req.user });
 };
 
-module.exports = { login, logout, getMe };
+// PUT /api/auth/change-password
+const changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  try {
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ success: false, message: 'Current and new password required' });
+
+    const admin = await SuperAdmin.findByPk(req.user.id);
+    if (!admin)
+      return res.status(404).json({ success: false, message: 'Admin not found' });
+
+    const ok = await bcrypt.compare(currentPassword, admin.password);
+    if (!ok)
+      return res.status(400).json({ success: false, message: 'Invalid current password' });
+
+    const salt = await bcrypt.genSalt(12);
+    const hashed = await bcrypt.hash(newPassword, salt);
+    await admin.update({ password: hashed });
+
+    AuditLog.create({
+      admin_id: admin.id, hospital_id: null,
+      action: 'UPDATE', module: 'Auth',
+      description: `Super Admin "${admin.name}" changed password`,
+      ip_address: req.ip,
+    }).catch(console.error);
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Super admin password change error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// PUT /api/auth/profile
+const updateProfile = async (req, res) => {
+  const { name, email } = req.body;
+  try {
+    if (!name || !email)
+      return res.status(400).json({ success: false, message: 'Name and email are required' });
+
+    const admin = await SuperAdmin.findByPk(req.user.id);
+    if (!admin)
+      return res.status(404).json({ success: false, message: 'Admin not found' });
+
+    // Check email uniqueness
+    if (email !== admin.email) {
+      const emailTaken = await SuperAdmin.findOne({ where: { email } });
+      if (emailTaken)
+        return res.status(400).json({ success: false, message: 'Email address is already in use by another admin' });
+    }
+
+    await admin.update({ name, email });
+
+    AuditLog.create({
+      admin_id: admin.id, hospital_id: null,
+      action: 'UPDATE', module: 'Auth',
+      description: `Super Admin "${admin.name}" updated profile details`,
+      ip_address: req.ip,
+    }).catch(console.error);
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: { id: admin.id, name: admin.name, email: admin.email, role: 'SUPER_ADMIN' }
+    });
+  } catch (error) {
+    console.error('Super admin profile update error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { login, logout, getMe, changePassword, updateProfile };

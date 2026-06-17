@@ -8,6 +8,14 @@
     <title>CarePlus · Super Admin</title>
   </head>
   <body>
+    <script>
+      (function() {
+        const theme = localStorage.getItem('theme') || 'light';
+        if (theme === 'dark') {
+          document.body.classList.add('dark-theme');
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

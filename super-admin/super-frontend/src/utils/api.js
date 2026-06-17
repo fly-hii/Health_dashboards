@@ -26,6 +26,8 @@ API.interceptors.response.use(
 
 // ── Auth ────────────────────────────────────────────────────
 export const login = (data) => API.post('/auth/login', data);
+export const changePassword = (data) => API.put('/auth/change-password', data);
+export const updateProfile = (data) => API.put('/auth/profile', data);
 
 // ── Hospitals ───────────────────────────────────────────────
 export const getHospitals = (params) => API.get('/super/hospitals', { params });

@@ -75,10 +75,10 @@ export default function DashboardPage() {
               {(analytics?.hospitalsByPlan || []).length === 0
                 ? <div className="empty-state"><div className="icon">📊</div><p>No data yet</p></div>
                 : (analytics?.hospitalsByPlan || []).map((p) => (
-                  <div key={p.plan} style={{ marginBottom: 14 }}>
+                  <div key={p.plan || 'unassigned'} style={{ marginBottom: 14 }}>
                     <div className="flex-between mb-4" style={{ marginBottom: 6 }}>
                       <span style={{ fontSize: 13, textTransform: 'capitalize', fontWeight: 500 }}>
-                        {p.plan}
+                        {p.plan || 'no plan'}
                       </span>
                       <span className={`badge badge-${PLANS[p.plan] || 'primary'}`}>{p.count}</span>
                     </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getAnalytics } from '../utils/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
-const PLAN_COLORS = { trial: '#06b6d4', basic: '#6366f1', professional: '#f59e0b', enterprise: '#10b981' };
+const PLAN_COLORS = { trial: '#38bdf8', basic: '#0ea5e9', professional: '#f59e0b', enterprise: '#10b981', 'no plan': '#94a3b8' };
 
 export default function AnalyticsPage() {
   const [data, setData] = useState(null);
@@ -25,10 +25,13 @@ export default function AnalyticsPage() {
     name: new Date(m.year, m.month - 1).toLocaleString('en', { month: 'short', year: '2-digit' }),
     revenue: parseFloat(m.total || 0),
   }));
-  const planData = (data?.hospitalsByPlan || []).map(p => ({
-    name: p.plan.charAt(0).toUpperCase() + p.plan.slice(1),
-    value: parseInt(p.count),
-  }));
+  const planData = (data?.hospitalsByPlan || []).map(p => {
+    const planName = p.plan ? (p.plan.charAt(0).toUpperCase() + p.plan.slice(1)) : 'No Plan';
+    return {
+      name: planName,
+      value: parseInt(p.count),
+    };
+  });
 
   const summary = [
     { label: 'Total Hospitals',  value: ov.totalHospitals   || 0, icon: '🏥', color: 'indigo' },
@@ -99,18 +102,19 @@ export default function AnalyticsPage() {
           {/* Plan Distribution Pie */}
           <div className="card">
             <div className="card-header"><h3>🏷️ Plan Distribution</h3></div>
-            <div style={{ padding: '20px 10px' }}>
+            <div style={{ padding: '10px 10px' }}>
               {planData.length === 0 ? (
                 <div className="empty-state"><div className="icon">📊</div><p>No plan data</p></div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
+                  <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                     <Pie
                       data={planData}
                       cx="50%" cy="50%"
-                      innerRadius={60} outerRadius={90}
+                      innerRadius={45} outerRadius={70}
                       paddingAngle={3}
                       dataKey="value"
+                      nameKey="name"
                       label={({ name, value }) => `${name}: ${value}`}
                       labelLine={false}
                     >
@@ -134,7 +138,7 @@ export default function AnalyticsPage() {
             {[
               { label: 'Activation Rate', value: ov.totalHospitals ? Math.round((ov.activeHospitals/ov.totalHospitals)*100) : 0, suffix: '%', color: '#10b981' },
               { label: 'Suspension Rate', value: ov.totalHospitals ? Math.round((ov.suspendedHospitals/ov.totalHospitals)*100) : 0, suffix: '%', color: '#ef4444' },
-              { label: 'Trial Conversion Target', value: ov.trialHospitals || 0, suffix: ' hospitals', color: '#06b6d4' },
+              { label: 'Trial Conversion Target', value: ov.trialHospitals || 0, suffix: ' Hospitals', color: '#06b6d4' },
               { label: 'Avg Revenue/Hospital', value: ov.totalHospitals ? Math.round(ov.totalRevenue/ov.totalHospitals) : 0, prefix: '₹', color: '#f59e0b' },
             ].map(m => (
               <div key={m.label} style={{ textAlign: 'center' }}>
