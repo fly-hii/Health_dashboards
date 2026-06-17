@@ -57,6 +57,8 @@ app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/audit-logs', require('./routes/auditRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/departments', require('./routes/departmentRoutes'));
+app.use('/api/hospitals', require('./routes/hospitalRoutes'));
 
 app.get('/health', (req, res) => res.json({
   status: 'healthy', service: 'CarePlus Hospital Admin API v3.0',

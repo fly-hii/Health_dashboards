@@ -14,7 +14,8 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Building
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../services/api';
@@ -23,6 +24,7 @@ export default function Sidebar({ isMinimized }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isUserPortalsOpen, setIsUserPortalsOpen] = useState(true);
+  const [isAdminOpen, setIsAdminOpen] = useState(true);
 
   const handleLogout = async () => {
     try {
@@ -101,6 +103,53 @@ export default function Sidebar({ isMinimized }) {
               </NavLink>
             );
           })}
+          {/* Hospital Administration Section */}
+          <div className="pt-2">
+            <button
+              onClick={() => setIsAdminOpen(!isAdminOpen)}
+              title={isMinimized ? "Hospital Admin" : ""}
+              className={`flex items-center justify-between w-full text-sm font-medium rounded-xl hover:bg-sidebar-hover hover:text-white transition-all text-left ${isMinimized ? 'px-0 justify-center gap-0 py-3.5' : 'px-4 py-3'
+                }`}
+            >
+              <div className={`flex items-center ${isMinimized ? 'justify-center gap-0' : 'gap-3'}`}>
+                <Building className="w-5 h-5 text-slate-400 shrink-0" />
+                <span className={`transition-all duration-300 whitespace-nowrap overflow-hidden ${isMinimized ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+                  Hospital Admin
+                </span>
+              </div>
+              {!isMinimized && (isAdminOpen ? (
+                <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+              ))}
+            </button>
+
+            {isAdminOpen && !isMinimized && (
+              <div className="pl-9 pr-2 mt-1 space-y-1">
+                {[
+                  { name: 'Hospital Profile', path: '/admin/hospital-profile' },
+                  { name: 'Department Management', path: '/admin/departments' },
+                  { name: 'Staff Management', path: '/admin/staff' },
+                  { name: 'Hospital Settings', path: '/admin/hospital-settings' },
+                ].map((subItem) => {
+                  const isActive = location.pathname === subItem.path;
+                  return (
+                    <NavLink
+                      key={subItem.name}
+                      to={subItem.path}
+                      className={`block px-4 py-2 text-xs font-medium rounded-lg transition-all ${isActive
+                          ? 'bg-primary/20 text-primary border-l-2 border-primary font-semibold'
+                          : 'text-slate-400 hover:bg-sidebar-hover hover:text-white'
+                        }`}
+                    >
+                      {subItem.name}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
         </nav>
       </div>
 

@@ -14,6 +14,10 @@ import Reports from './pages/Reports';
 import AuditLogs from './pages/AuditLogs';
 import UserManagement from './pages/UserManagement';
 import Notifications from './pages/Notifications';
+import HospitalProfile from './pages/HospitalProfile';
+import DepartmentManagement from './pages/DepartmentManagement';
+import StaffManagement from './pages/StaffManagement';
+import HospitalSettings from './pages/HospitalSettings';
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('admin_token');
@@ -47,6 +51,10 @@ function App() {
           <Route path="notifications" element={<Notifications />} />
           <Route path="audit-logs" element={<AuditLogs />} />
           <Route path="user-management" element={<UserManagement />} />
+          <Route path="hospital-profile" element={<HospitalProfile />} />
+          <Route path="departments" element={<DepartmentManagement />} />
+          <Route path="staff" element={<StaffManagement />} />
+          <Route path="hospital-settings" element={<HospitalSettings />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

@@ -375,6 +375,7 @@ function createModels(sequelize) {
   // Hospital ↔ Department
   Hospital.hasMany(Department,  { foreignKey: 'hospital_id', as: 'departments' });
   Department.belongsTo(Hospital, { foreignKey: 'hospital_id', as: 'hospital' });
+  Department.belongsTo(User, { foreignKey: 'head_doctor_id', as: 'headDoctor' });
 
   // Hospital ↔ User
   Hospital.hasMany(User, { foreignKey: 'hospital_id', as: 'staff' });
@@ -441,6 +442,8 @@ function createModels(sequelize) {
   LabTest.belongsTo(Patient, { foreignKey: 'patient_id', as: 'patient' });
   Consultation.hasMany(LabTest, { foreignKey: 'consultation_id', as: 'labTests' });
   LabTest.belongsTo(Consultation, { foreignKey: 'consultation_id', as: 'consultation' });
+  LabTest.belongsTo(User, { foreignKey: 'doctor_id', as: 'technician' });
+
 
   // Payment
   Patient.hasMany(Payment, { foreignKey: 'patient_id', as: 'payments' });
