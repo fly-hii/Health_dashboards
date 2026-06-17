@@ -1,16 +1,16 @@
 'use strict';
-const express  = require('express');
-const http     = require('http');
-const cors     = require('cors');
-const morgan   = require('morgan');
+const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const morgan = require('morgan');
 require('dotenv').config();
 
 const { initConnections } = require('./services/databaseResolver');
-const { initSocket }      = require('./sockets/socket');
+const { initSocket } = require('./sockets/socket');
 
-const app    = express();
+const app = express();
 const server = http.createServer(app);
-const io     = initSocket(server);
+const io = initSocket(server);
 app.set('io', io);
 
 if (!process.env.CLIENT_URL) {
@@ -25,7 +25,9 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:5176',
   'http://localhost:5177',
-  'http://localhost:5180'
+  'http://localhost:5180',
+  'https://health-dashboards-hospital-admin-fr.vercel.app',
+  'https://health-dashboardsptal-admin-backend.vercel.app',
 ].filter(Boolean);
 
 app.use(cors({
@@ -43,17 +45,17 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
 // Routes
-app.use('/api/auth',          require('./routes/authRoutes'));
-app.use('/api/users',         require('./routes/userRoutes'));
-app.use('/api/doctors',       require('./routes/doctorRoutes'));
-app.use('/api/patients',      require('./routes/patientRoutes'));
-app.use('/api/appointments',  require('./routes/appointmentRoutes'));
-app.use('/api/pharmacy',      require('./routes/pharmacyRoutes'));
-app.use('/api/laboratory',    require('./routes/labRoutes'));
-app.use('/api/billing',       require('./routes/billingRoutes'));
-app.use('/api/reports',       require('./routes/reportRoutes'));
-app.use('/api/audit-logs',    require('./routes/auditRoutes'));
-app.use('/api/dashboard',     require('./routes/dashboardRoutes'));
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/doctors', require('./routes/doctorRoutes'));
+app.use('/api/patients', require('./routes/patientRoutes'));
+app.use('/api/appointments', require('./routes/appointmentRoutes'));
+app.use('/api/pharmacy', require('./routes/pharmacyRoutes'));
+app.use('/api/laboratory', require('./routes/labRoutes'));
+app.use('/api/billing', require('./routes/billingRoutes'));
+app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/audit-logs', require('./routes/auditRoutes'));
+app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 
 app.get('/health', (req, res) => res.json({
