@@ -33,15 +33,20 @@ export default function App() {
     if (!isAuthenticated || !user) return;
 
     const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-    const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : 'http://localhost:5051';
+    const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : '';
     const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
+
+    // Skip socket if no real URL is available (e.g. Vercel serverless without VITE_SOCKET_URL)
+    if (!socketUrl || socketUrl === 'http://localhost:5051') {
+      // Still fall back to localhost socket when running locally
+      if (!socketUrl) return;
+    }
+
     const socket = io(socketUrl, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket'],          // websocket only — no polling 404 spam
       reconnectionAttempts: 3,
       timeout: 5000,
-      auth: {
-        token: localStorage.getItem('doctor_token')
-      }
+      auth: { token: localStorage.getItem('doctor_token') }
     });
 
     socket.on('connect', () => {
@@ -49,42 +54,21 @@ export default function App() {
       socket.emit('join_room', user._id || user.id);
     });
 
+    socket.on('connect_error', (err) => {
+      console.warn('Socket connection unavailable (real-time updates disabled):', err.message);
+    });
+
     // Handle real-time socket events
-    socket.on('STATS_UPDATED', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
+    socket.on('STATS_UPDATED', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('QUEUE_COUNT_UPDATED', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('CONSULTATION_STARTED', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('CONSULTATION_COMPLETED', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('NEW_APPOINTMENT', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('NEW_FOLLOWUP', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('PATIENT_CHECKED_IN', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('PATIENT_SENT_TO_DOCTOR', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
 
-    socket.on('QUEUE_COUNT_UPDATED', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
-
-    socket.on('CONSULTATION_STARTED', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
-
-    socket.on('CONSULTATION_COMPLETED', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
-
-    socket.on('NEW_APPOINTMENT', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
-
-    socket.on('NEW_FOLLOWUP', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
-
-    socket.on('PATIENT_CHECKED_IN', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
-
-    socket.on('PATIENT_SENT_TO_DOCTOR', () => {
-      window.dispatchEvent(new CustomEvent('dashboard_refresh'));
-    });
-
-    return () => {
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, [isAuthenticated, user]);
 
 

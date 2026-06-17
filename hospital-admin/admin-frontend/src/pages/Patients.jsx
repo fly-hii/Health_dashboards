@@ -592,44 +592,44 @@ export default function Patients() {
 
       {/* Top Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-        {[
+      {[
           { 
             title: 'Total Patients', 
-            count: stats?.totalPatients?.count ?? '2,568', 
-            growth: stats?.totalPatients?.growth ?? '12.5%', 
-            isUp: (stats?.totalPatients?.growth ?? 12.5) >= 0,
+            count: stats?.totalPatients?.count ?? '—', 
+            growth: stats?.totalPatients?.growth ?? null, 
+            isUp: (parseFloat(stats?.totalPatients?.growth) ?? 0) >= 0,
             icon: Users, 
             bg: 'bg-emerald-50 border-emerald-100 text-emerald-600' 
           },
           { 
             title: 'Male Patients', 
-            count: stats?.malePatients?.count ?? '1,326', 
-            growth: stats?.malePatients?.growth ?? '8.3%', 
-            isUp: (stats?.malePatients?.growth ?? 8.3) >= 0,
+            count: stats?.malePatients?.count ?? '—', 
+            growth: stats?.malePatients?.growth ?? null, 
+            isUp: (parseFloat(stats?.malePatients?.growth) ?? 0) >= 0,
             icon: User, 
             bg: 'bg-sky-50 border-sky-100 text-sky-600' 
           },
           { 
             title: 'Female Patients', 
-            count: stats?.femalePatients?.count ?? '1,242', 
-            growth: stats?.femalePatients?.growth ?? '10.2%', 
-            isUp: (stats?.femalePatients?.growth ?? 10.2) >= 0,
+            count: stats?.femalePatients?.count ?? '—', 
+            growth: stats?.femalePatients?.growth ?? null, 
+            isUp: (parseFloat(stats?.femalePatients?.growth) ?? 0) >= 0,
             icon: User, 
             bg: 'bg-purple-50 border-purple-100 text-purple-600' 
           },
           { 
             title: 'Children Patients', 
-            count: stats?.childrenPatients?.count ?? '156', 
-            growth: stats?.childrenPatients?.growth ?? '-2.1%', 
-            isUp: (stats?.childrenPatients?.growth ?? -2.1) >= 0,
+            count: stats?.childrenPatients?.count ?? '—', 
+            growth: stats?.childrenPatients?.growth ?? null, 
+            isUp: (parseFloat(stats?.childrenPatients?.growth) ?? 0) >= 0,
             icon: Baby, 
             bg: 'bg-orange-50 border-orange-100 text-orange-600' 
           },
           { 
             title: 'New This Month', 
-            count: stats?.newThisMonth?.count ?? '342', 
-            growth: stats?.newThisMonth?.growth ?? '15.7%', 
-            isUp: (stats?.newThisMonth?.growth ?? 15.7) >= 0,
+            count: stats?.newThisMonth?.count ?? '—', 
+            growth: stats?.newThisMonth?.growth ?? null, 
+            isUp: (parseFloat(stats?.newThisMonth?.growth) ?? 0) >= 0,
             icon: Calendar, 
             bg: 'bg-teal-50 border-teal-100 text-teal-600' 
           }
@@ -641,11 +641,13 @@ export default function Patients() {
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{item.title}</p>
               <p className="text-2xl font-bold text-slate-800 mt-0.5">{item.count}</p>
-              <p className={`text-[10px] font-bold mt-0.5 flex items-center gap-0.5 ${item.isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {item.isUp ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                <span>{item.growth.toString().startsWith('-') ? item.growth : `+${item.growth}`}</span>
-                <span className="text-slate-400 font-normal ml-1">from last month</span>
-              </p>
+              {item.growth != null && (
+                <p className={`text-[10px] font-bold mt-0.5 flex items-center gap-0.5 ${item.isUp ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {item.isUp ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                  <span>{item.growth.toString().startsWith('-') ? item.growth : `+${item.growth}`}</span>
+                  <span className="text-slate-400 font-normal ml-1">from last month</span>
+                </p>
+              )}
             </div>
           </div>
         ))}

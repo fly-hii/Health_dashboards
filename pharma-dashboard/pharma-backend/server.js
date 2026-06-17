@@ -19,7 +19,9 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:5176',
   'http://localhost:5177',
-  'http://localhost:5180'
+  'http://localhost:5180',
+  'https://health-dashboards-pharma-frontend.vercel.app',
+  'https://health-dashboards-pharma-backend.vercel.app',
 ].filter(Boolean);
 
 const io = new Server(server, {

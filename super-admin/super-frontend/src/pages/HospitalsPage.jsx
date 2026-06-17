@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getHospitals, createHospital, suspendHospital, activateHospital, updateHospitalPlan, testDbConnection } from '../utils/api';
-import { Eye, EyeOff } from 'lucide-react';
+import { getHospitals, createHospital, suspendHospital, activateHospital, updateHospitalPlan, testDbConnection, deleteHospital } from '../utils/api';
+import { Eye, EyeOff, Trash2 } from 'lucide-react';
 
 const STATUS_BADGE = { active: 'success', suspended: 'danger', trial: 'cyan', expired: 'warning' };
 const PLAN_BADGE   = { trial: 'cyan', basic: 'primary', professional: 'amber', enterprise: 'green' };
@@ -247,6 +247,79 @@ function CreateModal({ onClose, onCreated }) {
   );
 }
 
+function DeleteConfirmModal({ hospital, onClose, onDeleted }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDelete = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await deleteHospital(hospital.id);
+      onDeleted();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete hospital');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && !loading && onClose()}>
+      <div className="modal" style={{ maxWidth: 440 }}>
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'rgba(239,68,68,0.12)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
+          }}>
+            <Trash2 size={28} color="#ef4444" />
+          </div>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Delete Hospital</h2>
+        </div>
+
+        <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: 8 }}>
+          Are you sure you want to permanently delete
+        </p>
+        <p style={{ fontWeight: 700, textAlign: 'center', fontSize: 16, marginBottom: 16, color: 'var(--text)' }}>
+          "{hospital.name}"
+        </p>
+
+        <div style={{
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+          borderRadius: 8, padding: '12px 16px', marginBottom: 20
+        }}>
+          <p style={{ color: '#ef4444', fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+            ⚠️ <strong>This action cannot be undone.</strong> All hospital records, subscriptions,
+            and audit logs associated with this hospital will be permanently removed from the master registry.
+          </p>
+        </div>
+
+        {error && <div className="error-msg" style={{ marginBottom: 16 }}>{error}</div>}
+
+        <div className="modal-footer">
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={loading}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={loading}
+            style={{
+              background: '#ef4444', color: '#fff', border: 'none',
+              padding: '9px 20px', borderRadius: 8, fontWeight: 700,
+              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+              display: 'flex', alignItems: 'center', gap: 6, fontSize: 14
+            }}
+          >
+            <Trash2 size={14} />
+            {loading ? 'Deleting...' : 'Yes, Delete Hospital'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PlanModal({ hospital, onClose, onUpdated }) {
   const [form, setForm] = useState({ plan: hospital.plan, billingCycle: 'monthly', amount: 0 });
   const [loading, setLoading] = useState(false);
@@ -313,6 +386,7 @@ export default function HospitalsPage() {
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(searchParams.get('create') === '1');
   const [planModal, setPlanModal] = useState(null);
+  const [deleteModal, setDeleteModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
 
   const fetchHospitals = useCallback(async () => {
@@ -439,19 +513,33 @@ export default function HospitalsPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/hospitals/${h.id}`)}>
+                        <button className="btn btn-ghost btn-sm" title="View" onClick={() => navigate(`/hospitals/${h.id}`)}>
                           👁
                         </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setPlanModal(h)}>
+                        <button className="btn btn-ghost btn-sm" title="Update Plan" onClick={() => setPlanModal(h)}>
                           🏷
                         </button>
                         {actionLoading === h.id ? (
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>...</span>
                         ) : h.status === 'suspended' ? (
-                          <button className="btn btn-success-outline btn-sm" onClick={() => handleActivate(h)}>✅</button>
+                          <button className="btn btn-success-outline btn-sm" title="Activate" onClick={() => handleActivate(h)}>✅</button>
                         ) : (
-                          <button className="btn btn-danger-outline btn-sm" onClick={() => handleSuspend(h)}>🚫</button>
+                          <button className="btn btn-danger-outline btn-sm" title="Suspend" onClick={() => handleSuspend(h)}>🚫</button>
                         )}
+                        <button
+                          className="btn btn-sm"
+                          title="Delete Hospital"
+                          onClick={() => setDeleteModal(h)}
+                          style={{
+                            background: 'rgba(239,68,68,0.08)',
+                            color: '#ef4444',
+                            border: '1px solid rgba(239,68,68,0.25)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 30, height: 30, padding: 0, borderRadius: 6
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -486,6 +574,13 @@ export default function HospitalsPage() {
           hospital={planModal}
           onClose={() => setPlanModal(null)}
           onUpdated={() => { setPlanModal(null); fetchHospitals(); }}
+        />
+      )}
+      {deleteModal && (
+        <DeleteConfirmModal
+          hospital={deleteModal}
+          onClose={() => setDeleteModal(null)}
+          onDeleted={() => { setDeleteModal(null); fetchHospitals(); }}
         />
       )}
     </div>

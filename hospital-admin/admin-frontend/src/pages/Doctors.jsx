@@ -40,11 +40,11 @@ import socket from '../sockets/socket';
 export default function Doctors() {
   // Stats States
   const [stats, setStats] = useState({
-    totalDoctors: { count: 62, growth: '+12.5%' },
-    activeDoctors: { count: 56, growth: '+8.3%' },
-    onLeave: { count: 4, growth: '-2.1%' },
-    departments: { count: 12, growth: '+10.2%' },
-    todayConsultations: { count: 248, growth: '+15.7%' }
+    totalDoctors: { count: null, growth: null },
+    activeDoctors: { count: null, growth: null },
+    onLeave: { count: null, growth: null },
+    departments: { count: null, growth: null },
+    todayConsultations: { count: null, growth: null }
   });
 
   // Directory List States
@@ -635,8 +635,10 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Doctors</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.totalDoctors?.count ?? 62}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.totalDoctors?.growth ?? '+12.5%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.totalDoctors?.count ?? '—'}</span>
+              {stats.totalDoctors?.growth != null && (
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.totalDoctors.growth}</span>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -650,8 +652,10 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Active Doctors</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.activeDoctors?.count ?? 56}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.activeDoctors?.growth ?? '+8.3%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.activeDoctors?.count ?? '—'}</span>
+              {stats.activeDoctors?.growth != null && (
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.activeDoctors.growth}</span>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -665,8 +669,10 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">On Leave</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.onLeave?.count ?? 4}</span>
-              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">{stats.onLeave?.growth ?? '-2.1%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.onLeave?.count ?? '—'}</span>
+              {stats.onLeave?.growth != null && (
+                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">{stats.onLeave.growth}</span>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -680,8 +686,10 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Departments</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.departments?.count ?? 12}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.departments?.growth ?? '+10.2%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.departments?.count ?? '—'}</span>
+              {stats.departments?.growth != null && (
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.departments.growth}</span>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from last month</span>
           </div>
@@ -695,8 +703,10 @@ export default function Doctors() {
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Today's Consults</span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-800">{stats.todayConsultations?.count ?? 248}</span>
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.todayConsultations?.growth ?? '+15.7%'}</span>
+              <span className="text-2xl font-black text-slate-800">{stats.todayConsultations?.count ?? '—'}</span>
+              {stats.todayConsultations?.growth != null && (
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{stats.todayConsultations.growth}</span>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 block mt-0.5">from yesterday</span>
           </div>

@@ -222,23 +222,28 @@ export default function ReportsView() {
     fetchReportsData();
 
     const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-    const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : 'http://localhost:5051';
+    const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : '';
     const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
+
+    // Skip socket if no real URL is configured (Vercel serverless)
+    if (!socketUrl) return;
+
     const socket = io(socketUrl, {
-      transports: ['polling', 'websocket'],
+      transports: ['websocket'],
       reconnectionAttempts: 3,
       timeout: 5000,
-      auth: {
-        token: localStorage.getItem('doctor_token')
-      }
+      auth: { token: localStorage.getItem('doctor_token') }
     });
 
     socket.on('connect', () => {
       console.log('🔌 ReportsView socket connection established');
     });
 
+    socket.on('connect_error', (err) => {
+      console.warn('ReportsView socket unavailable:', err.message);
+    });
+
     socket.on('reportUploaded', (newReport) => {
-      // Add if uploader doesn't already have it
       setReports(prev => {
         if (prev.some(r => r._id === newReport._id)) return prev;
         return [newReport, ...prev];
@@ -249,9 +254,7 @@ export default function ReportsView() {
       setReports(prev => prev.filter(r => r._id !== id));
     });
 
-    return () => {
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, []);
 
   // Toast Timer auto-dismiss

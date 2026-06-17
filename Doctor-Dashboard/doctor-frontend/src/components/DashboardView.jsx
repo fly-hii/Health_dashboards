@@ -9,7 +9,7 @@ import {
   Calendar, 
   ChevronDown 
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell } from 'recharts';
 import { format } from 'date-fns';
 
 export default function DashboardView({ onDiagnosePatient, onQueueFetched, setActiveTab }) {
@@ -50,10 +50,15 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
         Authorization: `Bearer ${localStorage.getItem('doctor_token')}`
       };
 
+      // VITE_API_BASE_URL already includes /api (e.g. https://backend.vercel.app/api)
+      // Strip trailing /api to get the host, then re-append full paths
+      const envBase = import.meta.env.VITE_API_BASE_URL || '';
+      const host = envBase.replace(/\/api$/, '');   // '' locally → Vite proxy handles /api/...
+
       const [statsRes, scheduleRes, chartRes] = await Promise.all([
-        axios.get('/api/doctor/dashboard/stats', { headers }),
-        axios.get('/api/doctor/dashboard/schedule', { headers }),
-        axios.get('/api/doctor/dashboard/chart', { headers })
+        axios.get(`${host}/api/doctor/dashboard/stats`, { headers }),
+        axios.get(`${host}/api/doctor/dashboard/schedule`, { headers }),
+        axios.get(`${host}/api/doctor/dashboard/chart`, { headers })
       ]);
 
       if (statsRes.data) {
@@ -276,28 +281,27 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
 
           {/* Donut Chart & Legend */}
           <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-8 flex-1">
-            {/* Recharts Donut Pie */}
+            {/* Recharts Donut Pie — fixed 192×192 to prevent width/height=-1 warning */}
             <div className="relative w-48 h-48 flex-shrink-0 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData.data || []}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={64}
-                    outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {(chartData.data || []).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              <PieChart width={192} height={192}>
+                <Pie
+                  data={chartData.data?.length ? chartData.data : [{ name: 'No data', value: 1, color: '#E2E8F0' }]}
+                  cx={96}
+                  cy={96}
+                  innerRadius={64}
+                  outerRadius={80}
+                  paddingAngle={chartData.data?.length ? 3 : 0}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {(chartData.data?.length ? chartData.data : [{ color: '#E2E8F0' }]).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">Total</span>
-                <span className="text-3xl font-extrabold text-[#0B1F3A] mt-0.5">{chartData.total}</span>
+                <span className="text-3xl font-extrabold text-[#0B1F3A] mt-0.5">{chartData.total ?? '—'}</span>
               </div>
             </div>
 
