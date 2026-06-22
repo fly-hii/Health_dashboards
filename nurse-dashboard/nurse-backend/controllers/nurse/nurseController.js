@@ -44,11 +44,9 @@ const getDashboardStats = async (req, res, next) => {
 
     const mappedActivities = recentActivities.map(appt => {
       const json = appt.toJSON();
-      json.patientName = json.patient?.full_name || 'Unknown Patient';
-      json.doctorName = json.doctor?.name || 'Unknown Doctor';
-      json.doctorObj = json.doctor;
-      json.doctor = json.doctor?.name || 'Unknown Doctor';
-      json.time = json.updated_at || json.date_time || new Date();
+      json.patientName = json.patient?.full_name;
+      json.doctor = json.doctor?.name;
+      json.time = json.updated_at || json.date_time;
       json.type = json.status === 'In-Progress' ? 'vitals' : 'check_in';
       return json;
     });

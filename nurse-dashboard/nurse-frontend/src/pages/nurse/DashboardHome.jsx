@@ -385,15 +385,13 @@ const DashboardHome = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-4">
-                      <div className="font-bold text-[14px] text-slate-900 truncate">
-                        {activity.patientName || activity.patient?.full_name || 'Unknown Patient'}
-                      </div>
+                      <div className="font-bold text-[14px] text-slate-900 truncate">{activity.patientName}</div>
                       <div className="text-[11px] text-slate-400 font-semibold shrink-0">
-                        {new Date(activity.time || activity.updated_at || activity.date_time || new Date()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(activity.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
                     <div className="text-[12px] text-slate-500 mt-0.5">
-                      {activity.department} • {typeof activity.doctor === 'object' ? activity.doctor?.name : (activity.doctor || 'Unknown Doctor')}
+                      {activity.department} • {activity.doctor}
                     </div>
                     <div className="mt-2.5">
                       <span className={`badge status-${activity.status}`}>{activity.status?.replace(/_/g, ' ')}</span>
