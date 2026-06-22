@@ -18,27 +18,17 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
   const displayName = rawName.startsWith('Dr.') ? rawName : `Dr. ${rawName}`;
 
   const [stats, setStats] = useState({
-    patientsInQueue: 12,
-    todayConsultations: 18,
-    completedToday: 15,
-    followUps: 5
+    patientsInQueue: 0,
+    todayConsultations: 0,
+    completedToday: 0,
+    followUps: 0
   });
 
-  const [schedule, setSchedule] = useState([
-    { _id: '1', time: '09:30 AM', patientName: 'Ramesh Kumar', visitType: 'Consultation', status: 'in_progress' },
-    { _id: '2', time: '10:00 AM', patientName: 'Sunita Devi', visitType: 'Consultation', status: 'waiting' },
-    { _id: '3', time: '10:30 AM', patientName: 'Amit Singh', visitType: 'Consultation', status: 'waiting' },
-    { _id: '4', time: '11:00 AM', patientName: 'Pooja Sharma', visitType: 'Follow-up', status: 'waiting' },
-    { _id: '5', time: '11:30 AM', patientName: 'Vikram Patel', visitType: 'Consultation', status: 'waiting' }
-  ]);
+  const [schedule, setSchedule] = useState([]);
 
   const [chartData, setChartData] = useState({
-    total: 105,
-    data: [
-      { name: 'Completed', value: 73, percentage: 74, color: '#0F9D8A' },
-      { name: 'Pending', value: 16, percentage: 17, color: '#F59E0B' },
-      { name: 'Cancelled', value: 9, percentage: 9, color: '#EF4444' }
-    ]
+    total: 0,
+    data: []
   });
 
   const [loading, setLoading] = useState(true);
@@ -247,14 +237,22 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F1F5F9]">
-                {schedule.map((item) => (
-                  <tr key={item._id} className="hover:bg-slate-50 transition-all">
-                    <td className="py-4 text-sm font-semibold text-[#64748B]">{item.time}</td>
-                    <td className="py-4 text-sm font-bold text-[#0B1F3A] pl-4">{item.patientName}</td>
-                    <td className="py-4 text-sm font-semibold text-[#64748B] pl-4">{item.visitType}</td>
-                    <td className="py-4 pl-4">{getStatusBadge(item.status)}</td>
+                {schedule.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="py-8 text-center text-sm text-[#64748B] font-semibold">
+                      {loading ? 'Loading schedule...' : 'No appointments scheduled for today'}
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  schedule.map((item) => (
+                    <tr key={item._id} className="hover:bg-slate-50 transition-all">
+                      <td className="py-4 text-sm font-semibold text-[#64748B]">{item.time}</td>
+                      <td className="py-4 text-sm font-bold text-[#0B1F3A] pl-4">{item.patientName}</td>
+                      <td className="py-4 text-sm font-semibold text-[#64748B] pl-4">{item.visitType}</td>
+                      <td className="py-4 pl-4">{getStatusBadge(item.status)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
