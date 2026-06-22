@@ -1311,6 +1311,50 @@ app.get('/api/pharmacy/orders', protect, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
+// DIAGNOSTIC ENDPOINT
+// ────────────────────────────────────────────────────────────
+app.get('/api/diagnose-db', async (req, res) => {
+  const diagnostics = {};
+  try {
+    const { masterDb } = require('./services/databaseResolver');
+    diagnostics.masterDbConfig = {
+      host: process.env.MASTER_DB_HOST,
+      name: process.env.MASTER_DB_NAME,
+      user: process.env.MASTER_DB_USER,
+      port: process.env.MASTER_DB_PORT,
+      dbSsl: process.env.DB_SSL
+    };
+    await masterDb.authenticate();
+    diagnostics.masterDbConnection = 'Success';
+    const [results] = await masterDb.query(
+      "SELECT id, name FROM hospitals WHERE status IN ('active', 'trial') LIMIT 1"
+    );
+    diagnostics.masterDbQuery = 'Success';
+    diagnostics.masterDbQueryResult = results;
+  } catch (err) {
+    diagnostics.masterDbError = err.message;
+    diagnostics.masterDbStack = err.stack;
+  }
+
+  try {
+    const { connectDB, sequelize } = require('./config/database');
+    diagnostics.saasDbConfig = {
+      host: process.env.DB_HOST,
+      name: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      dbSsl: process.env.DB_SSL
+    };
+    await sequelize.authenticate();
+    diagnostics.saasDbConnection = 'Success';
+  } catch (err) {
+    diagnostics.saasDbError = err.message;
+    diagnostics.saasDbStack = err.stack;
+  }
+
+  res.json(diagnostics);
+});
+
+// ────────────────────────────────────────────────────────────
 // HEALTH CHECK
 // ────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
