@@ -7,36 +7,47 @@ const dbPassword = process.env.DB_PASSWORD;
 const dbHost = process.env.DB_HOST;
 const dbPort = process.env.DB_PORT || 3306;
 
+let sequelize;
 if (!dbName || !dbUser || !dbHost) {
-  throw new Error('Database environment variables (DB_NAME, DB_USER, DB_HOST) are not fully configured in env.');
-}
-
-const sequelize = new Sequelize(
-  dbName,
-  dbUser,
-  dbPassword,
-  {
-    host: dbHost,
-    port: parseInt(dbPort),
+  console.warn('⚠️ Database environment variables (DB_NAME, DB_USER, DB_HOST) are not fully configured in env. Local/Production may fail.');
+  sequelize = new Sequelize('dummy', 'dummy', 'dummy', {
+    host: 'localhost',
     dialect: 'mysql',
     dialectModule: require('mysql2'),
-    logging: false,
-    pool: { max: 5, min: 0, acquire: 30000, idle: 10000, evict: 10000 },
-    dialectOptions: {
-      connectTimeout: 60000,
-      ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
-    },
-    define: { timestamps: true, underscored: true },
-  }
-);
+    logging: false
+  });
+} else {
+  sequelize = new Sequelize(
+    dbName,
+    dbUser,
+    dbPassword,
+    {
+      host: dbHost,
+      port: parseInt(dbPort),
+      dialect: 'mysql',
+      dialectModule: require('mysql2'),
+      logging: false,
+      pool: { max: 5, min: 0, acquire: 30000, idle: 10000, evict: 10000 },
+      dialectOptions: {
+        connectTimeout: 60000,
+        ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+      },
+      define: { timestamps: true, underscored: true },
+    }
+  );
+}
 
 const connectDB = async () => {
+  if (!dbName || !dbUser || !dbHost) {
+    console.error('❌ Database connection skipped: Missing environment variables.');
+    return;
+  }
   try {
     await sequelize.authenticate();
     console.log('✅ MySQL (AWS RDS) connected - Patient Backend');
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
-    process.exit(1);
+    // DO NOT process.exit(1) on Vercel serverless environment
   }
 };
 

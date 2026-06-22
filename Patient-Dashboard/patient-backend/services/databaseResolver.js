@@ -29,27 +29,34 @@ const masterDbPassword = process.env.MASTER_DB_PASSWORD || process.env.DB_PASSWO
 const masterDbHost = process.env.MASTER_DB_HOST || process.env.DB_HOST;
 const masterDbPort = process.env.MASTER_DB_PORT || process.env.DB_PORT || 3306;
 
+let masterDb;
 if (!masterDbName || !masterDbUser || !masterDbHost) {
-  throw new Error('Master database environment variables (MASTER_DB_NAME, MASTER_DB_USER, MASTER_DB_HOST) are not fully configured in env.');
-}
-
-const masterDb = new Sequelize(
-  masterDbName,
-  masterDbUser,
-  masterDbPassword,
-  {
-    host:    masterDbHost,
-    port:    parseInt(masterDbPort),
+  console.warn('⚠️ Master database environment variables (MASTER_DB_NAME, MASTER_DB_USER, MASTER_DB_HOST) are not fully configured in env.');
+  masterDb = new Sequelize('dummy', 'dummy', 'dummy', {
+    host: 'localhost',
     dialect: 'mysql',
     dialectModule: require('mysql2'),
-    logging: false,
-    pool: { max: 5, min: 0, acquire: 30000, idle: 10000, evict: 10000 },
-    dialectOptions: {
-      connectTimeout: 60000,
-      ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
-    },
-  }
-);
+    logging: false
+  });
+} else {
+  masterDb = new Sequelize(
+    masterDbName,
+    masterDbUser,
+    masterDbPassword,
+    {
+      host:    masterDbHost,
+      port:    parseInt(masterDbPort),
+      dialect: 'mysql',
+      dialectModule: require('mysql2'),
+      logging: false,
+      pool: { max: 5, min: 0, acquire: 30000, idle: 10000, evict: 10000 },
+      dialectOptions: {
+        connectTimeout: 60000,
+        ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+      },
+    }
+  );
+}
 
 // ── Shared SaaS DB (hospitals_db) ─────────────────────────────
 // Used for all hospitals with database_type = 'shared'
@@ -59,28 +66,35 @@ const saasDbPassword = process.env.DB_PASSWORD;
 const saasDbHost = process.env.DB_HOST;
 const saasDbPort = process.env.DB_PORT || 3306;
 
+let sharedSaasDb;
 if (!saasDbName || !saasDbUser || !saasDbHost) {
-  throw new Error('SaaS database environment variables (DB_NAME, DB_USER, DB_HOST) are not fully configured in env.');
-}
-
-const sharedSaasDb = new Sequelize(
-  saasDbName,
-  saasDbUser,
-  saasDbPassword,
-  {
-    host:    saasDbHost,
-    port:    parseInt(saasDbPort),
+  console.warn('⚠️ SaaS database environment variables (DB_NAME, DB_USER, DB_HOST) are not fully configured in env.');
+  sharedSaasDb = new Sequelize('dummy', 'dummy', 'dummy', {
+    host: 'localhost',
     dialect: 'mysql',
     dialectModule: require('mysql2'),
-    logging: process.env.NODE_ENV === 'development' ? console.log : false,
-    pool: { max: 15, min: 2, acquire: 30000, idle: 10000, evict: 10000 },
-    dialectOptions: {
-      connectTimeout: 60000,
-      ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
-    },
-    define: { timestamps: true, underscored: true },
-  }
-);
+    logging: false
+  });
+} else {
+  sharedSaasDb = new Sequelize(
+    saasDbName,
+    saasDbUser,
+    saasDbPassword,
+    {
+      host:    saasDbHost,
+      port:    parseInt(saasDbPort),
+      dialect: 'mysql',
+      dialectModule: require('mysql2'),
+      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      pool: { max: 15, min: 2, acquire: 30000, idle: 10000, evict: 10000 },
+      dialectOptions: {
+        connectTimeout: 60000,
+        ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+      },
+      define: { timestamps: true, underscored: true },
+    }
+  );
+}
 
 // ── Connection Cache ────────────────────────────────────────────
 // Map<hospitalId, { sequelize: Sequelize, lastAccessed: number, type: string }>
