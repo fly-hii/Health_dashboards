@@ -38,14 +38,13 @@ export default function App() {
     const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : '';
     const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
 
-    // Skip socket if no real URL is available (e.g. Vercel serverless without VITE_SOCKET_URL)
-    if (!socketUrl || socketUrl === 'http://localhost:5051') {
-      // Still fall back to localhost socket when running locally
-      if (!socketUrl) return;
-    }
+    // Vercel serverless does not support WebSockets / Socket.IO persistent connections.
+    // Skip socket setup entirely when no dedicated socket server is configured.
+    const isVercel = !socketUrl || socketUrl.includes('vercel.app') || socketUrl.includes('vercel.com');
+    if (isVercel) return;
 
     const socket = io(socketUrl, {
-      transports: ['websocket'],          // websocket only — no polling 404 spam
+      transports: ['websocket'],
       reconnectionAttempts: 3,
       timeout: 5000,
       auth: { token: localStorage.getItem('doctor_token') }

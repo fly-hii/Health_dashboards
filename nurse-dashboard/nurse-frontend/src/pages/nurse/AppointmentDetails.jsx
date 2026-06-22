@@ -164,10 +164,11 @@ const AppointmentDetails = () => {
   /* socket */
   useEffect(() => {
     if (!user?._id) return;
-    const socketUrl = config.socketUrl || window.location.origin;
-    const socket = io(socketUrl, {
+    // config.socketUrl is null on Vercel (serverless can't handle WebSockets)
+    if (!config.socketUrl) return;
+    const socket = io(config.socketUrl, {
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       reconnectionAttempts: 3,
       timeout: 5000,
     });

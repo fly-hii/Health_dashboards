@@ -71,8 +71,9 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 const NURSE_SOCKET_URL = process.env.NURSE_SOCKET_URL;
-if (!NURSE_SOCKET_URL) {
-  throw new Error('NURSE_SOCKET_URL is not configured in env.');
+const nurseSocketDisabled = !NURSE_SOCKET_URL || NURSE_SOCKET_URL.includes('vercel.app');
+if (nurseSocketDisabled) {
+  console.warn('⚠️  NURSE_SOCKET_URL not set or is a Vercel URL — real-time nurse relay disabled.');
 }
 let nurseSocket = null;
 const connectNurseSocket = () => {
@@ -95,7 +96,7 @@ const connectNurseSocket = () => {
     io.to(`hospital_${data.hospitalId}`).emit('appointment_status_updated', data);
   });
 };
-connectNurseSocket();
+if (!nurseSocketDisabled) connectNurseSocket();
 
 const notifyNurse = (data) => {
   if (nurseSocket?.connected) {

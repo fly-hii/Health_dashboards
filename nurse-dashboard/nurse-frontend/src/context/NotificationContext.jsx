@@ -29,8 +29,11 @@ export const NotificationProvider = ({ children }) => {
     };
     fetchInitialNotifications();
 
+    // config.socketUrl is null on Vercel (serverless can't handle WebSockets)
+    if (!config.socketUrl) return;
+
     const socket = io(config.socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 3,
       timeout: 5000,

@@ -11,10 +11,14 @@ const getApiBaseUrl = () => {
 
 const getSocketUrl = () => {
   const envSocket = import.meta.env.VITE_SOCKET_URL;
-  if (envSocket && envSocket.startsWith('http')) {
+  if (envSocket && envSocket.startsWith('http') && !envSocket.includes('vercel.app')) {
     return envSocket;
   }
-  return getApiBaseUrl().replace(/\/api$/, '');
+  // Vercel serverless cannot support persistent WebSocket connections.
+  // Return null to signal that real-time features should be disabled.
+  const derived = getApiBaseUrl().replace(/\/api$/, '');
+  if (derived.includes('vercel.app') || derived.includes('vercel.com')) return null;
+  return derived;
 };
 
 const config = {
