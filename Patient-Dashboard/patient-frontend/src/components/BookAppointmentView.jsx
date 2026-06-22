@@ -1,8 +1,41 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
 import { toast } from 'react-toastify';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import './BookAppointmentView.css';
+
+// ── Predefined coordinates for cities ───────────────────────────
+const CITY_COORDS = {
+  'jaipur':   { lat: 26.9124, lon: 75.7873 },
+  'mumbai':   { lat: 19.0760, lon: 72.8777 },
+  'kakinada': { lat: 16.9891, lon: 82.2475 }
+};
+
+// ── Predefined coordinates for hospitals ────────────────────────
+const HOSPITAL_COORDS = {
+  5:  { lat: 26.9150, lon: 75.7900, name: 'Sai Hospital' },
+  10: { lat: 19.0820, lon: 72.8820, name: 'sam' },
+  12: { lat: 19.0700, lon: 72.8700, name: 'TESTPRO' },
+  13: { lat: 19.0900, lon: 72.8900, name: 'saii@gmail.com' },
+  14: { lat: 16.9920, lon: 82.2500, name: 'appolo' },
+  15: { lat: 16.9820, lon: 82.2400, name: 'satish' },
+};
+
+const normalizeCity = (c) => (c || '').trim().toLowerCase();
+
+const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
 
 // ── Department icons & colors ──────────────────────────────────
 const DEPT_META = {
@@ -123,6 +156,7 @@ export default function BookAppointmentView() {
   const [hospitals, setHospitals]     = useState([]);
   const [departments, setDepartments] = useState([]);
   const [doctors, setDoctors]         = useState([]);
+  const [allHospitals, setAllHospitals] = useState([]);
 
   // ── UI state ──
   const [loading, setLoading]               = useState(false);
@@ -135,12 +169,18 @@ export default function BookAppointmentView() {
     : false;
   // Note: cross-hospital booking is fully allowed — no registration restriction.
 
-  // ── Load locations on mount ──
+  // ── Load locations and all hospitals on mount ──
   useEffect(() => {
     setLoading(true);
-    api.getLocations()
-      .then(res => setLocations(res.data || []))
-      .catch(() => toast.error('Failed to load locations'))
+    Promise.all([
+      api.getLocations(),
+      api.getHospitals()
+    ])
+      .then(([locRes, hospRes]) => {
+        setLocations(locRes.data || []);
+        setAllHospitals(hospRes.data || []);
+      })
+      .catch(() => toast.error('Failed to load initial data'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -187,6 +227,21 @@ export default function BookAppointmentView() {
     setSelectedDate('');
     setSelectedTime('');
     setStep(2);
+  };
+  const pickHospitalDirectly = (hosp) => {
+    const cityMatched = locations.find(loc => loc.city.toLowerCase().trim() === hosp.city.toLowerCase().trim());
+    if (cityMatched) {
+      setSelectedLocation(cityMatched);
+    } else {
+      setSelectedLocation({ city: hosp.city, state: hosp.state || '', hospitalCount: 1 });
+    }
+    setSelectedHospital(hosp);
+    setSelectedDept(null);
+    setSelectedDoc(null);
+    setSelectedDate('');
+    setSelectedTime('');
+    setStep(3);
+    toast.success(`Selected ${hosp.name}`);
   };
   const pickHospital = (h) => {
     setSelectedHospital(h);
@@ -354,8 +409,19 @@ export default function BookAppointmentView() {
             <span className="bav-section-emoji">📍</span>
             <div>
               <h2 className="bav-section-title">Select Your Location</h2>
-              <p className="bav-section-sub">Choose a city to discover nearby hospitals</p>
+              <p className="bav-section-sub">Pick a location on the map or choose a city below to discover nearby hospitals</p>
             </div>
+          </div>
+
+          <MapPicker
+            locations={locations}
+            allHospitals={allHospitals}
+            onSelectCity={pickLocation}
+            onSelectHospitalDirectly={pickHospitalDirectly}
+          />
+
+          <div className="bav-or-divider">
+            <span>Or select from popular cities</span>
           </div>
 
           {loading ? (
@@ -706,6 +772,236 @@ export default function BookAppointmentView() {
           <button className="bav-book-another" onClick={reset}>
             Book Another Appointment
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAP PICKER COMPONENT
+// ─────────────────────────────────────────────────────────────
+function MapPicker({ locations, allHospitals, onSelectCity, onSelectHospitalDirectly }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
+  const hospitalMarkersGroupRef = useRef(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [pickedAddress, setPickedAddress] = useState(null);
+  const [closestCity, setClosestCity] = useState(null);
+
+  // Initialize Map
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Centered in India initially
+    const map = L.map(mapRef.current, {
+      center: [20.5937, 78.9629],
+      zoom: 5,
+      zoomControl: true
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+    hospitalMarkersGroupRef.current = L.layerGroup().addTo(map);
+
+    // Click handler on map
+    map.on('click', async (e) => {
+      const { lat, lng } = e.latlng;
+      handleMapClick(lat, lng);
+    });
+
+    return () => {
+      map.remove();
+    };
+  }, []);
+
+  // Update Hospital Markers when allHospitals change
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const group = hospitalMarkersGroupRef.current;
+    if (!map || !group || !allHospitals.length) return;
+
+    group.clearLayers();
+
+    // Custom Green Pin for hospitals
+    const hospitalIcon = L.divIcon({
+      className: 'custom-hosp-marker',
+      html: `<div class="hosp-pin">🏥</div>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 30],
+      popupAnchor: [0, -30]
+    });
+
+    allHospitals.forEach(hosp => {
+      const coords = HOSPITAL_COORDS[hosp.id] || CITY_COORDS[normalizeCity(hosp.city)];
+      if (coords) {
+        const marker = L.marker([coords.lat, coords.lon], { icon: hospitalIcon });
+        
+        // Popup with detail and selection button
+        const popupContent = document.createElement('div');
+        popupContent.className = 'map-popup-content';
+        popupContent.innerHTML = `
+          <h4 style="margin: 0 0 4px 0; font-weight:800; font-size:14px; color:#0f172a;">${hosp.name}</h4>
+          <p style="margin: 0 0 8px 0; font-size:12px; color:#64748b;">📍 ${hosp.city}${hosp.state ? `, ${hosp.state}` : ''}</p>
+          <button class="bav-map-select-btn" style="padding: 5px 12px; background:#0F9D8A; color:white; border:none; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">Select Hospital</button>
+        `;
+        
+        popupContent.querySelector('button').onclick = () => {
+          onSelectHospitalDirectly(hosp);
+        };
+
+        marker.bindPopup(popupContent);
+        marker.addTo(group);
+      }
+    });
+  }, [allHospitals, locations]);
+
+  const handleMapClick = async (lat, lng) => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // Pulse Red Pin for picked location
+    const pickedIcon = L.divIcon({
+      className: 'custom-picked-marker',
+      html: `<div class="picked-pin">📍<span class="pulse"></span></div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 32]
+    });
+
+    if (markerRef.current) {
+      markerRef.current.setLatLng([lat, lng]);
+    } else {
+      markerRef.current = L.marker([lat, lng], { icon: pickedIcon }).addTo(map);
+    }
+
+    map.panTo([lat, lng]);
+
+    setSearching(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+      const data = await res.json();
+      
+      const addr = data.display_name;
+      const cityCandidate = data.address.city || data.address.town || data.address.village || data.address.suburb || data.address.state_district;
+      setPickedAddress(addr);
+
+      // Find nearest registered city
+      calculateNearestCity(lat, lng);
+    } catch (err) {
+      console.error('Reverse geocode failed:', err);
+      calculateNearestCity(lat, lng);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const calculateNearestCity = (lat, lng) => {
+    if (!locations.length) return;
+
+    let closest = null;
+    let minDistance = Infinity;
+
+    locations.forEach(loc => {
+      const cityConfig = CITY_COORDS[normalizeCity(loc.city)];
+      if (cityConfig) {
+        const dist = getDistanceKm(lat, lng, cityConfig.lat, cityConfig.lon);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closest = { ...loc, distance: dist };
+        }
+      }
+    });
+
+    setClosestCity(closest);
+  };
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setSearching(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`);
+      const results = await res.json();
+      if (results && results.length > 0) {
+        const { lat, lon } = results[0];
+        const parsedLat = parseFloat(lat);
+        const parsedLng = parseFloat(lon);
+
+        handleMapClick(parsedLat, parsedLng);
+        const map = mapInstanceRef.current;
+        if (map) {
+          map.setView([parsedLat, parsedLng], 12);
+        }
+      } else {
+        toast.error('Location not found. Please try another search.');
+      }
+    } catch (err) {
+      toast.error('Search failed. Please try again.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <div className="bav-map-wrapper">
+      {/* Search Input */}
+      <form onSubmit={handleSearch} className="bav-map-search">
+        <input
+          type="text"
+          placeholder="Search for your area/address..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          disabled={searching}
+        />
+        <button type="submit" disabled={searching}>
+          {searching ? 'Searching...' : '🔍 Search'}
+        </button>
+      </form>
+
+      {/* Map Container */}
+      <div className="bav-map-container" ref={mapRef} />
+
+      {/* Location Details panel */}
+      {(pickedAddress || closestCity) && (
+        <div className="bav-map-details-panel">
+          {searching ? (
+            <div className="bav-map-panel-loading">Geocoding picked spot...</div>
+          ) : (
+            <>
+              {pickedAddress && (
+                <div className="bav-address-row">
+                  <strong>📍 Picked Location:</strong>
+                  <p>{pickedAddress}</p>
+                </div>
+              )}
+              {closestCity && (
+                <div className="bav-nearest-city-row">
+                  {closestCity.distance < 40 ? (
+                    <div className="bav-city-detected">
+                      <span>🎯 Near: <strong>{closestCity.city}</strong></span>
+                      <button className="bav-confirm-loc-btn" onClick={() => onSelectCity(closestCity)}>
+                        Discover {closestCity.hospitalCount} Hospital{closestCity.hospitalCount !== 1 ? 's' : ''} →
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bav-city-nearby-suggest">
+                      <p>⚠️ No hospitals registered at this exact spot. The nearest supported city is <strong>{closestCity.city}</strong> (~{Math.round(closestCity.distance)} km away).</p>
+                      <button className="bav-confirm-loc-btn suggest" onClick={() => onSelectCity(closestCity)}>
+                        Select {closestCity.city} instead →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
