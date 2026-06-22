@@ -21,10 +21,7 @@ const { sendForgotPasswordOtp, verifyForgotPasswordOtp, resetForgotPassword } = 
 
 
 const app = express();
-const PORT = process.env.PORT;
-if (!PORT) {
-  throw new Error('PORT is not configured in env.');
-}
+const PORT = process.env.PORT || 5050;
 
 // ── HTTP Server & Socket.IO ─────────────────────────────────
 const server = http.createServer(app);
