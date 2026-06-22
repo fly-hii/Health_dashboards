@@ -42,12 +42,23 @@ const getDashboardStats = async (req, res, next) => {
       limit: 10,
     });
 
+    const mappedActivities = recentActivities.map(appt => {
+      const json = appt.toJSON();
+      json.patientName = json.patient?.full_name || 'Unknown Patient';
+      json.doctorName = json.doctor?.name || 'Unknown Doctor';
+      json.doctorObj = json.doctor;
+      json.doctor = json.doctor?.name || 'Unknown Doctor';
+      json.time = json.updated_at || json.date_time || new Date();
+      json.type = json.status === 'In-Progress' ? 'vitals' : 'check_in';
+      return json;
+    });
+
     res.json({
       success: true,
       data: {
         stats: { totalPatientsToday, waitingForVitals, vitalsCompleted, activeAppointments, completedConsultations },
         departmentWise: departmentData.map(d => ({ department: d.department, count: parseInt(d.dataValues.count) })),
-        recentActivities,
+        recentActivities: mappedActivities,
         opdTiming: process.env.OPD_TIMING || '09:00 AM - 06:00 PM',
       },
     });
