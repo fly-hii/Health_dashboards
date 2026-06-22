@@ -60,6 +60,19 @@ const getUsers = async (req, res) => {
   }
 };
 
+const getEmpIdPrefixForRole = (r) => {
+  switch(r) {
+    case 'DOCTOR': return 'DOC';
+    case 'NURSE': return 'NRS';
+    case 'PHARMACIST': return 'CPH';
+    case 'LAB_TECHNICIAN': return 'LAB';
+    case 'RECEPTIONIST': return 'REC';
+    case 'ADMIN': return 'ADM';
+    case 'HOSPITAL_ADMIN': return 'HAD';
+    default: return 'EMP';
+  }
+};
+
 const createUser = async (req, res) => {
   const { 
     name, email, password, role, department, phone, profileImage, 
@@ -68,9 +81,31 @@ const createUser = async (req, res) => {
 
   try {
     const { User, AuditLog } = req.models;
+    const { Op } = require('sequelize');
+    
     const userExists = await User.findOne({ where: { email } });
     if (userExists) {
       return res.status(400).json({ success: false, message: 'User already exists' });
+    }
+
+    const prefix = getEmpIdPrefixForRole(role);
+    let employeeIdToUse = (employeeId || '').trim();
+    if (!employeeIdToUse || employeeIdToUse === prefix) {
+      const latest = await User.findOne({
+        where: { hospital_id: req.hospitalId, employee_id: { [Op.like]: `${prefix}%` } },
+        order: [['employee_id', 'DESC']],
+      });
+      if (!latest?.employee_id) {
+        employeeIdToUse = `${prefix}1001`;
+      } else {
+        const numPart = latest.employee_id.replace(prefix, '');
+        const num = parseInt(numPart, 10);
+        if (isNaN(num)) {
+          employeeIdToUse = `${prefix}1001`;
+        } else {
+          employeeIdToUse = `${prefix}${num + 1}`;
+        }
+      }
     }
 
     let passwordToUse = password;
@@ -94,7 +129,7 @@ const createUser = async (req, res) => {
       role,
       department,
       phone,
-      employee_id: employeeId || null,
+      employee_id: employeeIdToUse,
       profile_image: profileImage || `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}`,
       specialization: specialization || null,
       experience: experience !== undefined ? parseInt(experience) : null,
@@ -111,7 +146,7 @@ const createUser = async (req, res) => {
       user_id: req.user ? req.user.id : user.id,
       action: 'CREATE',
       module: 'User Management',
-      description: `Created user ${name} with role ${role} in department ${department}`,
+      description: `Created user ${name} (${employeeIdToUse}) with role ${role} in department ${department}`,
       ip_address: req.ip
     });
 
@@ -123,7 +158,9 @@ const createUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        department: user.department
+        department: user.department,
+        employeeId: user.employee_id,
+        password: passwordToUse
       }
     });
 
@@ -144,6 +181,8 @@ const updateUser = async (req, res) => {
       name, phone, profileImage, department, role, status, employeeId,
       specialization, experience, qualification, shift, schedule, availabilityStatus
     } = req.body;
+
+    const oldStatus = user.status;
 
     const fields = {
       name, phone, department, role, status,
@@ -174,12 +213,17 @@ const updateUser = async (req, res) => {
 
     await user.save();
 
+    let auditDescription = `Updated user profile for ${user.name} (${user.role})`;
+    if (status !== undefined && status !== oldStatus) {
+      auditDescription = `${status === 'Active' ? 'Activated' : 'Deactivated'} user account for ${user.name} (${user.role})`;
+    }
+
     await AuditLog.create({
       hospital_id: req.hospitalId,
       user_id: req.user.id,
       action: 'UPDATE',
       module: 'User Management',
-      description: `Updated user profile for ${user.name} (${user.role})`,
+      description: auditDescription,
       ip_address: req.ip
     });
 

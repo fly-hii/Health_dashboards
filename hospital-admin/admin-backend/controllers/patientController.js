@@ -18,7 +18,7 @@ const generatePatientId = async (hospitalId) => {
     const num = parseInt(lastPatient.patient_id.replace(datePrefix, ''), 10);
     if (!isNaN(num)) sequence = num + 1;
   }
-  return `${datePrefix}${String(sequence).padStart(3, '0')}`;
+  return `${datePrefix}${String(sequence).padStart(4, '0')}`;
 };
 
 // GET /api/patients
@@ -146,6 +146,7 @@ const getPatientById = async (req, res) => {
       }),
       Report.findAll({
         where: { patient_id: patient.id, hospital_id: req.hospitalId, is_deleted: false },
+        include: [{ model: User, as: 'uploadedBy', attributes: ['id', 'name'] }],
         order: [['created_at', 'DESC']],
       }),
     ]);
@@ -157,7 +158,31 @@ const getPatientById = async (req, res) => {
       ...labTests.map(l => ({ id: `lab-${l.id}`, type: 'Lab Test', title: `Lab Test: ${l.test_name}`, description: `Result: ${l.result || 'Pending'}`, date: l.created_at, status: l.status })),
     ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    res.json({ success: true, data: { patient, appointments, prescriptions, labTests, vitals, reports, timeline } });
+    const formatBytes = (bytes, decimals = 1) => {
+      if (!bytes) return '0 Bytes';
+      const k = 1024;
+      const dm = decimals < 0 ? 0 : decimals;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    };
+
+    const mapReport = (r) => {
+      const data = r.toJSON ? r.toJSON() : r;
+      return {
+        ...data,
+        category: data.report_type,
+        filePath: data.file_url,
+        fileSize: formatBytes(data.file_size),
+        date: data.created_at || data.createdAt,
+        doctor: data.uploadedBy?.name || 'Staff',
+        fileName: data.file_name,
+      };
+    };
+
+    const mappedReports = reports.map(mapReport);
+
+    res.json({ success: true, data: { patient, appointments, prescriptions, labTests, vitals, reports: mappedReports, timeline } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -322,7 +347,30 @@ const getPatientReports = async (req, res) => {
       include: [{ model: User, as: 'uploadedBy', attributes: ['id', 'name'] }],
       order: [['created_at', 'DESC']],
     });
-    res.json({ success: true, data: reports });
+
+    const formatBytes = (bytes, decimals = 1) => {
+      if (!bytes) return '0 Bytes';
+      const k = 1024;
+      const dm = decimals < 0 ? 0 : decimals;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    };
+
+    const mapReport = (r) => {
+      const data = r.toJSON ? r.toJSON() : r;
+      return {
+        ...data,
+        category: data.report_type,
+        filePath: data.file_url,
+        fileSize: formatBytes(data.file_size),
+        date: data.created_at || data.createdAt,
+        doctor: data.uploadedBy?.name || 'Staff',
+        fileName: data.file_name,
+      };
+    };
+
+    res.json({ success: true, data: reports.map(mapReport) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -372,7 +420,33 @@ const uploadPatientReport = async (req, res) => {
       ip_address: req.ip,
     });
 
-    res.status(201).json({ success: true, data: report });
+    const fullReport = await Report.findByPk(report.id, {
+      include: [{ model: User, as: 'uploadedBy', attributes: ['id', 'name'] }]
+    });
+
+    const formatBytes = (bytes, decimals = 1) => {
+      if (!bytes) return '0 Bytes';
+      const k = 1024;
+      const dm = decimals < 0 ? 0 : decimals;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    };
+
+    const mapReport = (r) => {
+      const data = r.toJSON ? r.toJSON() : r;
+      return {
+        ...data,
+        category: data.report_type,
+        filePath: data.file_url,
+        fileSize: formatBytes(data.file_size),
+        date: data.created_at || data.createdAt,
+        doctor: data.uploadedBy?.name || 'Staff',
+        fileName: data.file_name,
+      };
+    };
+
+    res.status(201).json({ success: true, data: mapReport(fullReport) });
   } catch (error) {
     console.error('Report upload error:', error);
     res.status(500).json({ success: false, message: error.message });

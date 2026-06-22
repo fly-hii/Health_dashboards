@@ -189,13 +189,13 @@ export default function UserManagement() {
       specialization: role === 'DOCTOR' ? specialization : undefined,
       qualification: role === 'DOCTOR' ? qualification : undefined,
       experience: role === 'DOCTOR' ? (Number(experience) || 0) : undefined,
-      shift: role === 'NURSE' ? shift : undefined,
+      shift: ['NURSE', 'PHARMACIST', 'RECEPTIONIST', 'LAB_TECHNICIAN'].includes(role) ? shift : undefined,
       schedule: role === 'DOCTOR' ? {
         days: scheduleDays,
         startTime,
         endTime
       } : undefined,
-      availabilityStatus: (role === 'DOCTOR' || role === 'NURSE') ? availabilityStatus : undefined
+      availabilityStatus: ['DOCTOR', 'NURSE', 'PHARMACIST', 'RECEPTIONIST', 'LAB_TECHNICIAN'].includes(role) ? availabilityStatus : undefined
     };
 
     if (password) payload.password = password;
@@ -206,11 +206,21 @@ export default function UserManagement() {
         toast.success(`User ${name} updated successfully`);
         setIsModalOpen(false);
       } else {
-        await API.post('/users', payload);
+        const res = await API.post('/users', payload);
         toast.success(`User ${name} registered successfully`);
         setIsModalOpen(false);
         // Show credential summary so admin can share login details
-        setCreatedCredentials({ name, email, password, employeeId: employeeId.trim() || null });
+        if (res.data && res.data.success && res.data.data) {
+          const created = res.data.data;
+          setCreatedCredentials({
+            name: created.name,
+            email: created.email,
+            password: created.password || password,
+            employeeId: created.employeeId || employeeId.trim() || null
+          });
+        } else {
+          setCreatedCredentials({ name, email, password, employeeId: employeeId.trim() || null });
+        }
       }
       fetchUsers();
     } catch (err) {
@@ -430,7 +440,7 @@ export default function UserManagement() {
                     </div>
                   )}
 
-                  {u.role === 'NURSE' && (
+                  {['NURSE', 'PHARMACIST', 'LAB_TECHNICIAN', 'RECEPTIONIST'].includes(u.role) && (
                     <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5 text-[11px]">
                       <div>
                         <span className="font-semibold text-slate-500">Shift Assignment:</span>{' '}
@@ -725,10 +735,15 @@ export default function UserManagement() {
                 </div>
               )}
 
-              {/* Dynamic Nurse Fields */}
-              {role === 'NURSE' && (
+              {/* Dynamic Shift-based Fields (NURSE, PHARMACIST, RECEPTIONIST, LAB_TECHNICIAN) */}
+              {['NURSE', 'PHARMACIST', 'RECEPTIONIST', 'LAB_TECHNICIAN'].includes(role) && (
                 <div className="border-t border-slate-100 pt-4 mt-2 space-y-4">
-                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Nurse Information</h4>
+                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider">
+                    {role === 'NURSE' ? 'Nurse Information' :
+                     role === 'PHARMACIST' ? 'Pharmacist Information' :
+                     role === 'RECEPTIONIST' ? 'Receptionist Information' :
+                     'Laboratory Staff Information'}
+                  </h4>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>

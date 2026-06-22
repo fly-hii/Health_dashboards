@@ -95,6 +95,7 @@ export default function Patients() {
   });
 
   const [noteForm, setNoteForm] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
   const [previewReport, setPreviewReport] = useState(null);
   const [editingPatientId, setEditingPatientId] = useState(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState(null);
@@ -178,10 +179,10 @@ export default function Patients() {
 
       const res = await API.get(endpoint);
       if (res.data.success) {
-        if (tab === 'overview') {
+        if (tab === 'overview' || tab === 'vitals') {
           setPatientDetail(res.data.data);
           // Auto set note form if any
-          setNoteForm(res.data.data.patient.medicalNotes || '');
+          if (tab === 'overview') setNoteForm(res.data.data.patient.medicalNotes || '');
         } else if (tab === 'history') {
           setHistoryTimeline(res.data.data);
         } else if (tab === 'appointments') {
@@ -389,21 +390,30 @@ export default function Patients() {
   // Upload Report Submit
   const handleUploadReportSubmit = async (e) => {
     e.preventDefault();
+    if (!selectedFile) return toast.warning('Please select a file to upload');
+
     try {
-      const body = {
-        ...reportForm,
-        filePath: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf' // Simulated file link
-      };
-      const res = await API.post(`/patients/${selectedPatientId}/reports`, body);
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('title', reportForm.title);
+      formData.append('report_type', reportForm.category || 'Other');
+      formData.append('description', `Consultant: ${reportForm.doctor || 'N/A'}`);
+
+      const res = await API.post(`/patients/${selectedPatientId}/reports`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
       if (res.data.success) {
-        toast.success('Report document uploaded');
+        toast.success('Report document uploaded successfully');
         setIsReportModalOpen(false);
         setReportForm({ title: '', category: 'Lab Test', doctor: '', fileName: '', fileSize: '1.4 MB' });
+        setSelectedFile(null);
         fetchPatientTabData('reports', selectedPatientId);
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to upload report');
+      toast.error(err.response?.data?.message || 'Failed to upload report');
     }
   };
 
@@ -1008,6 +1018,7 @@ export default function Patients() {
                 <div className="flex border-b border-slate-100 overflow-x-auto scrollbar-none px-4 bg-white sticky top-0 z-10">
                   {[
                     { id: 'overview', name: 'Overview' },
+                    { id: 'vitals', name: 'Vitals' },
                     { id: 'history', name: 'Medical History' },
                     { id: 'appointments', name: 'Appointments' },
                     { id: 'prescriptions', name: 'Prescriptions' },
@@ -1137,6 +1148,74 @@ export default function Patients() {
                               </button>
                             </div>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Vitals Tab */}
+                      {activeTab === 'vitals' && (
+                        <div className="space-y-4">
+                          <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <Activity className="w-4 h-4 text-primary shrink-0" />
+                            <span>Patient Vitals Log</span>
+                          </h4>
+                          {!patientDetail.vitals || patientDetail.vitals.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">No vitals records found</p>
+                          ) : (
+                            <div className="space-y-4">
+                              {patientDetail.vitals.map((v) => (
+                                <div key={v._id || v.id} className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-xs space-y-3 hover:border-slate-200 transition-all">
+                                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold border-b border-slate-100 pb-2">
+                                    <span>Recorded by: {v.recordedBy?.name || 'Staff'}</span>
+                                    <span>{v.recorded_at ? new Date(v.recorded_at).toLocaleString() : v.recordedAt ? new Date(v.recordedAt).toLocaleString() : '—'}</span>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                                      <span className="text-[10px] text-slate-400 block">Blood Pressure</span>
+                                      <span className="font-bold text-slate-700 block mt-0.5">{v.blood_pressure || v.bloodPressure || '—'} mmHg</span>
+                                    </div>
+                                    <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                                      <span className="text-[10px] text-slate-400 block">Pulse Rate</span>
+                                      <span className="font-bold text-slate-700 block mt-0.5">{v.pulse || v.pulseRate || '—'} bpm</span>
+                                    </div>
+                                    <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                                      <span className="text-[10px] text-slate-400 block">Temperature</span>
+                                      <span className="font-bold text-slate-700 block mt-0.5">{v.temperature || '—'} °F</span>
+                                    </div>
+                                    <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                                      <span className="text-[10px] text-slate-400 block">SpO2</span>
+                                      <span className="font-bold text-slate-700 block mt-0.5">{v.spo2 || '—'}%</span>
+                                    </div>
+                                    <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                                      <span className="text-[10px] text-slate-400 block">Weight</span>
+                                      <span className="font-bold text-slate-700 block mt-0.5">{v.weight || '—'} kg</span>
+                                    </div>
+                                    <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                                      <span className="text-[10px] text-slate-400 block">Height</span>
+                                      <span className="font-bold text-slate-700 block mt-0.5">{v.height || '—'} cm</span>
+                                    </div>
+                                    {(v.blood_sugar || v.bloodSugar) && (
+                                      <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm col-span-1">
+                                        <span className="text-[10px] text-slate-400 block">Blood Sugar</span>
+                                        <span className="font-bold text-slate-700 block mt-0.5">{v.blood_sugar || v.bloodSugar} mg/dL</span>
+                                      </div>
+                                    )}
+                                    {v.bmi && (
+                                      <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm col-span-1">
+                                        <span className="text-[10px] text-slate-400 block">BMI</span>
+                                        <span className="font-bold text-slate-700 block mt-0.5">{v.bmi}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {v.notes && (
+                                    <div className="bg-white p-2.5 rounded-lg border border-slate-100 shadow-sm">
+                                      <span className="text-[10px] text-slate-400 block font-semibold mb-1">Notes</span>
+                                      <p className="text-slate-600 leading-relaxed">{v.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1784,13 +1863,20 @@ export default function Patients() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-600">File Name *</label>
+                <label className="font-bold text-slate-600">Choose File *</label>
                 <input 
-                  type="text" required
-                  placeholder="e.g. mri_scan_brain.pdf"
-                  value={reportForm.fileName}
-                  onChange={(e) => setReportForm({...reportForm, fileName: e.target.value})}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-primary/50"
+                  type="file" required
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    setSelectedFile(file);
+                    if (file && !reportForm.title) {
+                      const nameWithoutExt = file.name.split('.').slice(0, -1).join('.');
+                      setReportForm(prev => ({ ...prev, title: nameWithoutExt, fileName: file.name }));
+                    } else if (file) {
+                      setReportForm(prev => ({ ...prev, fileName: file.name }));
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-primary/50 text-slate-500"
                 />
               </div>
 
