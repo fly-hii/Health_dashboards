@@ -176,9 +176,18 @@ export default function AppointmentsView({ initialSelectedId, onClearDeepLink })
   };
 
   const getStatusClass = (status) => {
-    if (status === 'Upcoming') return 'badge-appt-upcoming';
-    if (status === 'Completed') return 'badge-appt-completed';
+    if (status === 'In-Progress') return 'badge-appt-inprogress';
+    if (status === 'Confirmed')   return 'badge-appt-confirmed';
+    if (status === 'Upcoming')    return 'badge-appt-upcoming';
+    if (status === 'Completed')   return 'badge-appt-completed';
     return 'badge-appt-cancelled';
+  };
+
+  const getDisplayStatus = (appt) => {
+    if (appt.rawStatus === 'In-Progress') return 'In-Progress';
+    if (appt.rawStatus === 'Confirmed')   return 'Confirmed';
+    if (appt.rawStatus === 'Pending')     return 'Pending';
+    return appt.status; // Completed / Cancelled / Upcoming
   };
 
   const hasActiveFilters = searchQuery || selectedDoctor || selectedDept || startDate || endDate;
@@ -397,8 +406,8 @@ export default function AppointmentsView({ initialSelectedId, onClearDeepLink })
                       </div>
                     </td>
                     <td className="appt-td">
-                      <span className={`appt-status-badge ${getStatusClass(appt.status)}`}>
-                        {appt.status}
+                      <span className={`appt-status-badge ${getStatusClass(getDisplayStatus(appt))}`}>
+                        {getDisplayStatus(appt)}
                       </span>
                     </td>
                     <td className="appt-td">

@@ -1,14 +1,13 @@
+'use strict';
 const { Op } = require('sequelize');
-const { sequelize } = require('../config/database');
-const { Patient, Appointment, Prescription, LabTest, Vitals, AuditLog, Report, User, PrescriptionMedicine } = require('../models');
 const { uploadToS3, deleteFromS3, generateReportKey } = require('../services/s3Service');
 
-// Generate unique PAT+YYYYMMDD+3digit counter scoped to hospital
-const generatePatientId = async (hospitalId) => {
+// Generate unique PAT+YYYYMMDD+4digit counter scoped to hospital
+const generatePatientId = async (hospitalId, PatientModel) => {
   const today = new Date();
   const datePrefix = `PAT${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
 
-  const lastPatient = await Patient.findOne({
+  const lastPatient = await PatientModel.findOne({
     where: { hospital_id: hospitalId, patient_id: { [Op.like]: `${datePrefix}%` } },
     order: [['patient_id', 'DESC']],
   });
@@ -26,6 +25,7 @@ const getPatients = async (req, res) => {
   try {
     const { search, status, gender, ageGroup, sortBy, order = 'DESC', page = 1, limit = 8, export: isExport } = req.query;
     const hospitalId = req.hospitalId;
+    const { Patient } = req.models;
     const where = { hospital_id: hospitalId };
 
     if (search) {
@@ -82,6 +82,7 @@ const getPatients = async (req, res) => {
 const getPatientStats = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
+    const { Patient } = req.models;
     const today = new Date();
     const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sixtyDaysAgo = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000);
@@ -116,6 +117,8 @@ const getPatientStats = async (req, res) => {
 // GET /api/patients/:id
 const getPatientById = async (req, res) => {
   try {
+    const { Patient, Appointment, Prescription, LabTest, Vitals, Report, User, PrescriptionMedicine } = req.models;
+
     const patient = await Patient.findOne({
       where: { id: req.params.id, hospital_id: req.hospitalId },
     });
@@ -192,7 +195,8 @@ const getPatientById = async (req, res) => {
 const createPatient = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
-    const patientId = req.body.patient_id || req.body.patientId || await generatePatientId(hospitalId);
+    const { Patient, AuditLog } = req.models;
+    const patientId = req.body.patient_id || req.body.patientId || await generatePatientId(hospitalId, Patient);
 
     const patient = await Patient.create({
       ...req.body,
@@ -226,6 +230,7 @@ const createPatient = async (req, res) => {
 // PUT /api/patients/:id
 const updatePatient = async (req, res) => {
   try {
+    const { Patient, AuditLog } = req.models;
     const patient = await Patient.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
@@ -260,6 +265,7 @@ const updatePatient = async (req, res) => {
 // DELETE /api/patients/:id
 const deletePatient = async (req, res) => {
   try {
+    const { Patient, AuditLog } = req.models;
     const patient = await Patient.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
@@ -286,6 +292,7 @@ const deletePatient = async (req, res) => {
 // GET /api/patients/:id/history
 const getPatientHistory = async (req, res) => {
   try {
+    const { Appointment, Prescription, LabTest, Report, User, PrescriptionMedicine } = req.models;
     const where = { patient_id: req.params.id, hospital_id: req.hospitalId };
 
     const [appointments, prescriptions, labTests, reports] = await Promise.all([
@@ -311,6 +318,7 @@ const getPatientHistory = async (req, res) => {
 // GET /api/patients/:id/appointments
 const getPatientAppointments = async (req, res) => {
   try {
+    const { Appointment, User } = req.models;
     const appointments = await Appointment.findAll({
       where: { patient_id: req.params.id, hospital_id: req.hospitalId },
       include: [{ model: User, as: 'doctor', attributes: ['id', 'name', 'specialization'] }],
@@ -325,6 +333,7 @@ const getPatientAppointments = async (req, res) => {
 // GET /api/patients/:id/prescriptions
 const getPatientPrescriptions = async (req, res) => {
   try {
+    const { Prescription, User, PrescriptionMedicine } = req.models;
     const prescriptions = await Prescription.findAll({
       where: { patient_id: req.params.id, hospital_id: req.hospitalId },
       include: [
@@ -342,6 +351,7 @@ const getPatientPrescriptions = async (req, res) => {
 // GET /api/patients/:id/reports
 const getPatientReports = async (req, res) => {
   try {
+    const { Report, User } = req.models;
     const reports = await Report.findAll({
       where: { patient_id: req.params.id, hospital_id: req.hospitalId, is_deleted: false },
       include: [{ model: User, as: 'uploadedBy', attributes: ['id', 'name'] }],
@@ -382,6 +392,7 @@ const uploadPatientReport = async (req, res) => {
     const hospitalId = req.hospitalId;
     const patientId = req.params.id;
     const { title, report_type = 'Other', description, appointment_id } = req.body;
+    const { Patient, Report, User, AuditLog } = req.models;
 
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
@@ -457,6 +468,7 @@ const uploadPatientReport = async (req, res) => {
 const deletePatientReport = async (req, res) => {
   try {
     const { id: patientId, reportId } = req.params;
+    const { Report, AuditLog } = req.models;
     const report = await Report.findOne({ where: { id: reportId, patient_id: patientId, hospital_id: req.hospitalId } });
     if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
 

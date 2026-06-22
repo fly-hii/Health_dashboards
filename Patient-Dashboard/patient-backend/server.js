@@ -1,4 +1,5 @@
 const express = require('express');
+const { fn, col, where: seqWhere } = require('sequelize');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const http = require('http');
@@ -20,7 +21,10 @@ const { sendForgotPasswordOtp, verifyForgotPasswordOtp, resetForgotPassword } = 
 
 
 const app = express();
-const PORT = process.env.PORT || 5050;
+const PORT = process.env.PORT;
+if (!PORT) {
+  throw new Error('PORT is not configured in env.');
+}
 
 // ── HTTP Server & Socket.IO ─────────────────────────────────
 const server = http.createServer(app);
@@ -66,8 +70,10 @@ io.on('connection', (socket) => {
 });
 app.set('io', io);
 
-// ── Nurse Socket Relay ──────────────────────────────────────
-const NURSE_SOCKET_URL = process.env.NURSE_SOCKET_URL || 'http://localhost:5002';
+const NURSE_SOCKET_URL = process.env.NURSE_SOCKET_URL;
+if (!NURSE_SOCKET_URL) {
+  throw new Error('NURSE_SOCKET_URL is not configured in env.');
+}
 let nurseSocket = null;
 const connectNurseSocket = () => {
   nurseSocket = ioClient(NURSE_SOCKET_URL, {
@@ -133,19 +139,183 @@ app.get('/api/profile', protect, getProfile);
 app.put('/api/profile', protect, updateProfile);
 
 // ────────────────────────────────────────────────────────────
-// HOSPITAL DISCOVERY (for registration)
+// LOCATION & HOSPITAL DISCOVERY
+// All endpoints below are public (no auth needed for browsing).
+// Department/Doctor reads use getHospitalConnection so only that
+// hospital's tenant DB is accessed — no cross-tenant data leak.
 // ────────────────────────────────────────────────────────────
+
+// GET /api/locations — distinct cities with active/trial hospitals from master registry
+app.get('/api/locations', async (req, res) => {
+  try {
+    const { masterDb } = require('./services/databaseResolver');
+    const [rows] = await masterDb.query(
+      "SELECT city, state FROM hospitals WHERE status IN ('active', 'trial')"
+    );
+
+    // Aggregate hospital count per city
+    const cityMap = {};
+    rows.forEach(h => {
+      if (!h.city) return;
+      const key = h.city.trim().toLowerCase();
+      if (!cityMap[key]) {
+        cityMap[key] = { city: h.city.trim(), state: h.state || '', hospitalCount: 0 };
+      }
+      cityMap[key].hospitalCount++;
+    });
+
+    const data = Object.values(cityMap).sort((a, b) => a.city.localeCompare(b.city));
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/hospitals?city=Mumbai — hospitals list from master registry (with optional city filter)
 app.get('/api/hospitals', async (req, res) => {
   try {
-    const hospitals = await Hospital.findAll({
-      where: { status: 'active' },
-      attributes: ['id', 'name', 'city', 'state', 'phone', 'logo_url'],
-    });
+    const { city } = req.query;
+    const { masterDb } = require('./services/databaseResolver');
+
+    let queryStr = "SELECT id, name, city, state, phone, logo_url, email, address, code FROM hospitals WHERE status IN ('active', 'trial')";
+    const replacements = [];
+    if (city) {
+      queryStr += " AND LOWER(TRIM(city)) = LOWER(TRIM(?))";
+      replacements.push(city);
+    }
+    queryStr += " ORDER BY name ASC";
+
+    const [hospitals] = await masterDb.query(queryStr, { replacements });
     res.json({ success: true, data: hospitals });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// GET /api/hospitals/:hospitalId/departments
+// Protected: auth required. Reads the TARGET hospital's tenant DB.
+app.get('/api/hospitals/:hospitalId/departments', protect, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.hospitalId);
+    if (!targetId || isNaN(targetId)) {
+      return res.status(400).json({ success: false, message: 'Invalid hospital ID' });
+    }
+
+    const { getHospitalConnection } = require('./services/databaseResolver');
+    const db = await getHospitalConnection(targetId);
+
+    // Fetch all active departments created in admin dashboard
+    const [dbDepts] = await db.query(
+      `SELECT id, name FROM departments WHERE hospital_id = ? AND status = 'active' ORDER BY name ASC`,
+      { replacements: [targetId] }
+    );
+
+    if (dbDepts.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // For each department, count active doctors whose department OR specialization matches
+    const data = [];
+    for (const dept of dbDepts) {
+      const deptNameLower = dept.name.trim().toLowerCase();
+      const [countRows] = await db.query(
+        `SELECT COUNT(*) as cnt FROM users 
+         WHERE hospital_id = ? 
+           AND role = 'DOCTOR' 
+           AND status = 'Active'
+           AND (
+             LOWER(TRIM(department)) = ?
+             OR LOWER(TRIM(department)) LIKE ?
+             OR LOWER(TRIM(specialization)) LIKE ?
+           )`,
+        { replacements: [targetId, deptNameLower, `%${deptNameLower}%`, `%${deptNameLower}%`] }
+      );
+      data.push({
+        name: dept.name.trim(),
+        doctorCount: parseInt(countRows[0].cnt) || 0,
+      });
+    }
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('[departments route error]', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+
+// GET /api/hospitals/:hospitalId/doctors?department=X
+// Protected: auth required. Reads the TARGET hospital's tenant DB.
+app.get('/api/hospitals/:hospitalId/doctors', protect, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.hospitalId);
+    if (!targetId || isNaN(targetId)) {
+      return res.status(400).json({ success: false, message: 'Invalid hospital ID' });
+    }
+
+    const { getHospitalConnection } = require('./services/databaseResolver');
+    const { createModels } = require('./services/modelFactory');
+    const db = await getHospitalConnection(targetId);
+    const models = createModels(db);
+
+    const { department } = req.query;
+    const where = { hospital_id: targetId, role: 'DOCTOR', status: 'Active' };
+    // Match doctors by department OR specialization (both case-insensitive, partial match).
+    // This handles doctors who have no department set but have a matching specialization
+    // e.g. department="cardiology" will match specialization="Cardiologist".
+    if (department) {
+      const deptLower = department.trim().toLowerCase();
+      where[Op.and] = [
+        {
+          [Op.or]: [
+            seqWhere(fn('LOWER', col('department')), deptLower),
+            seqWhere(fn('LOWER', col('department')), { [Op.like]: `%${deptLower}%` }),
+            seqWhere(fn('LOWER', col('specialization')), { [Op.like]: `%${deptLower}%` }),
+          ]
+        }
+      ];
+    }
+
+    // Auto-update availability_status to 'Busy' if inactive for > 2 hours
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await models.User.update(
+      { availability_status: 'Busy' },
+      {
+        where: {
+          hospital_id: targetId,
+          role: 'DOCTOR',
+          availability_status: 'Available',
+          [Op.or]: [
+            { last_login: { [Op.lt]: twoHoursAgo } },
+            { last_login: null }
+          ]
+        }
+      }
+    ).catch(err => console.error('[Auto Availability Expiry Error in hospitals/doctors]', err));
+
+    const rows = await models.User.findAll({
+      where,
+      attributes: ['id', 'name', 'department', 'specialization', 'experience', 'qualification', 'profile_image', 'availability_status', 'employee_id'],
+      order: [['name', 'ASC']],
+    });
+
+    const data = rows.map(d => ({
+      id: d.id,
+      name: d.name,
+      department: d.department,
+      specialization: d.specialization || d.department,
+      experience: d.experience ? `${d.experience} Years` : 'N/A',
+      qualification: d.qualification || 'MBBS',
+      avatar: d.profile_image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(d.name)}&backgroundColor=b6e3f4`,
+      availability: d.availability_status || 'Available',
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 
 // ────────────────────────────────────────────────────────────
 // DOCTOR ROUTES (for booking)
@@ -156,7 +326,24 @@ app.get('/api/doctors', protect, async (req, res) => {
     const where = { hospital_id: req.hospitalId, role: 'DOCTOR', status: 'Active' };
     if (department) where.department = department;
 
-    const doctors = await User.findAll({
+    // Auto-update availability_status to 'Busy' if inactive for > 2 hours
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await req.models.User.update(
+      { availability_status: 'Busy' },
+      {
+        where: {
+          hospital_id: req.hospitalId,
+          role: 'DOCTOR',
+          availability_status: 'Available',
+          [Op.or]: [
+            { last_login: { [Op.lt]: twoHoursAgo } },
+            { last_login: null }
+          ]
+        }
+      }
+    ).catch(err => console.error('[Auto Availability Expiry Error in doctors]', err));
+
+    const doctors = await req.models.User.findAll({
       where,
       attributes: ['id', 'name', 'department', 'specialization', 'experience', 'qualification', 'profile_image', 'availability_status', 'employee_id'],
       order: [['name', 'ASC']],
@@ -181,6 +368,40 @@ app.get('/api/doctors', protect, async (req, res) => {
   }
 });
 
+// Helper to retrieve database connections and resolved patient IDs for the logged-in patient across all active/trial hospitals
+async function getPatientConnectionsAcrossHospitals(email) {
+  const { masterDb, getHospitalConnection } = require('./services/databaseResolver');
+  const { createModels } = require('./services/modelFactory');
+
+  const [hospitals] = await masterDb.query(
+    "SELECT id, name FROM hospitals WHERE status IN ('active', 'trial')"
+  );
+
+  const results = [];
+  for (const hosp of hospitals) {
+    try {
+      const db = await getHospitalConnection(hosp.id);
+      const models = createModels(db);
+      // Find patient by email in this hospital's DB
+      const patient = await models.Patient.findOne({
+        where: { email: email }
+      });
+      if (patient) {
+        results.push({
+          hospitalId: hosp.id,
+          hospitalName: hosp.name,
+          patientId: patient.id,
+          db,
+          models
+        });
+      }
+    } catch (err) {
+      console.error(`[Patient DB Resolver] Failed to check patient in hospital ${hosp.id}:`, err.message);
+    }
+  }
+  return results;
+}
+
 // ────────────────────────────────────────────────────────────
 // APPOINTMENT ROUTES
 // ────────────────────────────────────────────────────────────
@@ -188,23 +409,34 @@ app.get('/api/doctors', protect, async (req, res) => {
 // GET /api/appointments (patient's own)
 app.get('/api/appointments', protect, async (req, res) => {
   try {
-    const appointments = await Appointment.findAll({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id },
-      include: [{ model: User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'profile_image'] }],
-      order: [['date_time', 'DESC']],
-    });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allAppointments = [];
 
-    const mapped = appointments.map(a => ({
-      _id: a.id,
-      apptId: `APT${String(a.id).padStart(4, '0')}`,
-      doctor: a.doctor?.name ? `Dr. ${a.doctor.name}` : 'Doctor',
-      department: a.department,
-      dateTime: a.date_time ? new Date(a.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
-      tokenNumber: a.token_number,
-      status: a.status === 'Completed' ? 'Completed' : a.status === 'Cancelled' ? 'Cancelled' : 'Upcoming',
-      rawStatus: a.status,
-    }));
-    res.json(mapped);
+    for (const conn of patientConns) {
+      const appointments = await conn.models.Appointment.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId },
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'profile_image'] }],
+        order: [['date_time', 'DESC']],
+      });
+
+      const mapped = appointments.map(a => ({
+        _id: a.id,
+        apptId: `APT${String(a.id).padStart(4, '0')}`,
+        doctor: a.doctor?.name ? `Dr. ${a.doctor.name}` : 'Doctor',
+        department: a.department,
+        dateTime: a.date_time ? new Date(a.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        tokenNumber: a.token_number,
+        status: a.status === 'Completed' ? 'Completed' : a.status === 'Cancelled' ? 'Cancelled' : 'Upcoming',
+        rawStatus: a.status,
+      }));
+
+      allAppointments.push(...mapped);
+    }
+
+    // Sort all by dateTime descending
+    allAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+    res.json(allAppointments);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -214,49 +446,64 @@ app.get('/api/appointments', protect, async (req, res) => {
 app.get('/api/patient/appointments', protect, async (req, res) => {
   try {
     const { search, department, status, startDate, endDate, page = 1, limit = 5 } = req.query;
-    const where = { hospital_id: req.hospitalId, patient_id: req.user.id };
 
-    if (department) where.department = department;
-    if (status) {
-      if (status.toLowerCase() === 'upcoming') where.status = { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] };
-      else if (status.toLowerCase() === 'completed') where.status = 'Completed';
-      else if (status.toLowerCase() === 'cancelled') where.status = 'Cancelled';
-    }
-    if (startDate || endDate) {
-      where.date_time = {};
-      if (startDate) where.date_time[Op.gte] = new Date(startDate);
-      if (endDate) { const e = new Date(endDate); e.setHours(23, 59, 59, 999); where.date_time[Op.lte] = e; }
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allRows = [];
+
+    for (const conn of patientConns) {
+      const where = { hospital_id: conn.hospitalId, patient_id: conn.patientId };
+
+      if (department) where.department = department;
+      if (status) {
+        if (status.toLowerCase() === 'upcoming') where.status = { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] };
+        else if (status.toLowerCase() === 'completed') where.status = 'Completed';
+        else if (status.toLowerCase() === 'cancelled') where.status = 'Cancelled';
+      }
+      if (startDate || endDate) {
+        where.date_time = {};
+        if (startDate) where.date_time[Op.gte] = new Date(startDate);
+        if (endDate) { const e = new Date(endDate); e.setHours(23, 59, 59, 999); where.date_time[Op.lte] = e; }
+      }
+
+      const rows = await conn.models.Appointment.findAll({
+        where,
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'profile_image', 'qualification'] }],
+      });
+
+      const mapped = rows.map(a => ({
+        _id: a.id,
+        appointmentId: `APT${String(a.id).padStart(4, '0')}`,
+        doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
+        doctorAvatar: a.doctor?.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${a.doctor?.name}`,
+        department: a.department,
+        appointmentDate: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        appointmentTime: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+        tokenNumber: a.token_number,
+        reason: a.reason || 'Routine checkup',
+        status: a.status === 'Completed' ? 'Completed' : a.status === 'Cancelled' ? 'Cancelled' : 'Upcoming',
+        rawStatus: a.status,
+        createdAt: a.created_at,
+        hospitalId: conn.hospitalId,
+        hospitalName: conn.hospitalName
+      }));
+
+      allRows.push(...mapped);
     }
 
+    // Sort all rows by createdAt descending
+    allRows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const total = allRows.length;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
-    const { count, rows } = await Appointment.findAndCountAll({
-      where,
-      include: [{ model: User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'profile_image', 'qualification'] }],
-      order: [['date_time', 'DESC']],
-      limit: limitNum,
-      offset: (pageNum - 1) * limitNum,
-    });
-
-    const mapped = rows.map(a => ({
-      _id: a.id,
-      appointmentId: `APT${String(a.id).padStart(4, '0')}`,
-      doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
-      doctorAvatar: a.doctor?.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${a.doctor?.name}`,
-      department: a.department,
-      appointmentDate: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-      appointmentTime: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-      tokenNumber: a.token_number,
-      reason: a.reason || 'Routine checkup',
-      status: a.status === 'Completed' ? 'Completed' : a.status === 'Cancelled' ? 'Cancelled' : 'Upcoming',
-      rawStatus: a.status,
-      createdAt: a.created_at,
-    }));
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    const offset = (pageNum - 1) * limitNum;
+    const paginatedRows = allRows.slice(offset, offset + limitNum);
 
     res.json({
       success: true,
-      appointments: mapped,
-      pagination: { total: count, page: pageNum, limit: limitNum, totalPages: Math.ceil(count / limitNum) || 1 },
+      appointments: paginatedRows,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -266,13 +513,24 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
 // GET /api/patient/appointments/:id
 app.get('/api/patient/appointments/:id', protect, async (req, res) => {
   try {
-    const appt = await Appointment.findOne({
-      where: { id: req.params.id, hospital_id: req.hospitalId, patient_id: req.user.id },
-      include: [
-        { model: User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'qualification', 'profile_image'] },
-        { model: Vitals, as: 'vitals', required: false },
-      ],
-    });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let appt = null;
+    let activeConn = null;
+
+    for (const conn of patientConns) {
+      appt = await conn.models.Appointment.findOne({
+        where: { id: req.params.id, patient_id: conn.patientId },
+        include: [
+          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'qualification', 'profile_image'] },
+          { model: conn.models.Vitals, as: 'vitals', required: false },
+        ],
+      });
+      if (appt) {
+        activeConn = conn;
+        break;
+      }
+    }
+
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
     res.json({
@@ -313,30 +571,92 @@ app.get('/api/patient/appointments/:id', protect, async (req, res) => {
 
 // POST /api/appointments (book)
 app.post('/api/appointments', protect, async (req, res) => {
-  const t = await sequelize.transaction();
+  const targetHospitalId = parseInt(req.body.hospitalId || req.body.hospital_id || req.hospitalId);
+  const isCrossHospital = targetHospitalId !== req.hospitalId;
+
+  // Resolve target database connection and models
+  const { getHospitalConnection } = require('./services/databaseResolver');
+  const { createModels } = require('./services/modelFactory');
+
+  let dbConnection, models;
+  try {
+    dbConnection = await getHospitalConnection(targetHospitalId);
+    models = createModels(dbConnection);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: `Failed to connect to target hospital: ${err.message}` });
+  }
+
+  const t = await dbConnection.transaction();
   try {
     const { doctorId, doctor_id, department, dateTime, reason, notes } = req.body;
     const resolvedDoctorId = doctorId || doctor_id;
 
-    const doctor = await User.findOne({
-      where: { id: resolvedDoctorId, hospital_id: req.hospitalId, role: 'DOCTOR' },
+    // 1. Resolve Patient in Target Hospital
+    let targetPatientId = req.user.id;
+    if (isCrossHospital) {
+      let targetPatient = await models.Patient.findOne({
+        where: { email: req.user.email },
+        transaction: t,
+      });
+
+      if (!targetPatient) {
+        // Generate patient ID for target hospital
+        const today = new Date();
+        const prefix = `PAT${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+        const last = await models.Patient.findOne({
+          where: { patient_id: { [Op.like]: `${prefix}%` } },
+          order: [['patient_id', 'DESC']],
+          transaction: t,
+        });
+        const seq = last?.patient_id ? parseInt(last.patient_id.replace(prefix, '')) + 1 : 1;
+        const patient_id = `${prefix}${String(seq).padStart(3, '0')}`;
+
+        targetPatient = await models.Patient.create({
+          hospital_id: targetHospitalId,
+          patient_id,
+          full_name: req.user.full_name,
+          email: req.user.email,
+          password: req.user.password, // Copied hashed password
+          phone: req.user.phone,
+          dob: req.user.dob,
+          gender: req.user.gender,
+          blood_group: req.user.blood_group,
+          address: req.user.address,
+          status: 'Active',
+          is_portal_user: true,
+        }, { transaction: t });
+      }
+      targetPatientId = targetPatient.id;
+    }
+
+    // 2. Resolve Doctor in Target Hospital
+    const doctor = await models.User.findOne({
+      where: { id: resolvedDoctorId, hospital_id: targetHospitalId, role: 'DOCTOR' },
+      transaction: t,
     });
-    if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+    if (!doctor) {
+      await t.rollback();
+      return res.status(404).json({ success: false, message: 'Doctor not found at the selected hospital' });
+    }
+    if (doctor.availability_status && doctor.availability_status !== 'Available') {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: `Dr. ${doctor.name} is currently ${doctor.availability_status.toLowerCase()} and cannot accept appointments.` });
+    }
 
     const appointmentDateTime = new Date(dateTime);
 
     // Auto token number for the day
     const dayStart = new Date(appointmentDateTime); dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(appointmentDateTime); dayEnd.setHours(23, 59, 59, 999);
-    const tokenCount = await Appointment.count({
-      where: { hospital_id: req.hospitalId, doctor_id: resolvedDoctorId, date_time: { [Op.between]: [dayStart, dayEnd] } },
+    const tokenCount = await models.Appointment.count({
+      where: { hospital_id: targetHospitalId, doctor_id: resolvedDoctorId, date_time: { [Op.between]: [dayStart, dayEnd] } },
       transaction: t,
     });
     const tokenNumber = tokenCount + 1;
 
-    const appointment = await Appointment.create({
-      hospital_id: req.hospitalId,
-      patient_id: req.user.id,
+    const appointment = await models.Appointment.create({
+      hospital_id: targetHospitalId,
+      patient_id: targetPatientId,
       doctor_id: resolvedDoctorId,
       department: department || doctor.department,
       date_time: appointmentDateTime,
@@ -348,20 +668,20 @@ app.post('/api/appointments', protect, async (req, res) => {
       status: 'Confirmed',
     }, { transaction: t });
 
-    await Token.create({
-      hospital_id: req.hospitalId,
+    await models.Token.create({
+      hospital_id: targetHospitalId,
       appointment_id: appointment.id,
-      patient_id: req.user.id,
+      patient_id: targetPatientId,
       doctor_id: resolvedDoctorId,
       token_number: tokenNumber,
       token_date: appointmentDateTime.toISOString().split('T')[0],
       status: 'Waiting',
     }, { transaction: t });
 
-    // Create notification
-    await Notification.create({
-      hospital_id: req.hospitalId,
-      user_id: req.user.id,
+    // Create notification in target database
+    await models.Notification.create({
+      hospital_id: targetHospitalId,
+      user_id: targetPatientId,
       title: 'Appointment Confirmed',
       message: `Your appointment with Dr. ${doctor.name} is confirmed for Token #${tokenNumber}.`,
       type: 'appointment',
@@ -374,9 +694,9 @@ app.post('/api/appointments', protect, async (req, res) => {
     // Notify nurse dashboard
     notifyNurse({ type: 'new_appointment', appointmentId: appointment.id, department, tokenNumber });
 
-    // Socket events
+    // Socket events (emit to target rooms)
     io.to(`patient_${req.user.id}`).emit('appointment_confirmed', { appointmentId: appointment.id, tokenNumber, doctorName: doctor.name });
-    io.to(`hospital_${req.hospitalId}`).emit('new_appointment', { appointmentId: appointment.id, tokenNumber });
+    io.to(`hospital_${targetHospitalId}`).emit('new_appointment', { appointmentId: appointment.id, tokenNumber });
 
     res.status(201).json({
       success: true,
@@ -394,17 +714,27 @@ app.post('/api/appointments', protect, async (req, res) => {
 app.put('/api/appointments/:id/reschedule', protect, async (req, res) => {
   try {
     const { dateTime } = req.body;
-    const appt = await Appointment.findOne({
-      where: { id: req.params.id, patient_id: req.user.id, hospital_id: req.hospitalId },
-      include: [{ model: User, as: 'doctor', attributes: ['id', 'name'] }],
-    });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let appt = null;
+    let activeConn = null;
+
+    for (const conn of patientConns) {
+      appt = await conn.models.Appointment.findOne({
+        where: { id: req.params.id, patient_id: conn.patientId, hospital_id: conn.hospitalId },
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+      });
+      if (appt) {
+        activeConn = conn;
+        break;
+      }
+    }
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
     await appt.update({ date_time: new Date(dateTime), status: 'Confirmed' });
 
-    await Notification.create({
-      hospital_id: req.hospitalId,
-      user_id: req.user.id,
+    await activeConn.models.Notification.create({
+      hospital_id: activeConn.hospitalId,
+      user_id: activeConn.patientId,
       title: 'Appointment Rescheduled',
       message: `Your appointment with Dr. ${appt.doctor?.name} has been rescheduled.`,
       type: 'appointment',
@@ -412,7 +742,7 @@ app.put('/api/appointments/:id/reschedule', protect, async (req, res) => {
     });
 
     io.to(`patient_${req.user.id}`).emit('appointment_rescheduled', { appointmentId: appt.id });
-    io.to(`hospital_${req.hospitalId}`).emit('appointment_rescheduled', { appointmentId: appt.id });
+    io.to(`hospital_${activeConn.hospitalId}`).emit('appointment_rescheduled', { appointmentId: appt.id });
 
     res.json({ success: true, message: 'Appointment rescheduled successfully', appointment: appt });
   } catch (error) {
@@ -424,19 +754,29 @@ app.put('/api/appointments/:id/reschedule', protect, async (req, res) => {
 app.put('/api/appointments/:id/cancel', protect, async (req, res) => {
   try {
     const { reason } = req.body;
-    const appt = await Appointment.findOne({
-      where: { id: req.params.id, patient_id: req.user.id, hospital_id: req.hospitalId },
-      include: [{ model: User, as: 'doctor', attributes: ['id', 'name'] }],
-    });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let appt = null;
+    let activeConn = null;
+
+    for (const conn of patientConns) {
+      appt = await conn.models.Appointment.findOne({
+        where: { id: req.params.id, patient_id: conn.patientId, hospital_id: conn.hospitalId },
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+      });
+      if (appt) {
+        activeConn = conn;
+        break;
+      }
+    }
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
     if (appt.status === 'Cancelled') return res.status(400).json({ success: false, message: 'Already cancelled' });
 
     await appt.update({ status: 'Cancelled', notes: `Cancelled: ${reason || 'Patient request'}` });
-    await Token.update({ status: 'Cancelled' }, { where: { appointment_id: appt.id } });
+    await activeConn.models.Token.update({ status: 'Cancelled' }, { where: { appointment_id: appt.id } });
 
-    await Notification.create({
-      hospital_id: req.hospitalId,
-      user_id: req.user.id,
+    await activeConn.models.Notification.create({
+      hospital_id: activeConn.hospitalId,
+      user_id: activeConn.patientId,
       title: 'Appointment Cancelled',
       message: `Your appointment with Dr. ${appt.doctor?.name} has been cancelled.`,
       type: 'appointment',
@@ -444,7 +784,7 @@ app.put('/api/appointments/:id/cancel', protect, async (req, res) => {
     });
 
     io.to(`patient_${req.user.id}`).emit('appointment_cancelled', { appointmentId: appt.id, reason });
-    io.to(`hospital_${req.hospitalId}`).emit('appointment_cancelled', { appointmentId: appt.id });
+    io.to(`hospital_${activeConn.hospitalId}`).emit('appointment_cancelled', { appointmentId: appt.id });
 
     res.json({ success: true, message: 'Appointment cancelled successfully', appointment: appt });
   } catch (error) {
@@ -455,7 +795,17 @@ app.put('/api/appointments/:id/cancel', protect, async (req, res) => {
 // DELETE /api/appointments/:id
 app.delete('/api/appointments/:id', protect, async (req, res) => {
   try {
-    const appt = await Appointment.findOne({ where: { id: req.params.id, patient_id: req.user.id } });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let appt = null;
+    let activeConn = null;
+
+    for (const conn of patientConns) {
+      appt = await conn.models.Appointment.findOne({ where: { id: req.params.id, patient_id: conn.patientId } });
+      if (appt) {
+        activeConn = conn;
+        break;
+      }
+    }
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
     await appt.destroy();
     io.to(`patient_${req.user.id}`).emit('appointment_deleted', { appointmentId: req.params.id });
@@ -473,21 +823,60 @@ app.get('/api/token/current', protect, async (req, res) => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
 
-    let appt = await Appointment.findOne({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id, date_time: { [Op.between]: [today, todayEnd] }, status: { [Op.ne]: 'Cancelled' } },
-      include: [{ model: User, as: 'doctor', attributes: ['id', 'name'] }, { model: Vitals, as: 'vitals', required: false }],
-      order: [['updated_at', 'DESC']],
-    });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
 
-    if (!appt) {
-      appt = await Appointment.findOne({
-        where: { hospital_id: req.hospitalId, patient_id: req.user.id, date_time: { [Op.gt]: todayEnd }, status: { [Op.notIn]: ['Cancelled', 'Completed'] } },
-        include: [{ model: User, as: 'doctor', attributes: ['id', 'name'] }],
-        order: [['date_time', 'ASC']],
+    let activeAppt = null;
+    let activeModels = null;
+    let activeHospitalId = null;
+
+    // 1. Look for today's appointment first
+    for (const conn of patientConns) {
+      const appt = await conn.models.Appointment.findOne({
+        where: { 
+          hospital_id: conn.hospitalId, 
+          patient_id: conn.patientId, 
+          date_time: { [Op.between]: [today, todayEnd] }, 
+          status: { [Op.ne]: 'Cancelled' } 
+        },
+        include: [
+          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
+          { model: conn.models.Vitals, as: 'vitals', required: false }
+        ],
+        order: [['updated_at', 'DESC']],
       });
+      if (appt) {
+        if (!activeAppt || appt.updated_at > activeAppt.updated_at) {
+          activeAppt = appt;
+          activeModels = conn.models;
+          activeHospitalId = conn.hospitalId;
+        }
+      }
     }
 
-    if (!appt) return res.json(null);
+    // 2. If no today's appointment, look for upcoming future appointments
+    if (!activeAppt) {
+      for (const conn of patientConns) {
+        const appt = await conn.models.Appointment.findOne({
+          where: { 
+            hospital_id: conn.hospitalId, 
+            patient_id: conn.patientId, 
+            date_time: { [Op.gt]: todayEnd }, 
+            status: { [Op.notIn]: ['Cancelled', 'Completed'] } 
+          },
+          include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+          order: [['date_time', 'ASC']],
+        });
+        if (appt) {
+          if (!activeAppt || appt.date_time < activeAppt.date_time) {
+            activeAppt = appt;
+            activeModels = conn.models;
+            activeHospitalId = conn.hospitalId;
+          }
+        }
+      }
+    }
+
+    if (!activeAppt) return res.json(null);
 
     const statusMap = {
       'Pending': 'Registration', 'Confirmed': 'Registration',
@@ -496,50 +885,157 @@ app.get('/api/token/current', protect, async (req, res) => {
     };
 
     // Queue position
-    const apptDay = new Date(appt.date_time); apptDay.setHours(0, 0, 0, 0);
-    const apptDayEnd = new Date(appt.date_time); apptDayEnd.setHours(23, 59, 59, 999);
-    const countAhead = await Appointment.count({
+    const apptDay = new Date(activeAppt.date_time); apptDay.setHours(0, 0, 0, 0);
+    const apptDayEnd = new Date(activeAppt.date_time); apptDayEnd.setHours(23, 59, 59, 999);
+    const countAhead = await activeModels.Appointment.count({
       where: {
-        hospital_id: req.hospitalId,
-        doctor_id: appt.doctor_id,
+        hospital_id: activeHospitalId,
+        doctor_id: activeAppt.doctor_id,
         date_time: { [Op.between]: [apptDay, apptDayEnd] },
-        token_number: { [Op.lt]: appt.token_number },
+        token_number: { [Op.lt]: activeAppt.token_number },
         status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] },
       },
     });
 
     res.json({
-      _id: appt.id,
-      number: appt.token_number,
-      department: `${appt.department} - OPD`,
+      _id: activeAppt.id,
+      number: activeAppt.token_number,
+      department: `${activeAppt.department} - OPD`,
       estimatedWaitMinutes: Math.max(5, countAhead * 15),
       peopleAhead: countAhead,
-      status: statusMap[appt.status] || 'Registration',
-      appointmentTime: appt.date_time ? new Date(appt.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
-      doctor: appt.doctor ? `Dr. ${appt.doctor.name}` : 'Doctor',
-      isCompleted: appt.status === 'Completed',
-      vitals: appt.vitals || null,
+      status: statusMap[activeAppt.status] || 'Registration',
+      appointmentTime: activeAppt.date_time ? new Date(activeAppt.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+      doctor: activeAppt.doctor ? `Dr. ${activeAppt.doctor.name}` : 'Doctor',
+      isCompleted: activeAppt.status === 'Completed',
+      vitals: activeAppt.vitals || null,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
+// POST /api/token/refresh — re-fetches current token state (called by patient frontend refresh button)
+app.post('/api/token/refresh', protect, async (req, res) => {
+  try {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+
+    let activeAppt = null;
+    let activeModels = null;
+    let activeHospitalId = null;
+
+    for (const conn of patientConns) {
+      const appt = await conn.models.Appointment.findOne({
+        where: { 
+          hospital_id: conn.hospitalId, 
+          patient_id: conn.patientId, 
+          date_time: { [Op.between]: [today, todayEnd] }, 
+          status: { [Op.ne]: 'Cancelled' } 
+        },
+        include: [
+          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
+          { model: conn.models.Vitals, as: 'vitals', required: false }
+        ],
+        order: [['updated_at', 'DESC']],
+      });
+      if (appt) {
+        if (!activeAppt || appt.updated_at > activeAppt.updated_at) {
+          activeAppt = appt;
+          activeModels = conn.models;
+          activeHospitalId = conn.hospitalId;
+        }
+      }
+    }
+
+    if (!activeAppt) {
+      for (const conn of patientConns) {
+        const appt = await conn.models.Appointment.findOne({
+          where: { 
+            hospital_id: conn.hospitalId, 
+            patient_id: conn.patientId, 
+            date_time: { [Op.gt]: todayEnd }, 
+            status: { [Op.notIn]: ['Cancelled', 'Completed'] } 
+          },
+          include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+          order: [['date_time', 'ASC']],
+        });
+        if (appt) {
+          if (!activeAppt || appt.date_time < activeAppt.date_time) {
+            activeAppt = appt;
+            activeModels = conn.models;
+            activeHospitalId = conn.hospitalId;
+          }
+        }
+      }
+    }
+
+    if (!activeAppt) return res.json({ success: true, data: null });
+
+    const statusMap = {
+      'Pending': 'Registration', 'Confirmed': 'Registration',
+      'In-Progress': 'Consultation', 'Completed': 'Completed', 'Cancelled': 'Cancelled',
+    };
+
+    const apptDay = new Date(activeAppt.date_time); apptDay.setHours(0, 0, 0, 0);
+    const apptDayEnd = new Date(activeAppt.date_time); apptDayEnd.setHours(23, 59, 59, 999);
+    const countAhead = await activeModels.Appointment.count({
+      where: {
+        hospital_id: activeHospitalId,
+        doctor_id: activeAppt.doctor_id,
+        date_time: { [Op.between]: [apptDay, apptDayEnd] },
+        token_number: { [Op.lt]: activeAppt.token_number },
+        status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        _id: activeAppt.id,
+        number: activeAppt.token_number,
+        department: `${activeAppt.department} - OPD`,
+        estimatedWaitMinutes: Math.max(5, countAhead * 15),
+        peopleAhead: countAhead,
+        status: statusMap[activeAppt.status] || 'Registration',
+        appointmentTime: activeAppt.date_time ? new Date(activeAppt.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        doctor: activeAppt.doctor ? `Dr. ${activeAppt.doctor.name}` : 'Doctor',
+        isCompleted: activeAppt.status === 'Completed',
+        vitals: activeAppt.vitals || null,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+
 app.get('/api/token/past', protect, async (req, res) => {
   try {
-    const appointments = await Appointment.findAll({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id, status: 'Completed' },
-      include: [{ model: User, as: 'doctor', attributes: ['id', 'name'] }],
-      order: [['date_time', 'DESC']],
-    });
-    const pastTokens = appointments.map(a => ({
-      _id: a.id, number: a.token_number,
-      department: `${a.department} - OPD`,
-      date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-      doctor: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
-      status: 'Completed',
-    }));
-    res.json(pastTokens);
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allPastTokens = [];
+
+    for (const conn of patientConns) {
+      const appointments = await conn.models.Appointment.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId, status: 'Completed' },
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+        order: [['date_time', 'DESC']],
+      });
+      const pastTokens = appointments.map(a => ({
+        _id: a.id, number: a.token_number,
+        department: `${a.department} - OPD`,
+        date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        doctor: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
+        status: 'Completed',
+      }));
+      allPastTokens.push(...pastTokens);
+    }
+
+    // Sort all past tokens by date descending
+    allPastTokens.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json(allPastTokens);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -550,15 +1046,25 @@ app.get('/api/token/past', protect, async (req, res) => {
 // ────────────────────────────────────────────────────────────
 app.get('/api/prescriptions', protect, async (req, res) => {
   try {
-    const prescriptions = await Prescription.findAll({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id },
-      include: [
-        { model: User, as: 'doctor', attributes: ['id', 'name', 'specialization'] },
-        { model: PrescriptionMedicine, as: 'medicines' },
-      ],
-      order: [['created_at', 'DESC']],
-    });
-    res.json({ success: true, data: prescriptions });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allPrescriptions = [];
+
+    for (const conn of patientConns) {
+      const prescriptions = await conn.models.Prescription.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId },
+        include: [
+          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'specialization'] },
+          { model: conn.models.PrescriptionMedicine, as: 'medicines' },
+        ],
+        order: [['created_at', 'DESC']],
+      });
+      allPrescriptions.push(...prescriptions);
+    }
+
+    // Sort by created_at descending
+    allPrescriptions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json({ success: true, data: allPrescriptions });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -569,11 +1075,21 @@ app.get('/api/prescriptions', protect, async (req, res) => {
 // ────────────────────────────────────────────────────────────
 app.get('/api/reports', protect, async (req, res) => {
   try {
-    const reports = await Report.findAll({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id, is_deleted: false },
-      order: [['created_at', 'DESC']],
-    });
-    res.json({ success: true, data: reports });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allReports = [];
+
+    for (const conn of patientConns) {
+      const reports = await conn.models.Report.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId, is_deleted: false },
+        order: [['created_at', 'DESC']],
+      });
+      allReports.push(...reports);
+    }
+
+    // Sort by created_at descending
+    allReports.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json({ success: true, data: allReports });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -581,9 +1097,16 @@ app.get('/api/reports', protect, async (req, res) => {
 
 app.get('/api/reports/:id/download', protect, async (req, res) => {
   try {
-    const report = await Report.findOne({
-      where: { id: req.params.id, patient_id: req.user.id, is_deleted: false },
-    });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let report = null;
+
+    for (const conn of patientConns) {
+      report = await conn.models.Report.findOne({
+        where: { id: req.params.id, patient_id: conn.patientId, is_deleted: false },
+      });
+      if (report) break;
+    }
+
     if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
 
     if (report.s3_key) {
@@ -610,11 +1133,21 @@ app.get('/api/reports/:id/download', protect, async (req, res) => {
 // GET /api/vitals/latest — most recent vitals record
 app.get('/api/vitals/latest', protect, async (req, res) => {
   try {
-    const vitals = await Vitals.findOne({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id },
-      order: [['recorded_at', 'DESC']],
-    });
-    res.json({ success: true, data: vitals || null });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let latestVitals = null;
+
+    for (const conn of patientConns) {
+      const vitals = await conn.models.Vitals.findOne({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId },
+        order: [['recorded_at', 'DESC']],
+      });
+      if (vitals) {
+        if (!latestVitals || new Date(vitals.recorded_at) > new Date(latestVitals.recorded_at)) {
+          latestVitals = vitals;
+        }
+      }
+    }
+    res.json({ success: true, data: latestVitals || null });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -622,12 +1155,22 @@ app.get('/api/vitals/latest', protect, async (req, res) => {
 
 app.get('/api/vitals', protect, async (req, res) => {
   try {
-    const vitals = await Vitals.findAll({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id },
-      order: [['recorded_at', 'DESC']],
-      limit: 20,
-    });
-    res.json({ success: true, data: vitals });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allVitals = [];
+
+    for (const conn of patientConns) {
+      const vitals = await conn.models.Vitals.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId },
+        order: [['recorded_at', 'DESC']],
+        limit: 20,
+      });
+      allVitals.push(...vitals);
+    }
+
+    // Sort and limit to 20 overall
+    allVitals.sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
+
+    res.json({ success: true, data: allVitals.slice(0, 20) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -638,12 +1181,22 @@ app.get('/api/vitals', protect, async (req, res) => {
 // ────────────────────────────────────────────────────────────
 app.get('/api/notifications', protect, async (req, res) => {
   try {
-    const notifications = await Notification.findAll({
-      where: { hospital_id: req.hospitalId, user_id: req.user.id },
-      order: [['created_at', 'DESC']],
-      limit: 50,
-    });
-    res.json({ success: true, data: notifications });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allNotifications = [];
+
+    for (const conn of patientConns) {
+      const notifications = await conn.models.Notification.findAll({
+        where: { hospital_id: conn.hospitalId, user_id: conn.patientId },
+        order: [['created_at', 'DESC']],
+        limit: 50,
+      });
+      allNotifications.push(...notifications);
+    }
+
+    // Sort by created_at descending
+    allNotifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json({ success: true, data: allNotifications.slice(0, 50) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -651,11 +1204,20 @@ app.get('/api/notifications', protect, async (req, res) => {
 
 app.put('/api/notifications/:id/read', protect, async (req, res) => {
   try {
-    await Notification.update(
-      { status: 'read', read_at: new Date() },
-      { where: { id: req.params.id, user_id: req.user.id } }
-    );
-    res.json({ success: true, message: 'Notification marked as read' });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let updated = false;
+
+    for (const conn of patientConns) {
+      const [count] = await conn.models.Notification.update(
+        { status: 'read', read_at: new Date() },
+        { where: { id: req.params.id, user_id: conn.patientId, hospital_id: conn.hospitalId } }
+      );
+      if (count > 0) {
+        updated = true;
+        break;
+      }
+    }
+    res.json({ success: true, message: updated ? 'Notification marked as read' : 'Notification not found' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -663,10 +1225,14 @@ app.put('/api/notifications/:id/read', protect, async (req, res) => {
 
 app.put('/api/notifications/read-all', protect, async (req, res) => {
   try {
-    await Notification.update(
-      { status: 'read', read_at: new Date() },
-      { where: { user_id: req.user.id, status: 'unread' } }
-    );
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+
+    for (const conn of patientConns) {
+      await conn.models.Notification.update(
+        { status: 'read', read_at: new Date() },
+        { where: { user_id: conn.patientId, status: 'unread', hospital_id: conn.hospitalId } }
+      );
+    }
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -678,28 +1244,38 @@ app.put('/api/notifications/read-all', protect, async (req, res) => {
 // ────────────────────────────────────────────────────────────
 app.get('/api/history', protect, async (req, res) => {
   try {
-    const appointments = await Appointment.findAll({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id, status: 'Completed' },
-      include: [{ model: User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'profile_image'] }],
-      order: [['date_time', 'DESC']],
-      limit: 50,
-    });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allHistory = [];
 
-    const history = appointments.map(a => ({
-      _id: a.id,
-      visitId: `VIS${String(a.id).padStart(4, '0')}`,
-      doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
-      doctorAvatar: a.doctor?.profile_image || null,
-      department: a.department,
-      specialization: a.doctor?.specialization || a.department,
-      date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-      time: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-      diagnosis: a.reason || 'Routine Consultation',
-      status: 'Completed',
-      tokenNumber: a.token_number,
-    }));
+    for (const conn of patientConns) {
+      const appointments = await conn.models.Appointment.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId, status: 'Completed' },
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'profile_image'] }],
+        order: [['date_time', 'DESC']],
+        limit: 50,
+      });
 
-    res.json({ success: true, data: history });
+      const history = appointments.map(a => ({
+        _id: a.id,
+        visitId: `VIS${String(a.id).padStart(4, '0')}`,
+        doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
+        doctorAvatar: a.doctor?.profile_image || null,
+        department: a.department,
+        specialization: a.doctor?.specialization || a.department,
+        date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        time: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+        diagnosis: a.reason || 'Routine Consultation',
+        status: 'Completed',
+        tokenNumber: a.token_number,
+      }));
+
+      allHistory.push(...history);
+    }
+
+    // Sort history by date descending
+    allHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json({ success: true, data: allHistory.slice(0, 50) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -710,12 +1286,22 @@ app.get('/api/history', protect, async (req, res) => {
 // ────────────────────────────────────────────────────────────
 app.get('/api/pharmacy/orders', protect, async (req, res) => {
   try {
-    const orders = await PharmacyOrder.findAll({
-      where: { hospital_id: req.hospitalId, patient_id: req.user.id },
-      include: [{ model: Prescription, as: 'prescription', required: false }],
-      order: [['created_at', 'DESC']],
-    });
-    res.json({ success: true, data: orders });
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allOrders = [];
+
+    for (const conn of patientConns) {
+      const orders = await conn.models.PharmacyOrder.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId },
+        include: [{ model: conn.models.Prescription, as: 'prescription', required: false }],
+        order: [['created_at', 'DESC']],
+      });
+      allOrders.push(...orders);
+    }
+
+    // Sort orders by created_at descending
+    allOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json({ success: true, data: allOrders });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

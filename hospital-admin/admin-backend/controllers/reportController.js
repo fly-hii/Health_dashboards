@@ -1,5 +1,5 @@
+'use strict';
 const multer = require('multer');
-const { Report, Patient, User, AuditLog } = require('../models');
 const { uploadToS3, getSignedDownloadUrl, deleteFromS3, generateReportKey } = require('../services/s3Service');
 
 // Use memory storage - files go directly to S3
@@ -18,6 +18,7 @@ const upload = multer({
 const uploadReport = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
+    const { Report, Patient, AuditLog } = req.models;
     const { patient_id, appointment_id, title, report_type = 'Other', description } = req.body;
 
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -71,6 +72,7 @@ const uploadReport = async (req, res) => {
 // GET /api/reports
 const getReports = async (req, res) => {
   try {
+    const { Report, Patient, User } = req.models;
     const { patient_id, report_type, page = 1, limit = 20 } = req.query;
     const hospitalId = req.hospitalId;
     const where = { hospital_id: hospitalId, is_deleted: false };
@@ -98,6 +100,7 @@ const getReports = async (req, res) => {
 // GET /api/reports/:id/download
 const downloadReport = async (req, res) => {
   try {
+    const { Report } = req.models;
     const report = await Report.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId, is_deleted: false } });
     if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
 
@@ -111,6 +114,7 @@ const downloadReport = async (req, res) => {
 // DELETE /api/reports/:id
 const deleteReport = async (req, res) => {
   try {
+    const { Report, AuditLog } = req.models;
     const report = await Report.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
 

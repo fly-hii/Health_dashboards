@@ -1,17 +1,29 @@
+'use strict';
 const { Op } = require('sequelize');
-const { Appointment, Patient, User, Token, Notification, AuditLog } = require('../models');
-const { sequelize } = require('../config/database');
 
 // POST /api/appointments
 const createAppointment = async (req, res) => {
-  const t = await sequelize.transaction();
+  // Use tenant-scoped transaction from req.db
+  const t = await req.db.transaction();
   try {
     const hospitalId = req.hospitalId;
+    const { Appointment, Patient, User, Token, AuditLog } = req.models;
     const { patient_id, doctor_id, department = 'OPD', date_time, reason, notes, visit_type = 'New' } = req.body;
 
     // Get today's token count for this doctor
     const today = new Date(); today.setHours(0,0,0,0);
     const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+
+    // Verify doctor is available
+    const doctor = await User.findOne({ where: { id: doctor_id, hospital_id: hospitalId, role: 'DOCTOR' }, transaction: t });
+    if (!doctor) {
+      await t.rollback();
+      return res.status(404).json({ success: false, message: 'Doctor not found' });
+    }
+    if (doctor.availability_status && doctor.availability_status !== 'Available') {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: `Dr. ${doctor.name} is currently ${doctor.availability_status.toLowerCase()} and cannot accept appointments.` });
+    }
 
     const tokenCount = await Appointment.count({
       where: { hospital_id: hospitalId, doctor_id, date_time: { [Op.between]: [today, todayEnd] } },
@@ -68,6 +80,7 @@ const getAppointments = async (req, res) => {
   try {
     const { date, status, doctor_id, page = 1, limit = 20 } = req.query;
     const hospitalId = req.hospitalId;
+    const { Appointment, Patient, User } = req.models;
     const where = { hospital_id: hospitalId };
 
     if (date) {
@@ -99,6 +112,7 @@ const getAppointments = async (req, res) => {
 // PATCH /api/appointments/:id/status
 const updateAppointmentStatus = async (req, res) => {
   try {
+    const { Appointment, Token } = req.models;
     const appointment = await Appointment.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
@@ -113,7 +127,10 @@ const updateAppointmentStatus = async (req, res) => {
     );
 
     const io = req.app.get('io');
-    if (io) io.to(`hospital_${req.hospitalId}`).emit('appointment_updated', { id: appointment.id, status, oldStatus });
+    if (io) {
+      io.to(`hospital_${req.hospitalId}`).emit('appointment_updated', { id: appointment.id, status, oldStatus });
+      io.to(`hospital_${req.hospitalId}`).emit('appointment_status_updated', { appointmentId: appointment.id, status, hospitalId: req.hospitalId });
+    }
 
     res.json({ success: true, data: appointment });
   } catch (error) {
@@ -124,6 +141,7 @@ const updateAppointmentStatus = async (req, res) => {
 // GET /api/appointments/today
 const getTodayAppointments = async (req, res) => {
   try {
+    const { Appointment, Patient, User } = req.models;
     const today = new Date(); today.setHours(0,0,0,0);
     const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
@@ -145,6 +163,7 @@ const getTodayAppointments = async (req, res) => {
 // PUT /api/appointments/:id
 const updateAppointment = async (req, res) => {
   try {
+    const { Appointment, Token, AuditLog } = req.models;
     const appointment = await Appointment.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
@@ -181,6 +200,7 @@ const updateAppointment = async (req, res) => {
 // DELETE /api/appointments/:id
 const deleteAppointment = async (req, res) => {
   try {
+    const { Appointment, AuditLog } = req.models;
     const appointment = await Appointment.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
 

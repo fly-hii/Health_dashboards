@@ -73,11 +73,13 @@ export default function Appointments() {
 
   const openEditModal = (appt) => {
     setEditingAppt(appt);
-    setPatientId(appt.patient?._id || '');
-    setDoctorId(appt.doctor?._id || '');
-    // Format date string for datetime-local input (YYYY-MM-DDTHH:MM)
-    const d = new Date(appt.dateTime);
-    const dateString = d.toISOString().slice(0, 16);
+    // Backend returns `id` not `_id` for associations
+    setPatientId(appt.patient?.id || appt.patient_id || '');
+    setDoctorId(appt.doctor?.id || appt.doctor_id || '');
+    // Backend returns `date_time` not `dateTime`
+    const rawDate = appt.date_time || appt.dateTime;
+    const d = rawDate ? new Date(rawDate) : new Date();
+    const dateString = isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 16);
     setDateTime(dateString);
     setDepartment(appt.department || 'OPD');
     setStatus(appt.status || 'Pending');
@@ -92,19 +94,22 @@ export default function Appointments() {
       return toast.warning('Please enter all required fields');
     }
 
+    // Field names must match what the backend appointmentController expects
     const payload = {
-      patient: patientId,
-      doctor: doctorId,
-      dateTime: new Date(dateTime),
+      patient_id: patientId,
+      doctor_id: doctorId,
+      date_time: new Date(dateTime).toISOString(),
       department,
       status,
       reason,
-      notes
+      notes,
     };
 
     try {
       if (editingAppt) {
-        await API.put(`/appointments/${editingAppt._id}`, payload);
+        // Use `id` from the appointment object (backend returns integer id)
+        const apptId = editingAppt.id || editingAppt._id;
+        await API.put(`/appointments/${apptId}`, payload);
         toast.success('Appointment schedule updated');
       } else {
         await API.post('/appointments', payload);
@@ -118,10 +123,12 @@ export default function Appointments() {
     }
   };
 
-  const handleDelete = async (id, patName) => {
+  const handleDelete = async (appt, patName) => {
+    // Support both `id` (integer) and `_id` (legacy)
+    const apptId = appt?.id || appt;
     if (window.confirm(`Are you sure you want to cancel and delete appointment for ${patName}?`)) {
       try {
-        await API.delete(`/appointments/${id}`);
+        await API.delete(`/appointments/${apptId}`);
         toast.success('Appointment deleted');
         fetchAppointmentsData();
       } catch (err) {
@@ -175,17 +182,17 @@ export default function Appointments() {
               </thead>
               <tbody>
                 {appointments.map((appt) => (
-                  <tr key={appt._id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                  <tr key={appt.id || appt._id} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="py-4">
                       <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                        {appt.tokenNumber ?? '—'}
+                        {appt.token_number ?? appt.tokenNumber ?? '—'}
                       </span>
                     </td>
                     <td className="py-4 text-slate-500 flex items-center gap-1.5 font-medium">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{new Date(appt.dateTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                      <span>{new Date(appt.date_time || appt.dateTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
                     </td>
-                    <td className="py-4 font-bold text-slate-700">{appt.patient?.name || 'Walk-in Patient'}</td>
+                    <td className="py-4 font-bold text-slate-700">{appt.patient?.full_name || appt.patient?.name || 'Walk-in Patient'}</td>
                     <td className="py-4 text-slate-600">{appt.doctor?.name || 'Unassigned'}</td>
                     <td className="py-4">
                       <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-semibold text-slate-600">
@@ -212,7 +219,7 @@ export default function Appointments() {
                         <Edit className="w-4.5 h-4.5 inline" />
                       </button>
                       <button
-                        onClick={() => handleDelete(appt._id, appt.patient?.name)}
+                        onClick={() => handleDelete(appt, appt.patient?.full_name || appt.patient?.name)}
                         className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded"
                         title="Cancel Appointment"
                       >
@@ -266,7 +273,9 @@ export default function Appointments() {
                 >
                   <option value="">Select Doctor</option>
                   {doctors.map((d) => (
-                    <option key={d._id} value={d._id}>{d.name} ({d.specialization})</option>
+                    <option key={d._id} value={d._id}>
+                      {d.name} ({d.specialization}){d.availabilityStatus && d.availabilityStatus !== 'Available' ? ` - ${d.availabilityStatus}` : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -309,6 +318,7 @@ export default function Appointments() {
                   >
                     <option value="Pending">Pending</option>
                     <option value="Confirmed">Confirmed</option>
+                    <option value="In-Progress">In-Progress</option>
                     <option value="Cancelled">Cancelled</option>
                     <option value="Completed">Completed</option>
                   </select>

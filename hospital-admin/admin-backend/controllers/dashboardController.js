@@ -1,9 +1,5 @@
+'use strict';
 const { Op } = require('sequelize');
-const { sequelize } = require('../config/database');
-const {
-  Patient, Appointment, User, PharmacyOrder, Payment,
-  LabTest, Consultation, AuditLog, Token,
-} = require('../models');
 
 const getTodayRange = () => {
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
@@ -31,6 +27,14 @@ const getLastNMonthLabels = (n) => {
 const getDashboardStats = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
+    // Use tenant-scoped models and DB connection
+    const {
+      Patient, Appointment, User, PharmacyOrder, Payment,
+      LabTest, Consultation, AuditLog, Token,
+    } = req.models;
+    // Use req.db for Sequelize functions (fn, col) — ensures correct dialect/connection
+    const db = req.db;
+
     const { todayStart, todayEnd } = getTodayRange();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -48,12 +52,15 @@ const getDashboardStats = async (req, res) => {
       Appointment.count({ where: { hospital_id: hospitalId, date_time: { [Op.between]: [todayStart, todayEnd] }, status: { [Op.in]: ['Pending', 'Confirmed'] } } }),
     ]);
 
-    // Revenue today
-    const revenueResult = await Payment.findOne({
-      where: { hospital_id: hospitalId, status: 'Paid', paid_at: { [Op.between]: [todayStart, todayEnd] } },
-      attributes: [[sequelize.fn('SUM', sequelize.col('amount')), 'total']],
-    });
-    const todayRevenue = parseFloat(revenueResult?.dataValues?.total || 0);
+    // Revenue today — use req.db.fn and req.db.col for tenant-scoped Sequelize helpers
+    let todayRevenue = 0;
+    try {
+      const revenueResult = await Payment.findOne({
+        where: { hospital_id: hospitalId, status: 'Paid', paid_at: { [Op.between]: [todayStart, todayEnd] } },
+        attributes: [[db.fn('SUM', db.col('amount')), 'total']],
+      });
+      todayRevenue = parseFloat(revenueResult?.dataValues?.total || 0);
+    } catch (_) { /* Payment table may not exist in all hospitals */ }
 
     // ── 7-day sparklines ─────────────────────────────────────────
     const dailyLabels = getLastNDayLabels(7);
@@ -66,12 +73,15 @@ const getDashboardStats = async (req, res) => {
     );
 
     // ── Department Overview ───────────────────────────────────────
-    const [opdCount, labCount, pharmacyTotal, consultCount] = await Promise.all([
-      Appointment.count({ where: { hospital_id: hospitalId, department: 'OPD' } }),
-      LabTest.count({ where: { hospital_id: hospitalId } }),
-      PharmacyOrder.count({ where: { hospital_id: hospitalId } }),
-      Consultation.count({ where: { hospital_id: hospitalId } }),
-    ]);
+    let opdCount = 0, labCount = 0, pharmacyTotal = 0, consultCount = 0;
+    try {
+      [opdCount, labCount, pharmacyTotal, consultCount] = await Promise.all([
+        Appointment.count({ where: { hospital_id: hospitalId, department: 'OPD' } }),
+        LabTest.count({ where: { hospital_id: hospitalId } }),
+        PharmacyOrder.count({ where: { hospital_id: hospitalId } }),
+        Consultation ? Consultation.count({ where: { hospital_id: hospitalId } }) : Promise.resolve(0),
+      ]);
+    } catch (_) { /* optional models may not exist */ }
 
     const departmentWise = [
       { name: 'OPD', value: opdCount, color: '#0F9D8A' },
@@ -101,18 +111,21 @@ const getDashboardStats = async (req, res) => {
     );
 
     // ── Revenue Trends ────────────────────────────────────────────
-    const revMonthly = await Promise.all(
-      Array.from({ length: 6 }, async (_, i) => {
-        const d = new Date(); const m = d.getMonth() - (5 - i);
-        const start = new Date(d.getFullYear(), m, 1);
-        const end = new Date(d.getFullYear(), m + 1, 0, 23, 59, 59, 999);
-        const r = await Payment.findOne({
-          where: { hospital_id: hospitalId, status: 'Paid', paid_at: { [Op.between]: [start, end] } },
-          attributes: [[sequelize.fn('SUM', sequelize.col('amount')), 'total']],
-        });
-        return { label: monthLabels[i], revenue: parseFloat(r?.dataValues?.total || 0) };
-      })
-    );
+    let revMonthly = monthLabels.map(label => ({ label, revenue: 0 }));
+    try {
+      revMonthly = await Promise.all(
+        Array.from({ length: 6 }, async (_, i) => {
+          const d = new Date(); const m = d.getMonth() - (5 - i);
+          const start = new Date(d.getFullYear(), m, 1);
+          const end = new Date(d.getFullYear(), m + 1, 0, 23, 59, 59, 999);
+          const r = await Payment.findOne({
+            where: { hospital_id: hospitalId, status: 'Paid', paid_at: { [Op.between]: [start, end] } },
+            attributes: [[db.fn('SUM', db.col('amount')), 'total']],
+          });
+          return { label: monthLabels[i], revenue: parseFloat(r?.dataValues?.total || 0) };
+        })
+      );
+    } catch (_) { /* Payment table may not exist */ }
 
     // ── Recent Appointments ───────────────────────────────────────
     const recentAppointments = await Appointment.findAll({
@@ -133,10 +146,13 @@ const getDashboardStats = async (req, res) => {
       User.count({ where: { hospital_id: hospitalId, role: 'RECEPTIONIST', status: 'Active' } }),
     ]);
 
-    const [pendingPharmacy, pendingLab] = await Promise.all([
-      PharmacyOrder.count({ where: { hospital_id: hospitalId, status: 'Pending' } }),
-      LabTest.count({ where: { hospital_id: hospitalId, status: 'Ordered' } }),
-    ]);
+    let pendingPharmacy = 0, pendingLab = 0;
+    try {
+      [pendingPharmacy, pendingLab] = await Promise.all([
+        PharmacyOrder.count({ where: { hospital_id: hospitalId, status: 'Pending' } }),
+        LabTest.count({ where: { hospital_id: hospitalId, status: 'Ordered' } }),
+      ]);
+    } catch (_) {}
 
     const portalData = [
       { name: 'Doctor Portal', activeUsers: activeDoctors, pendingTasks: pendingQueue, color: 'from-teal-500 to-emerald-600' },
@@ -155,11 +171,14 @@ const getDashboardStats = async (req, res) => {
     });
 
     // ── Today Overview ────────────────────────────────────────────
-    const [labTestsToday, dischargedToday, pharmacySalesCount] = await Promise.all([
-      LabTest.count({ where: { hospital_id: hospitalId, created_at: { [Op.between]: [todayStart, todayEnd] } } }),
-      Patient.count({ where: { hospital_id: hospitalId, status: 'Discharged', updated_at: { [Op.between]: [todayStart, todayEnd] } } }),
-      PharmacyOrder.count({ where: { hospital_id: hospitalId, status: 'Delivered', delivered_at: { [Op.between]: [todayStart, todayEnd] } } }),
-    ]);
+    let labTestsToday = 0, dischargedToday = 0, pharmacySalesCount = 0;
+    try {
+      [labTestsToday, dischargedToday, pharmacySalesCount] = await Promise.all([
+        LabTest.count({ where: { hospital_id: hospitalId, created_at: { [Op.between]: [todayStart, todayEnd] } } }),
+        Patient.count({ where: { hospital_id: hospitalId, status: 'Discharged', updated_at: { [Op.between]: [todayStart, todayEnd] } } }),
+        PharmacyOrder.count({ where: { hospital_id: hospitalId, status: 'Delivered', delivered_at: { [Op.between]: [todayStart, todayEnd] } } }),
+      ]);
+    } catch (_) {}
 
     res.json({
       success: true,

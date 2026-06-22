@@ -26,7 +26,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/ca
 import { Button } from '../../components/ui/button';
 
 const DEPARTMENTS = ['All Departments', 'General Medicine', 'Cardiology', 'Orthopedics', 'Pediatrics'];
-const STATUSES    = ['All Status', 'Waiting', 'Completed'];
+const STATUSES    = ['All Status', 'Waiting', 'In-Progress', 'Completed'];
 
 // Format a JS Date as "09 Jun 2026"
 const fmtDate = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -66,8 +66,9 @@ const PatientQueue = () => {
 
   // API Status Mapper — maps UI filter chip to backend status param
   const getApiStatus = (uiStatus) => {
-    if (uiStatus === 'Waiting')   return 'waiting_for_vitals';
-    if (uiStatus === 'Completed') return 'consultation_done';
+    if (uiStatus === 'Waiting')     return 'waiting_for_vitals';
+    if (uiStatus === 'In-Progress') return 'in_progress';
+    if (uiStatus === 'Completed')   return 'consultation_done';
     return 'all';
   };
 

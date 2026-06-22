@@ -355,6 +355,16 @@
   color: #2563eb;
 }
 
+.badge-appt-confirmed {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
+.badge-appt-inprogress {
+  background-color: #f3e8ff;
+  color: #7c3aed;
+}
+
 .badge-appt-completed {
   background-color: #dcfce7;
   color: #16a34a;

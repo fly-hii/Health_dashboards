@@ -202,9 +202,9 @@ const VitalsEntry = () => {
         await vitalsService.recordVitals(payload);
       }
 
-      // 2. Mark appointment as consultation_done so it appears in the Completed count
+      // 2. Mark appointment as In-Progress so it appears in the Doctor queue
       if (apptId) {
-        await nurseService.updateAppointmentStatus(apptId, 'consultation_done');
+        await nurseService.updateAppointmentStatus(apptId, 'In-Progress');
       }
 
       toast.success('Vitals saved. Patient marked as completed.');

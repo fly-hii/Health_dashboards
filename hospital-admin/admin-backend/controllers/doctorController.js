@@ -42,6 +42,23 @@ const getDoctors = async (req, res) => {
     const { User } = req.models;
     const where = { hospital_id: hospitalId, role: 'DOCTOR' };
 
+    // Auto-update availability_status to 'Busy' if inactive for > 2 hours
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await User.update(
+      { availability_status: 'Busy' },
+      {
+        where: {
+          hospital_id: hospitalId,
+          role: 'DOCTOR',
+          availability_status: 'Available',
+          [Op.or]: [
+            { last_login: { [Op.lt]: twoHoursAgo } },
+            { last_login: null }
+          ]
+        }
+      }
+    ).catch(err => console.error('[Auto Availability Expiry Error in admin getDoctors]', err));
+
     if (search?.trim()) {
       where[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },

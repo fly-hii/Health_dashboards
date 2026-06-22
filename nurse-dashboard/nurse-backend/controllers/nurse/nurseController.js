@@ -72,7 +72,18 @@ const getPatientQueue = async (req, res, next) => {
 
     const where = { hospital_id: hospitalId, date_time: dateRange };
     if (department && department !== 'all') where.department = department;
-    if (status && status !== 'all') where.status = status;
+    
+    if (status && status !== 'all') {
+      if (status === 'waiting_for_vitals') {
+        where.status = { [Op.in]: ['Pending', 'Confirmed'] };
+      } else if (status === 'consultation_done') {
+        where.status = 'Completed';
+      } else if (status === 'in_progress') {
+        where.status = 'In-Progress';
+      } else {
+        where.status = status;
+      }
+    }
 
     const include = [
       { model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id', 'phone', 'gender', 'dob', 'blood_group'] },
@@ -98,7 +109,17 @@ const getPatientQueue = async (req, res, next) => {
       );
     }
 
-    res.json({ success: true, data: rows, pagination: { total: count, page: parseInt(page), limit: parseInt(limit) } });
+    const mappedRows = rows.map(appt => {
+      const json = appt.toJSON();
+      json._id = json.id;
+      if (json.patient) {
+        json.patient._id = json.patient.id;
+        json.patient.name = json.patient.full_name;
+      }
+      return json;
+    });
+
+    res.json({ success: true, data: mappedRows, pagination: { total: count, page: parseInt(page), limit: parseInt(limit) } });
   } catch (error) {
     next(error);
   }
@@ -119,8 +140,8 @@ const updateAppointmentStatus = async (req, res, next) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.to(`hospital_${req.hospitalId}`).emit('appointment_status_updated', { appointmentId: appointment.id, status });
-      if (status === 'Completed') io.to(`hospital_${req.hospitalId}`).emit('visit_completed', { appointmentId: appointment.id });
+      io.to(`hospital_${req.hospitalId}`).emit('appointment_status_updated', { appointmentId: appointment.id, status, hospitalId: req.hospitalId });
+      if (status === 'Completed') io.to(`hospital_${req.hospitalId}`).emit('visit_completed', { appointmentId: appointment.id, hospitalId: req.hospitalId });
     }
 
     res.json({ success: true, message: 'Status updated', data: appointment });
@@ -142,7 +163,15 @@ const getAppointmentDetails = async (req, res, next) => {
       ],
     });
     if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
-    res.json({ success: true, data: appointment });
+
+    const json = appointment.toJSON();
+    json._id = json.id;
+    if (json.patient) {
+      json.patient._id = json.patient.id;
+      json.patient.name = json.patient.full_name;
+    }
+
+    res.json({ success: true, data: json });
   } catch (error) {
     next(error);
   }

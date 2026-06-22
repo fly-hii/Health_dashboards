@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /**
  * emailService.js
  * Nodemailer email utility for OTP delivery.
@@ -12,21 +12,21 @@ let _transporter = null;
 const getTransporter = async () => {
   if (_transporter) return _transporter;
 
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    _transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-  } else {
-    const testAccount = await nodemailer.createTestAccount();
-    _transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email', port: 587, secure: false,
-      auth: { user: testAccount.user, pass: testAccount.pass },
-    });
-    console.log('📧 Ethereal test email account:', testAccount.user);
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = process.env.SMTP_PORT || '587';
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    throw new Error('SMTP environment variables (SMTP_HOST, SMTP_USER, SMTP_PASS) are not fully configured in env.');
   }
+
+  _transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: parseInt(smtpPort),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: { user: smtpUser, pass: smtpPass },
+  });
 
   return _transporter;
 };
@@ -44,7 +44,7 @@ const sendOtpEmail = async (to, name, otp, portal = 'CarePlus', purpose = 'reset
   const tagLabel = isLogin ? `${portal} – Sign In` : `${portal} – Password Reset`;
 
   const info = await transporter.sendMail({
-    from: `"CarePlus HMS" <${process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@careplus.com'}>`,
+    from: `"CarePlus HMS" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
     to,
     subject,
     html: `
@@ -79,10 +79,6 @@ const sendOtpEmail = async (to, name, otp, portal = 'CarePlus', purpose = 'reset
   <div class="footer"><p>© ${new Date().getFullYear()} CarePlus Healthcare Systems. All rights reserved.</p></div>
 </div></body></html>`,
   });
-
-  if (!process.env.SMTP_HOST) {
-    console.log(`📧 OTP email preview: ${nodemailer.getTestMessageUrl(info)}`);
-  }
 
   return info;
 };

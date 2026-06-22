@@ -67,8 +67,33 @@ export const api = {
       body: JSON.stringify(data),
     }).then(handleResponse).then(res => res.user || res),
 
-  // Doctors
+  // Doctors (patient's own hospital — legacy)
   getDoctors: () => fetch(`${BASE_URL}/doctors`, { headers: getHeaders() }).then(handleResponse),
+
+  // ── Location & Hospital Discovery (new booking flow) ──────
+  // getLocations: public, no auth needed
+  getLocations: () =>
+    fetch(`${BASE_URL}/locations`).then(handleResponse),
+
+  // getHospitalsByCity: public, no auth needed
+  getHospitalsByCity: (city) =>
+    fetch(`${BASE_URL}/hospitals?city=${encodeURIComponent(city || '')}`).then(handleResponse),
+
+  // All hospitals (used by registration; also accepts optional city)
+  getHospitals: (city) => {
+    const url = city ? `${BASE_URL}/hospitals?city=${encodeURIComponent(city)}` : `${BASE_URL}/hospitals`;
+    return fetch(url).then(handleResponse);
+  },
+
+  // Departments at a specific hospital (auth required — reads target hospital tenant DB)
+  getHospitalDepartments: (hospitalId) =>
+    fetch(`${BASE_URL}/hospitals/${hospitalId}/departments`, { headers: getHeaders() }).then(handleResponse),
+
+  // Doctors at a specific hospital+department (auth required)
+  getHospitalDoctors: (hospitalId, department) => {
+    const qs = department ? `?department=${encodeURIComponent(department)}` : '';
+    return fetch(`${BASE_URL}/hospitals/${hospitalId}/doctors${qs}`, { headers: getHeaders() }).then(handleResponse);
+  },
 
   // Appointments
   getAppointments: () => fetch(`${BASE_URL}/appointments`, { headers: getHeaders() }).then(handleResponse),

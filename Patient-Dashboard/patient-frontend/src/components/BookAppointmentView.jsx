@@ -1,176 +1,533 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../utils/api';
-import { toast } from '../utils/toast';
+import { toast } from 'react-toastify';
 import './BookAppointmentView.css';
 
-export default function BookAppointmentView({ onBookingSuccess }) {
-  const [step, setStep] = useState(1);
-  const [departments, setDepartments] = useState([
-    { id: 'General Medicine', name: 'General Medicine', desc: 'Consultation for general health issues', icon: '🩺', color: 'bg-teal' },
-    { id: 'Cardiology', name: 'Cardiology', desc: 'Heart and blood vessel related', icon: '❤️', color: 'bg-red' },
-    { id: 'Dermatology', name: 'Dermatology', desc: 'Skin, hair and nail care', icon: '🧴', color: 'bg-orange' },
-    { id: 'Orthopedics', name: 'Orthopaedics', desc: 'Bone, joint and musculoskeletal', icon: '🦴', color: 'bg-blue' },
-    { id: 'Pediatrics', name: 'Pediatrics', desc: 'Child healthcare and wellness', icon: '👶', color: 'bg-green' },
-    { id: 'Neurology', name: 'Neurology', desc: 'Brain and nervous system', icon: '🧠', color: 'bg-indigo' },
-    { id: 'Gynecology', name: 'Gynecology', desc: "Women's health and pregnancy", icon: '🤰', color: 'bg-pink' },
-    { id: 'Ophthalmology', name: 'Ophthalmology', desc: 'Eye and vision care', icon: '👁️', color: 'bg-sky' }
-  ]);
+// ── Department icons & colors ──────────────────────────────────
+const DEPT_META = {
+  'General Medicine':  { icon: '🩺', bg: '#E8F9F7', accent: '#0F9D8A' },
+  'Cardiology':        { icon: '❤️',  bg: '#FEF2F2', accent: '#EF4444' },
+  'Dermatology':       { icon: '🧴', bg: '#FFF7ED', accent: '#F97316' },
+  'Orthopedics':       { icon: '🦴', bg: '#EFF6FF', accent: '#3B82F6' },
+  'Orthopaedics':      { icon: '🦴', bg: '#EFF6FF', accent: '#3B82F6' },
+  'Pediatrics':        { icon: '👶', bg: '#F0FDF4', accent: '#22C55E' },
+  'Neurology':         { icon: '🧠', bg: '#F5F3FF', accent: '#8B5CF6' },
+  'Gynecology':        { icon: '🤰', bg: '#FDF2F8', accent: '#EC4899' },
+  'Ophthalmology':     { icon: '👁️', bg: '#ECFEFF', accent: '#06B6D4' },
+  'Psychiatry':        { icon: '🧘', bg: '#FAF5FF', accent: '#A855F7' },
+  'ENT':               { icon: '👂', bg: '#FFF7ED', accent: '#F59E0B' },
+  'Dental':            { icon: '🦷', bg: '#F8FAFC', accent: '#64748B' },
+  'Oncology':          { icon: '⚕️', bg: '#FEF2F2', accent: '#DC2626' },
+  'Radiology':         { icon: '🔬', bg: '#F0F9FF', accent: '#0EA5E9' },
+  'Surgery':           { icon: '🔧', bg: '#F0FDF4', accent: '#16A34A' },
+};
+const getDeptMeta = (name) => DEPT_META[name] || { icon: '🏥', bg: '#F1F5F9', accent: '#6366F1' };
 
-  const [selectedDept, setSelectedDept] = useState(null);
-  const [doctors, setDoctors] = useState([]);
-  const [selectedDoc, setSelectedDoc] = useState(null);
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState('');
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
-  const [bookingDetails, setBookingDetails] = useState(null);
-  const [loading, setLoading] = useState(false);
+const STEPS = [
+  { id: 1, label: 'Location'   },
+  { id: 2, label: 'Hospital'   },
+  { id: 3, label: 'Department' },
+  { id: 4, label: 'Doctor'     },
+  { id: 5, label: 'Schedule'   },
+  { id: 6, label: 'Confirm'    },
+];
 
-  // Fetch doctors list
+const TIME_GROUPS = [
+  { label: '🌅 Morning',   slots: ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM'] },
+  { label: '☀️ Afternoon', slots: ['02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM'] },
+  { label: '🌆 Evening',   slots: ['05:00 PM', '05:30 PM', '06:00 PM'] },
+];
+
+// Generate 14 future dates starting today
+const getAvailableDates = () => {
+  const dates = [];
+  const today = new Date();
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+};
+
+const fmtDate = (d) =>
+  d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+const fmtDateMini = (d) => ({
+  weekday: d.toLocaleDateString('en-US', { weekday: 'short' }),
+  day:     d.getDate(),
+  month:   d.toLocaleDateString('en-US', { month: 'short' }),
+  isToday: d.toDateString() === new Date().toDateString(),
+});
+
+// Check if a date string ("22 Jun 2026") is today's date
+const isDateToday = (dateStr) => {
+  return dateStr === fmtDate(new Date());
+};
+
+// Check if a time slot string ("09:00 AM") has already passed today
+const isTimeSlotPassedToday = (slotStr) => {
+  const now = new Date();
+  const currentHours = now.getHours();
+  const currentMinutes = now.getMinutes();
+
+  const [timePart, ampm] = slotStr.trim().split(' ');
+  let [hours, minutes] = timePart.split(':').map(Number);
+
+  if (ampm === 'PM' && hours !== 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+
+  if (hours < currentHours) return true;
+  if (hours === currentHours && minutes <= currentMinutes) return true;
+  return false;
+};
+
+// ── ISO datetime builder ──────────────────────────────────────
+const buildISO = (rawDate, timeLabel) => {
+  const dateObj = new Date(rawDate); // "22 Jun 2026"
+  const [timePart, ampm] = timeLabel.trim().split(' ');
+  let [hours, minutes] = timePart.split(':').map(Number);
+  if (ampm === 'PM' && hours !== 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+  dateObj.setHours(hours, minutes, 0, 0);
+  return dateObj.toISOString();
+};
+
+// ── Skeleton loader card ──────────────────────────────────────
+const Skeleton = ({ count = 4, type = 'card' }) => (
+  <div className={`skeleton-wrap ${type}`}>
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className={`skeleton-item ${type}`} />
+    ))}
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────
+export default function BookAppointmentView() {
+  const { user } = useAuth();
+
+  // ── step & selection state ──
+  const [step, setStep]                   = useState(1);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [selectedHospital, setSelectedHospital] = useState(null);
+  const [selectedDept, setSelectedDept]   = useState(null);
+  const [selectedDoc, setSelectedDoc]     = useState(null);
+  const [selectedDate, setSelectedDate]   = useState('');
+  const [selectedTime, setSelectedTime]   = useState('');
+
+  // ── data state ──
+  const [locations, setLocations]     = useState([]);
+  const [hospitals, setHospitals]     = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [doctors, setDoctors]         = useState([]);
+
+  // ── UI state ──
+  const [loading, setLoading]               = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [bookingResult, setBookingResult]   = useState(null);
+
+  // ── Is selected hospital the patient's own hospital? ──
+  const isOwnHospital = selectedHospital && user?.hospital_id
+    ? parseInt(selectedHospital.id) === parseInt(user.hospital_id)
+    : false;
+  // Note: cross-hospital booking is fully allowed — no registration restriction.
+
+  // ── Load locations on mount ──
   useEffect(() => {
-    api.getDoctors()
-      .then(data => setDoctors(data))
-      .catch(err => console.error("Error fetching doctors:", err));
+    setLoading(true);
+    api.getLocations()
+      .then(res => setLocations(res.data || []))
+      .catch(() => toast.error('Failed to load locations'))
+      .finally(() => setLoading(false));
   }, []);
 
-  const filteredDoctors = doctors.filter(doc => doc.department === selectedDept);
-
-  // Generate today's date object in the same format used by the date buttons
-  const getTodayDate = () => {
-    const today = new Date();
-    return {
-      raw: today.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      formatted: today.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })
-    };
-  };
-
-  // Generate next 7 days for the date selector (starts from tomorrow)
-  const getNext7Days = () => {
-    const days = [];
-    const options = { weekday: 'short', day: 'numeric', month: 'short' };
-    for (let i = 1; i <= 7; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() + i);
-      days.push({
-        raw: date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        formatted: date.toLocaleDateString('en-US', options)
-      });
-    }
-    return days;
-  };
-
-  const timeSlots = [
-    { label: 'Morning Slots', slots: ['09:30 AM', '10:30 AM', '11:30 AM'] },
-    { label: 'Afternoon Slots', slots: ['02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'] }
-  ];
-
-  const handleConfirmBooking = () => {
+  // ── Load hospitals when city selected ──
+  useEffect(() => {
+    if (!selectedLocation) return;
     setLoading(true);
-    const postData = {
-      doctorName: selectedDoc.name,
-      department: selectedDept,
-      dateTime: `${selectedDate}, ${selectedTime}`
-    };
-
-    api.bookAppointment(postData)
-      .then(res => {
-        setBookingDetails(res.appointment);
-        setBookingConfirmed(true);
-        setStep(4);
-        onBookingSuccess(); // refresh parent counters
-      })
-      .catch(err => toast.error("Error booking appointment: " + err.message))
+    api.getHospitalsByCity(selectedLocation.city)
+      .then(res => setHospitals(res.data || []))
+      .catch(() => toast.error('Failed to load hospitals'))
       .finally(() => setLoading(false));
+  }, [selectedLocation]);
+
+  // ── Load departments when hospital selected ──
+  useEffect(() => {
+    if (!selectedHospital) return;
+    setLoading(true);
+    api.getHospitalDepartments(selectedHospital.id)
+      .then(res => setDepartments(res.data || []))
+      .catch(() => toast.error('Failed to load departments'))
+      .finally(() => setLoading(false));
+  }, [selectedHospital]);
+
+  // ── Load doctors when department selected ──
+  useEffect(() => {
+    if (!selectedHospital || !selectedDept) return;
+    setLoading(true);
+    api.getHospitalDoctors(selectedHospital.id, selectedDept.name)
+      .then(res => setDoctors(res.data || []))
+      .catch(() => toast.error('Failed to load doctors'))
+      .finally(() => setLoading(false));
+  }, [selectedHospital, selectedDept]);
+
+  // ── Navigation helpers ──
+  const goBack = () => {
+    if (step > 1 && !bookingSuccess) setStep(s => s - 1);
   };
+
+  const pickLocation = (loc) => {
+    setSelectedLocation(loc);
+    setSelectedHospital(null);
+    setSelectedDept(null);
+    setSelectedDoc(null);
+    setSelectedDate('');
+    setSelectedTime('');
+    setStep(2);
+  };
+  const pickHospital = (h) => {
+    setSelectedHospital(h);
+    setSelectedDept(null);
+    setSelectedDoc(null);
+    setSelectedDate('');
+    setSelectedTime('');
+    setStep(3);
+  };
+  const pickDept = (d) => {
+    setSelectedDept(d);
+    setSelectedDoc(null);
+    setSelectedDate('');
+    setSelectedTime('');
+    setStep(4);
+  };
+  const pickDoc = (doc) => {
+    setSelectedDoc(doc);
+    setSelectedDate('');
+    setSelectedTime('');
+    setStep(5);
+  };
+
+  const reset = () => {
+    setStep(1);
+    setSelectedLocation(null); setSelectedHospital(null);
+    setSelectedDept(null);     setSelectedDoc(null);
+    setSelectedDate('');       setSelectedTime('');
+    setBookingSuccess(false);  setBookingResult(null);
+  };
+
+  // ── Refresh data helper for dynamic selection steps ──
+  const refreshCurrentStep = useCallback(() => {
+    if (step === 1) {
+      setLoading(true);
+      api.getLocations()
+        .then(res => setLocations(res.data || []))
+        .catch(() => toast.error('Failed to load locations'))
+        .finally(() => setLoading(false));
+    } else if (step === 2 && selectedLocation) {
+      setLoading(true);
+      api.getHospitalsByCity(selectedLocation.city)
+        .then(res => setHospitals(res.data || []))
+        .catch(() => toast.error('Failed to load hospitals'))
+        .finally(() => setLoading(false));
+    } else if (step === 3 && selectedHospital) {
+      setLoading(true);
+      api.getHospitalDepartments(selectedHospital.id)
+        .then(res => setDepartments(res.data || []))
+        .catch(() => toast.error('Failed to load departments'))
+        .finally(() => setLoading(false));
+    } else if (step === 4 && selectedHospital && selectedDept) {
+      setLoading(true);
+      api.getHospitalDoctors(selectedHospital.id, selectedDept.name)
+        .then(res => setDoctors(res.data || []))
+        .catch(() => toast.error('Failed to load doctors'))
+        .finally(() => setLoading(false));
+    }
+  }, [step, selectedLocation, selectedHospital, selectedDept]);
+
+  // ── Confirm booking ──
+  const handleBook = async () => {
+    setLoading(true);
+    try {
+      const res = await api.bookAppointment({
+        hospitalId: selectedHospital.id,
+        doctorId:  selectedDoc.id,
+        department: selectedDept.name,
+        dateTime:  buildISO(selectedDate, selectedTime),
+        reason:    'Online Booking',
+      });
+      setBookingResult(res);
+      setBookingSuccess(true);
+      setStep(7);
+    } catch (err) {
+      toast.error(err.message || 'Booking failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Breadcrumb trail ──
+  const breadcrumbs = [
+    selectedLocation && selectedLocation.city,
+    selectedHospital && selectedHospital.name,
+    selectedDept     && selectedDept.name,
+    selectedDoc      && `Dr. ${selectedDoc.name}`,
+  ].filter(Boolean);
 
   return (
-    <div className="book-appointment-view slide-up">
-      <div className="view-header flex justify-between items-center">
-        <div>
-          <h1 className="title">Book Appointment</h1>
-          <p className="subtitle">Schedule an appointment with your preferred doctor.</p>
+    <div className="bav-root">
+      {/* ── Header ─────────────────────────────────── */}
+      <div className="bav-header">
+        <div className="bav-header-text">
+          <h1 className="bav-title">Book Appointment</h1>
+          <p className="bav-subtitle">
+            {breadcrumbs.length
+              ? breadcrumbs.join(' › ')
+              : 'Find the right doctor, near you'}
+          </p>
         </div>
-        {step > 1 && !bookingConfirmed && (
-          <button onClick={() => {
-            if (step === 4) {
-              setStep(3);
-            } else if (step === 3) {
-              setStep(2);
-            } else if (step === 2) {
-              setStep(1);
-            }
-          }} className="btn btn-secondary flex items-center gap-2">
-            <svg style={{ width: '16px', height: '16px' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back
-          </button>
-        )}
-      </div>
-
-      {/* Stepper Status Bar */}
-      <div className="stepper-bar flex justify-between items-center">
-        {[
-          { num: 1, label: 'Select Department' },
-          { num: 2, label: 'Choose Doctor' },
-          { num: 3, label: 'Select Date & Time' },
-          { num: 4, label: 'Confirm' }
-        ].map((s) => (
-          <div key={s.num} className={`step-item flex items-center gap-2 ${step >= s.num ? 'active' : ''}`}>
-            <div className="step-number">{s.num}</div>
-            <span className="step-label">{s.label}</span>
-            {s.num < 4 && <div className="step-connector"></div>}
-          </div>
-        ))}
-      </div>
-
-      {/* STEP 1: Select Department */}
-      {step === 1 && (
-        <div className="step-container fade-in">
-          <h3 className="step-title">Select Department</h3>
-          <div className="departments-grid">
-            {departments.map((dept) => (
-              <button
-                key={dept.id}
-                onClick={() => { setSelectedDept(dept.id); setStep(2); }}
-                className="card dept-card text-left"
+        <div className="bav-header-actions">
+          {step <= 4 && !bookingSuccess && (
+            <button 
+              className="bav-refresh-btn" 
+              onClick={refreshCurrentStep} 
+              disabled={loading}
+              title="Refresh current list"
+            >
+              <svg 
+                className={loading ? 'bav-spinning' : ''} 
+                width="14" 
+                height="14" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2.5" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
               >
-                <div className={`dept-icon ${dept.color}`}>{dept.icon}</div>
-                <h4 className="dept-name">{dept.name}</h4>
-                <p className="dept-desc">{dept.desc}</p>
+                <path d="M23 4v6h-6" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              Refresh
+            </button>
+          )}
+          {step > 1 && !bookingSuccess && (
+            <button className="bav-back-btn" onClick={goBack}>
+              ← Back
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Progress bar ───────────────────────────── */}
+      {step <= 6 && (
+        <div className="bav-progress">
+          {STEPS.map((s, idx) => (
+            <React.Fragment key={s.id}>
+              <button
+                type="button"
+                className={`bav-step-node ${step > s.id ? 'done' : step === s.id ? 'active' : ''} ${s.id <= step ? 'clickable' : ''}`}
+                onClick={() => s.id <= step && setStep(s.id)}
+                disabled={s.id > step}
+              >
+                <div className="bav-step-circle">
+                  {step > s.id ? '✓' : s.id}
+                </div>
+                <span className="bav-step-lbl">{s.label}</span>
               </button>
-            ))}
-          </div>
+              {idx < STEPS.length - 1 && (
+                <div className={`bav-step-line ${step > s.id ? 'done' : ''}`} />
+              )}
+            </React.Fragment>
+          ))}
         </div>
       )}
 
-      {/* STEP 2: Choose Doctor */}
-      {step === 2 && (
-        <div className="step-container fade-in">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="step-title">Choose Doctor in {selectedDept}</h3>
-            <button onClick={() => setStep(1)} className="btn btn-secondary btn-sm">Back to Departments</button>
+      {/* ════════════════════════════════════════════ */}
+      {/* STEP 1 — SELECT LOCATION                    */}
+      {/* ════════════════════════════════════════════ */}
+      {step === 1 && (
+        <div className="bav-body fade-in">
+          <div className="bav-section-hdr">
+            <span className="bav-section-emoji">📍</span>
+            <div>
+              <h2 className="bav-section-title">Select Your Location</h2>
+              <p className="bav-section-sub">Choose a city to discover nearby hospitals</p>
+            </div>
           </div>
 
-          {filteredDoctors.length === 0 ? (
-            <p className="no-docs-text">No doctors available in this department right now.</p>
+          {loading ? (
+            <Skeleton count={6} type="grid" />
+          ) : locations.length === 0 ? (
+            <div className="bav-empty">No locations found. Please try again later.</div>
           ) : (
-            <div className="doctors-list-grid">
-              {filteredDoctors.map((doc) => (
-                <div key={doc.id} className="card doctor-card flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <img src={doc.avatar} alt={doc.name} className="doctor-avatar" />
-                    <div>
-                      <h4 className="doctor-name-title">{doc.name}</h4>
-                      <p className="doctor-meta">{doc.experience} Experience • ⭐ {doc.rating}</p>
-                      <p className="doctor-avail">📅 {doc.availability}</p>
+            <div className="bav-locations-grid">
+              {locations.map(loc => (
+                <button
+                  key={loc.city}
+                  className="bav-loc-card"
+                  onClick={() => pickLocation(loc)}
+                >
+                  <span className="bav-loc-icon">🏙️</span>
+                  <span className="bav-loc-city">{loc.city}</span>
+                  <span className="bav-loc-state">{loc.state}</span>
+                  <span className="bav-loc-count">
+                    {loc.hospitalCount} hospital{loc.hospitalCount !== 1 ? 's' : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* STEP 2 — SELECT HOSPITAL                    */}
+      {/* ════════════════════════════════════════════ */}
+      {step === 2 && (
+        <div className="bav-body fade-in">
+          <div className="bav-section-hdr">
+            <span className="bav-section-emoji">🏥</span>
+            <div>
+              <h2 className="bav-section-title">Hospitals in {selectedLocation?.city}</h2>
+              <p className="bav-section-sub">Your registered hospital is highlighted with a badge</p>
+            </div>
+          </div>
+
+          {loading ? (
+            <Skeleton count={3} type="list" />
+          ) : hospitals.length === 0 ? (
+            <div className="bav-empty">No hospitals found in {selectedLocation?.city}.</div>
+          ) : (
+            <div className="bav-hospital-list">
+              {/* Show own hospital first */}
+              {[...hospitals].sort((a, b) => {
+                const aOwn = parseInt(a.id) === parseInt(user?.hospital_id) ? -1 : 1;
+                const bOwn = parseInt(b.id) === parseInt(user?.hospital_id) ? -1 : 1;
+                return aOwn - bOwn;
+              }).map(hosp => {
+                const isOwn = parseInt(hosp.id) === parseInt(user?.hospital_id);
+                return (
+                  <button
+                    key={hosp.id}
+                    className={`bav-hospital-card ${isOwn ? 'own' : ''}`}
+                    onClick={() => pickHospital(hosp)}
+                  >
+                    <div className="bav-hosp-logo-wrap">
+                      {hosp.logo_url
+                        ? <img src={hosp.logo_url} alt={hosp.name} className="bav-hosp-logo" onError={e => { e.currentTarget.style.display='none'; }} />
+                        : <span className="bav-hosp-logo-fallback">🏥</span>
+                      }
+                    </div>
+                    <div className="bav-hosp-info">
+                      <div className="bav-hosp-name-row">
+                        <h3 className="bav-hosp-name">{hosp.name}</h3>
+                        {isOwn && <span className="bav-own-badge">✓ Your Hospital</span>}
+                      </div>
+                      <p className="bav-hosp-city">📍 {hosp.city}{hosp.state ? `, ${hosp.state}` : ''}</p>
+                      {hosp.phone && <p className="bav-hosp-phone">📞 {hosp.phone}</p>}
+                    </div>
+                    <span className="bav-hosp-arrow">›</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* STEP 3 — SELECT DEPARTMENT                  */}
+      {/* ════════════════════════════════════════════ */}
+      {step === 3 && (
+        <div className="bav-body fade-in">
+          <div className="bav-section-hdr">
+            <span className="bav-section-emoji">🏛️</span>
+            <div>
+              <h2 className="bav-section-title">Select Department</h2>
+              <p className="bav-section-sub">{selectedHospital?.name}</p>
+            </div>
+          </div>
+
+
+
+          {loading ? (
+            <Skeleton count={8} type="grid" />
+          ) : departments.length === 0 ? (
+            <div className="bav-empty">No departments found at this hospital.</div>
+          ) : (
+            <div className="bav-dept-grid">
+              {departments.map(dept => {
+                const meta = getDeptMeta(dept.name);
+                return (
+                  <button
+                    key={dept.name}
+                    className="bav-dept-card"
+                    onClick={() => pickDept(dept)}
+                    style={{ '--dept-bg': meta.bg, '--dept-accent': meta.accent }}
+                  >
+                    <div className="bav-dept-icon">{meta.icon}</div>
+                    <div className="bav-dept-name">{dept.name}</div>
+                    <div className="bav-dept-count">
+                      {dept.doctorCount} doctor{dept.doctorCount !== 1 ? 's' : ''}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* STEP 4 — CHOOSE DOCTOR                      */}
+      {/* ════════════════════════════════════════════ */}
+      {step === 4 && (
+        <div className="bav-body fade-in">
+          <div className="bav-section-hdr">
+            <span className="bav-section-emoji">👨‍⚕️</span>
+            <div>
+              <h2 className="bav-section-title">{selectedDept?.name} Specialists</h2>
+              <p className="bav-section-sub">{selectedHospital?.name}</p>
+            </div>
+          </div>
+
+          {loading ? (
+            <Skeleton count={3} type="list" />
+          ) : doctors.length === 0 ? (
+            <div className="bav-empty">No doctors available in this department right now.</div>
+          ) : (
+            <div className="bav-doctor-list">
+              {doctors.map(doc => (
+                <div key={doc.id} className="bav-doctor-card">
+                  <img
+                    src={doc.avatar}
+                    alt={doc.name}
+                    className="bav-doctor-avatar"
+                    onError={e => { e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(doc.name)}`; }}
+                  />
+                  <div className="bav-doctor-info">
+                    <h3 className="bav-doctor-name">Dr. {doc.name}</h3>
+                    <p className="bav-doctor-spec">{doc.specialization}</p>
+                    <div className="bav-doctor-tags">
+                      <span className="bav-tag exp">⏱ {doc.experience}</span>
+                      <span className="bav-tag qual">{doc.qualification}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { setSelectedDoc(doc); setStep(3); }}
-                    className="btn btn-primary"
-                  >
-                    Select Doctor
-                  </button>
+                  <div className="bav-doctor-right">
+                    <span className={`bav-avail-dot ${doc.availability === 'Available' ? 'avail' : 'busy'}`}>
+                      ● {doc.availability}
+                    </span>
+                    <button
+                      className="bav-select-doc-btn"
+                      onClick={() => pickDoc(doc)}
+                      disabled={doc.availability !== 'Available'}
+                    >
+                      {doc.availability === 'Available' ? 'Book →' : 'Unavailable'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -178,178 +535,177 @@ export default function BookAppointmentView({ onBookingSuccess }) {
         </div>
       )}
 
-      {/* STEP 3: Select Date & Time */}
-      {step === 3 && (
-        <div className="step-container fade-in">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="step-title">Select Date & Time for {selectedDoc.name}</h3>
-            <button onClick={() => setStep(2)} className="btn btn-secondary btn-sm">Back to Doctors</button>
+      {/* ════════════════════════════════════════════ */}
+      {/* STEP 5 — DATE & TIME                        */}
+      {/* ════════════════════════════════════════════ */}
+      {step === 5 && (
+        <div className="bav-body fade-in">
+          <div className="bav-section-hdr">
+            <span className="bav-section-emoji">📅</span>
+            <div>
+              <h2 className="bav-section-title">Choose Date &amp; Time</h2>
+              <p className="bav-section-sub">Dr. {selectedDoc?.name} · {selectedDept?.name}</p>
+            </div>
           </div>
 
-          <div className="appointment-scheduler-grid">
-            {/* Calendar list */}
-            <div className="scheduler-section card">
-              <div className="scheduler-header">
-                <h4 className="scheduler-title">Available Dates</h4>
-                <button
-                  onClick={() => {
-                    const today = getTodayDate();
-                    setSelectedDate(today.raw);
-                    setSelectedTime('');
-                  }}
-                  className={`today-quick-btn ${selectedDate === getTodayDate().raw ? 'today-active' : ''}`}
-                >
-                  📅 Today
-                </button>
-              </div>
-              <div className="dates-grid">
-                {/* Today as first slot */}
-                {(() => {
-                  const today = getTodayDate();
-                  return (
-                    <button
-                      key={today.raw}
-                      onClick={() => { setSelectedDate(today.raw); setSelectedTime(''); }}
-                      className={`date-btn-select today-date-btn ${selectedDate === today.raw ? 'active' : ''}`}
-                    >
-                      <span className="date-today-badge">TODAY</span>
-                      <span className="date-day">{today.formatted.split(',')[1] || today.formatted.split(' ').slice(-1)[0]}</span>
-                    </button>
-                  );
-                })()}
-                {getNext7Days().map((d) => (
-                  <button
-                    key={d.raw}
-                    onClick={() => { setSelectedDate(d.raw); setSelectedTime(''); }}
-                    className={`date-btn-select ${selectedDate === d.raw ? 'active' : ''}`}
+          {/* Date row */}
+          <div className="bav-schedule-block">
+            <h4 className="bav-block-title">Select Date</h4>
+            <div className="bav-dates-scroll">
+              {getAvailableDates().map(d => {
+                const raw = fmtDate(d);
+                const { weekday, day, month, isToday } = fmtDateMini(d);
+                return (
+                  <div
+                    key={raw}
+                    className={`bav-date-chip ${selectedDate === raw ? 'active' : ''} ${isToday ? 'today' : ''}`}
+                    onClick={() => { setSelectedDate(raw); setSelectedTime(''); }}
+                    role="button"
+                    tabIndex={0}
                   >
-                    <span className="date-weekday">{d.formatted.split(',')[0]}</span>
-                    <span className="date-day">{d.formatted.split(',')[1]}</span>
-                  </button>
-                ))}
-              </div>
+                    {isToday && <span className="bav-today-tag">Today</span>}
+                    <span className="bav-dc-weekday">{weekday}</span>
+                    <span className="bav-dc-day">{day}</span>
+                    <span className="bav-dc-month">{month}</span>
+                  </div>
+                );
+              })}
             </div>
+          </div>
 
-            {/* Time Slot Picker */}
-            <div className="scheduler-section card">
-              <h4 className="scheduler-title">Available Time Slots</h4>
-              {selectedDate ? (
-                <div className="time-slots-container">
-                  {timeSlots.map((group) => (
-                    <div key={group.label} className="time-group">
-                      <h5 className="time-group-label">{group.label}</h5>
-                      <div className="slots-grid">
-                        {group.slots.map((slot) => (
-                          <button
-                            key={slot}
-                            onClick={() => setSelectedTime(slot)}
-                            className={`time-slot-btn ${selectedTime === slot ? 'active' : ''}`}
-                          >
-                            {slot}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+          {/* Time slots */}
+          <div className="bav-schedule-block">
+            <h4 className="bav-block-title">Select Time</h4>
+            {!selectedDate ? (
+              <p className="bav-hint">← Pick a date first</p>
+            ) : TIME_GROUPS.map(grp => (
+              <div key={grp.label} className="bav-time-group">
+                <p className="bav-time-grp-lbl">{grp.label}</p>
+                <div className="bav-time-chips">
+                  {grp.slots.map(slot => {
+                    const isPassed = isDateToday(selectedDate) && isTimeSlotPassedToday(slot);
+                    return (
+                      <button
+                        key={slot}
+                        className={`bav-time-chip ${selectedTime === slot ? 'active' : ''}`}
+                        onClick={() => setSelectedTime(slot)}
+                        disabled={isPassed}
+                      >
+                        {slot}
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
-                <p className="no-selection-prompt">Please select a date first to view slots.</p>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
 
           {selectedDate && selectedTime && (
-            <div className="next-action-area flex justify-end gap-4 mt-6">
-              <button
-                onClick={() => setStep(4)}
-                className="btn btn-primary"
-              >
-                Proceed to Confirm
+            <div className="bav-proceed-area">
+              <p className="bav-selected-slot">
+                🗓 {selectedDate} at {selectedTime} — with Dr. {selectedDoc?.name}
+              </p>
+              <button className="bav-proceed-btn" onClick={() => setStep(6)}>
+                Proceed to Confirm →
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* STEP 4: Confirm Booking / Success Banner */}
-      {step === 4 && (
-        <div className="step-container fade-in text-center">
-          {!bookingConfirmed ? (
-            <div className="confirm-card card max-w-md mx-auto">
-              <h3 className="confirm-title mb-4">Confirm Appointment Details</h3>
-              <div className="confirm-summary-list">
-                <div className="summary-item">
-                  <span className="summary-lbl">Department:</span>
-                  <span className="summary-val">{selectedDept}</span>
-                </div>
-                <div className="summary-item">
-                  <span className="summary-lbl">Doctor:</span>
-                  <span className="summary-val font-semibold">{selectedDoc?.name}</span>
-                </div>
-                <div className="summary-item">
-                  <span className="summary-lbl">Date:</span>
-                  <span className="summary-val">{selectedDate}</span>
-                </div>
-                <div className="summary-item">
-                  <span className="summary-lbl">Time Slot:</span>
-                  <span className="summary-val">{selectedTime}</span>
-                </div>
-              </div>
+      {/* ════════════════════════════════════════════ */}
+      {/* STEP 6 — CONFIRM                            */}
+      {/* ════════════════════════════════════════════ */}
+      {step === 6 && (
+        <div className="bav-body fade-in">
+          <div className="bav-section-hdr">
+            <span className="bav-section-emoji">✅</span>
+            <div>
+              <h2 className="bav-section-title">Confirm Appointment</h2>
+              <p className="bav-section-sub">Review your details before booking</p>
+            </div>
+          </div>
 
-              <div className="confirm-actions flex gap-4 mt-6">
-                <button onClick={() => setStep(3)} className="btn btn-secondary flex-1" disabled={loading}>
-                  Back
-                </button>
-                <button onClick={handleConfirmBooking} className="btn btn-primary flex-1 flex gap-2" disabled={loading}>
-                  {loading && <div className="loading-spinner w-4 h-4"></div>}
-                  Confirm & Book
-                </button>
+          <div className="bav-confirm-layout">
+            {/* Doctor summary */}
+            <div className="bav-confirm-doctor">
+              <img
+                src={selectedDoc?.avatar}
+                alt={selectedDoc?.name}
+                className="bav-confirm-doc-avatar"
+                onError={e => { e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(selectedDoc?.name || '')}`; }}
+              />
+              <div>
+                <p className="bav-confirm-doc-name">Dr. {selectedDoc?.name}</p>
+                <p className="bav-confirm-doc-spec">{selectedDoc?.specialization} · {selectedDoc?.qualification}</p>
+                <p className="bav-confirm-doc-exp">⏱ {selectedDoc?.experience}</p>
               </div>
             </div>
-          ) : (
-            <div className="success-banner card max-w-md mx-auto">
-              <div className="success-check-circle">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h2 className="success-header text-primary mt-4">Appointment Booked!</h2>
-              <p className="success-desc mt-2">
-                Your appointment request is scheduled successfully. A confirmation message has been sent to your notifications.
-              </p>
-              
-              <div className="success-receipt-card mt-6">
-                <div className="receipt-row">
-                  <span>Appointment ID</span>
-                  <span className="receipt-val">{bookingDetails?.id}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Doctor</span>
-                  <span className="receipt-val font-semibold">{bookingDetails?.doctor}</span>
-                </div>
-                <div className="receipt-row">
-                  <span>Date & Time</span>
-                  <span className="receipt-val">{bookingDetails?.dateTime}</span>
-                </div>
-              </div>
 
-              <div className="success-actions flex flex-col gap-2 mt-6">
-                <button
-                  onClick={() => {
-                    setStep(1);
-                    setBookingConfirmed(false);
-                    setSelectedDept(null);
-                    setSelectedDoc(null);
-                    setSelectedDate('');
-                    setSelectedTime('');
-                  }}
-                  className="btn btn-primary"
-                >
-                  Book Another Appointment
-                </button>
-              </div>
+            {/* Booking detail rows */}
+            <div className="bav-confirm-table">
+              {[
+                { lbl: 'Hospital',    val: selectedHospital?.name },
+                { lbl: 'Department',  val: selectedDept?.name },
+                { lbl: 'Date',        val: selectedDate,  highlight: true },
+                { lbl: 'Time',        val: selectedTime,  highlight: true },
+                { lbl: 'Visit Type',  val: 'Consultation' },
+              ].map(row => (
+                <div key={row.lbl} className={`bav-confirm-row ${row.highlight ? 'highlight' : ''}`}>
+                  <span className="bav-cr-lbl">{row.lbl}</span>
+                  <span className="bav-cr-val">{row.val}</span>
+                </div>
+              ))}
             </div>
-          )}
+
+            <button
+              className="bav-book-btn"
+              onClick={handleBook}
+              disabled={loading}
+            >
+              {loading && <span className="bav-spin" />}
+              {loading ? 'Booking…' : '🎯 Confirm & Book Appointment'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* STEP 7 — SUCCESS                            */}
+      {/* ════════════════════════════════════════════ */}
+      {step === 7 && bookingSuccess && (
+        <div className="bav-success fade-in">
+          <div className="bav-success-ring">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+          <h2 className="bav-success-title">Appointment Confirmed! 🎉</h2>
+          <p className="bav-success-sub">Your slot is reserved. See you at {selectedHospital?.name}!</p>
+
+          <div className="bav-receipt">
+            {[
+              { lbl: 'Appointment ID', val: bookingResult?.appointment?.id || bookingResult?.appointment?._id || bookingResult?.id },
+              { lbl: 'Hospital',   val: selectedHospital?.name },
+              { lbl: 'Doctor',     val: `Dr. ${selectedDoc?.name}` },
+              { lbl: 'Department', val: selectedDept?.name },
+              { lbl: 'Date',       val: selectedDate },
+              { lbl: 'Time',       val: selectedTime },
+              (bookingResult?.token?.number || bookingResult?.appointment?.token_number || bookingResult?.token_number) && {
+                lbl: 'Token #',
+                val: bookingResult?.token?.number || bookingResult?.appointment?.token_number || bookingResult?.token_number
+              },
+            ].filter(Boolean).map(row => (
+              <div key={row.lbl} className="bav-receipt-row">
+                <span>{row.lbl}</span>
+                <strong>{row.val}</strong>
+              </div>
+            ))}
+          </div>
+
+          <button className="bav-book-another" onClick={reset}>
+            Book Another Appointment
+          </button>
         </div>
       )}
     </div>

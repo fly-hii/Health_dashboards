@@ -1,19 +1,32 @@
 const { Op } = require('sequelize');
 
+const mapIncomingBody = (body) => {
+  const mapped = { ...body };
+  if (body.patientId) mapped.patient_id = body.patientId;
+  if (body.appointmentId) mapped.appointment_id = body.appointmentId;
+  if (body.bloodPressureSystolic) mapped.blood_pressure_systolic = body.bloodPressureSystolic;
+  if (body.bloodPressureDiastolic) mapped.blood_pressure_diastolic = body.bloodPressureDiastolic;
+  if (body.pulseRate) mapped.pulse_rate = body.pulseRate;
+  if (body.respiratoryRate) mapped.respiratory_rate = body.respiratoryRate;
+  if (body.bloodSugar) mapped.blood_sugar = body.bloodSugar;
+  return mapped;
+};
+
 // POST /api/vitals
 const recordVitals = async (req, res, next) => {
   try {
     const { Vitals, Appointment, Notification, User } = req.models;
+    const body = mapIncomingBody(req.body);
     const {
       patient_id, appointment_id,
       blood_pressure_systolic, blood_pressure_diastolic,
       temperature, pulse, pulse_rate, respiratory_rate,
       spo2, weight, height, blood_sugar, notes,
-    } = req.body;
+    } = body;
 
     const bp = blood_pressure_systolic && blood_pressure_diastolic
       ? `${blood_pressure_systolic}/${blood_pressure_diastolic}`
-      : req.body.blood_pressure;
+      : body.blood_pressure;
 
     const bmi = (weight && height) ? parseFloat((weight / ((height / 100) ** 2)).toFixed(2)) : null;
 
@@ -55,8 +68,8 @@ const recordVitals = async (req, res, next) => {
       // Tenant-scoped socket events
       const io = req.app.get('io');
       if (io) {
-        io.to(`hospital_${req.hospitalId}`).emit('vitals_recorded', { appointmentId: appointment_id, vitalsId: vitals.id });
-        io.to(`hospital_${req.hospitalId}`).emit('appointment_status_updated', { appointmentId: appointment_id, status: 'In-Progress' });
+        io.to(`hospital_${req.hospitalId}`).emit('vitals_recorded', { appointmentId: appointment_id, vitalsId: vitals.id, patientId: patient_id, hospitalId: req.hospitalId });
+        io.to(`hospital_${req.hospitalId}`).emit('appointment_status_updated', { appointmentId: appointment_id, status: 'In-Progress', hospitalId: req.hospitalId });
       }
     }
 
@@ -77,7 +90,8 @@ const updateVitals = async (req, res, next) => {
     const vitals = await Vitals.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!vitals) return res.status(404).json({ success: false, message: 'Vitals not found' });
 
-    const { blood_pressure_systolic, blood_pressure_diastolic, ...rest } = req.body;
+    const body = mapIncomingBody(req.body);
+    const { blood_pressure_systolic, blood_pressure_diastolic, ...rest } = body;
     const updates = { ...rest };
     if (blood_pressure_systolic && blood_pressure_diastolic) {
       updates.blood_pressure = `${blood_pressure_systolic}/${blood_pressure_diastolic}`;

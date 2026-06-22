@@ -11,8 +11,9 @@ dotenv.config();
 const {
   login, getDashboardStatsV2, getDashboardSchedule, getDashboardChart, getPatients, getPatientQueue, getPatientById, getPatientHistoryV2,
   getPatientReports, getConsultationByAppointmentId, startConsultation, saveConsultationNotes,
-  savePrescription, completeConsultation, getTodayAppointments, getPrescriptions,
+  savePrescription, completeConsultation, bookFollowUpAppointment, getTodayAppointments, getPrescriptions,
   getNotifications, markNotificationRead, getDoctorProfile, updateDoctorProfile, changeDoctorPassword,
+  callPatient,
 } = require('./controllers/doctorController');
 
 const { getMedicalRecords, getMedicalRecordById, getPatientMedicalRecords } = require('./controllers/medicalRecordController');
@@ -99,9 +100,11 @@ app.get('/api/doctor/dashboard/chart', protect, authorizeDoctor, tenantMiddlewar
 app.get('/api/doctor/patients', protect, authorizeDoctor, tenantMiddleware, getPatients);
 app.get('/api/doctor/queue', protect, authorizeDoctor, tenantMiddleware, getPatientQueue);
 app.get('/api/doctor/appointments/today', protect, authorizeDoctor, tenantMiddleware, getTodayAppointments);
+app.post('/api/doctor/appointments', protect, authorizeDoctor, tenantMiddleware, bookFollowUpAppointment);
 app.get('/api/doctor/prescriptions', protect, authorizeDoctor, tenantMiddleware, getPrescriptions);
 app.get('/api/doctor/notifications', protect, authorizeDoctor, tenantMiddleware, getNotifications);
 app.put('/api/doctor/notifications/:id/read', protect, authorizeDoctor, tenantMiddleware, markNotificationRead);
+app.put('/api/doctor/appointment/:id/call', protect, authorizeDoctor, tenantMiddleware, callPatient);
 
 // ── Medical Records ──────────────────────────────────────────
 app.get('/api/medical-records', protect, authorizeDoctor, tenantMiddleware, getMedicalRecords);

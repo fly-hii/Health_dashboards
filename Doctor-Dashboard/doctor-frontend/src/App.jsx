@@ -69,6 +69,11 @@ export default function App() {
     socket.on('NEW_FOLLOWUP', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
     socket.on('PATIENT_CHECKED_IN', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
     socket.on('PATIENT_SENT_TO_DOCTOR', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    // lowercase variants — match actual backend emit names
+    socket.on('consultation_started', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('consultation_completed', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('appointment_status_updated', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
+    socket.on('new_appointment', () => { window.dispatchEvent(new CustomEvent('dashboard_refresh')); });
 
     return () => { socket.disconnect(); };
   }, [isAuthenticated, user]);

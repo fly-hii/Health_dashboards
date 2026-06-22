@@ -26,7 +26,7 @@ const User = sequelize.define('User', {
     allowNull: false,
   },
   department: {
-    type: DataTypes.ENUM('OPD', 'IPD', 'PHARMACY', 'LABORATORY', 'RECEPTION', 'OTHERS'),
+    type: DataTypes.STRING(100),
     defaultValue: 'OTHERS',
   },
   status: {

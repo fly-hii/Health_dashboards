@@ -73,7 +73,7 @@ function createModels(sequelize) {
       allowNull: false, defaultValue: 'HOSPITAL_ADMIN',
     },
     department: {
-      type: DataTypes.ENUM('OPD','IPD','PHARMACY','LABORATORY','RECEPTION','OTHERS'),
+      type: DataTypes.STRING(100),
       defaultValue: 'OTHERS',
     },
     status:               { type: DataTypes.ENUM('Active','Inactive'), defaultValue: 'Active' },

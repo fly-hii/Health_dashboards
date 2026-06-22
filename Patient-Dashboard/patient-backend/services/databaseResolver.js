@@ -23,13 +23,23 @@ require('dotenv').config();
 
 // ── Master DB (careplus_master) ─────────────────────────────────
 // Used ONLY to look up hospital config and db_connection credentials
+const masterDbName = process.env.MASTER_DB_NAME;
+const masterDbUser = process.env.MASTER_DB_USER || process.env.DB_USER;
+const masterDbPassword = process.env.MASTER_DB_PASSWORD || process.env.DB_PASSWORD;
+const masterDbHost = process.env.MASTER_DB_HOST || process.env.DB_HOST;
+const masterDbPort = process.env.MASTER_DB_PORT || process.env.DB_PORT || 3306;
+
+if (!masterDbName || !masterDbUser || !masterDbHost) {
+  throw new Error('Master database environment variables (MASTER_DB_NAME, MASTER_DB_USER, MASTER_DB_HOST) are not fully configured in env.');
+}
+
 const masterDb = new Sequelize(
-  process.env.MASTER_DB_NAME     || 'careplus_master',
-  process.env.MASTER_DB_USER     || process.env.DB_USER,
-  process.env.MASTER_DB_PASSWORD || process.env.DB_PASSWORD,
+  masterDbName,
+  masterDbUser,
+  masterDbPassword,
   {
-    host:    process.env.MASTER_DB_HOST || process.env.DB_HOST,
-    port:    parseInt(process.env.MASTER_DB_PORT || process.env.DB_PORT) || 3306,
+    host:    masterDbHost,
+    port:    parseInt(masterDbPort),
     dialect: 'mysql',
     dialectModule: require('mysql2'),
     logging: false,
@@ -43,13 +53,23 @@ const masterDb = new Sequelize(
 
 // ── Shared SaaS DB (hospitals_db) ─────────────────────────────
 // Used for all hospitals with database_type = 'shared'
+const saasDbName = process.env.DB_NAME;
+const saasDbUser = process.env.DB_USER;
+const saasDbPassword = process.env.DB_PASSWORD;
+const saasDbHost = process.env.DB_HOST;
+const saasDbPort = process.env.DB_PORT || 3306;
+
+if (!saasDbName || !saasDbUser || !saasDbHost) {
+  throw new Error('SaaS database environment variables (DB_NAME, DB_USER, DB_HOST) are not fully configured in env.');
+}
+
 const sharedSaasDb = new Sequelize(
-  process.env.DB_NAME     || 'hospitals_db',
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
+  saasDbName,
+  saasDbUser,
+  saasDbPassword,
   {
-    host:    process.env.DB_HOST,
-    port:    parseInt(process.env.DB_PORT) || 3306,
+    host:    saasDbHost,
+    port:    parseInt(saasDbPort),
     dialect: 'mysql',
     dialectModule: require('mysql2'),
     logging: process.env.NODE_ENV === 'development' ? console.log : false,

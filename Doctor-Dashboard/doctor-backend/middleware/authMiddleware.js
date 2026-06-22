@@ -27,6 +27,26 @@ const protect = async (req, res, next) => {
     if (!user)     return res.status(401).json({ success: false, message: 'User not found' });
     if (user.status === 'Inactive') return res.status(403).json({ success: false, message: 'Account deactivated' });
 
+    // Auto-update availability_status to Available and last_login (acting as last active) to current time.
+    // Throttle database writes to at most once every 5 minutes to keep it performant.
+    const now = new Date();
+    const lastActive = user.last_login ? new Date(user.last_login) : null;
+    const shouldUpdateAvailability = user.availability_status !== 'Available' && user.availability_status !== 'On Leave';
+    const shouldUpdateTimestamp = !lastActive || (now - lastActive > 5 * 60 * 1000);
+
+    if (shouldUpdateAvailability || shouldUpdateTimestamp) {
+      const updates = {};
+      if (shouldUpdateAvailability) {
+        updates.availability_status = 'Available';
+        user.availability_status = 'Available';
+      }
+      if (shouldUpdateTimestamp) {
+        updates.last_login = now;
+        user.last_login = now;
+      }
+      await user.update(updates).catch(err => console.error('[protect middleware auto-update error]', err));
+    }
+
     req.user = user; req.hospitalId = parseInt(hospitalId); req.db = db; req.models = models;
     next();
   } catch (err) {

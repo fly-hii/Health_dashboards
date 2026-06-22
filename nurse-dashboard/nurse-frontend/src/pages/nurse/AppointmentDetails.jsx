@@ -173,8 +173,8 @@ const AppointmentDetails = () => {
     });
     socketRef.current = socket;
     socket.emit('join', user._id);
-    socket.on('appointment_status_updated', ({ appointment }) => {
-      if (appointment._id === id) loadAppt();
+    socket.on('appointment_status_updated', ({ appointmentId }) => {
+      if (String(appointmentId) === String(id)) loadAppt();
     });
     return () => socket.disconnect();
   }, [user?._id, id]);

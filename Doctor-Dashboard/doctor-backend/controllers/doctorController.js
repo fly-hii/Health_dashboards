@@ -185,7 +185,7 @@ const login = async (req, res) => {
       if (!isMatch) return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
-    await user.update({ last_login: new Date() });
+    await user.update({ last_login: new Date(), availability_status: 'Available' });
 
     const AuditLog = models?.AuditLog || StaticAuditLog;
     await AuditLog.create({
@@ -378,7 +378,17 @@ const getPatientQueue = async (req, res) => {
       order: [['token_number', 'ASC']],
     });
 
-    res.json({ success: true, data: appointments });
+    const mapped = appointments.map(appt => {
+      const json = appt.toJSON();
+      json._id = json.id;
+      if (json.patient) {
+        json.patient._id = json.patient.id;
+        json.patient.name = json.patient.full_name;
+      }
+      return json;
+    });
+
+    res.json({ success: true, data: mapped, queue: mapped });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -453,7 +463,15 @@ const getConsultationByAppointmentId = async (req, res) => {
 const startConsultation = async (req, res) => {
   try {
     const { Consultation, Appointment } = req.models;
-    const consultation = await Consultation.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
+    const consultation = await Consultation.findOne({
+      where: {
+        hospital_id: req.hospitalId,
+        [Op.or]: [
+          { id: req.params.id },
+          { appointment_id: req.params.id }
+        ]
+      }
+    });
     if (!consultation) return res.status(404).json({ success: false, message: 'Consultation not found' });
 
     await consultation.update({ status: 'In-Progress', started_at: new Date() });
@@ -473,7 +491,15 @@ const saveConsultationNotes = async (req, res) => {
   try {
     const { Consultation } = req.models;
     const { symptoms, diagnosis, notes, follow_up_date, follow_up_notes } = req.body;
-    const consultation = await Consultation.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
+    const consultation = await Consultation.findOne({
+      where: {
+        hospital_id: req.hospitalId,
+        [Op.or]: [
+          { id: req.params.id },
+          { appointment_id: req.params.id }
+        ]
+      }
+    });
     if (!consultation) return res.status(404).json({ success: false, message: 'Consultation not found' });
 
     await consultation.update({ symptoms, diagnosis, notes, follow_up_date, follow_up_notes });
@@ -488,7 +514,16 @@ const savePrescription = async (req, res) => {
   const t = await req.db.transaction();
   try {
     const { Consultation, Prescription, PrescriptionMedicine } = req.models;
-    const consultation = await Consultation.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
+    const consultation = await Consultation.findOne({
+      where: {
+        hospital_id: req.hospitalId,
+        [Op.or]: [
+          { id: req.params.id },
+          { appointment_id: req.params.id }
+        ]
+      },
+      transaction: t
+    });
     if (!consultation) { await t.rollback(); return res.status(404).json({ success: false, message: 'Consultation not found' }); }
 
     const { diagnosis, instructions, medicines = [], valid_until } = req.body;
@@ -534,12 +569,84 @@ const savePrescription = async (req, res) => {
 // PATCH /api/consultations/:id/complete
 const completeConsultation = async (req, res) => {
   try {
-    const { Consultation, Appointment, AuditLog } = req.models;
-    const consultation = await Consultation.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
+    const { Consultation, Appointment, AuditLog, Prescription, PrescriptionMedicine, LabTest } = req.models;
+    const consultation = await Consultation.findOne({
+      where: {
+        hospital_id: req.hospitalId,
+        [Op.or]: [
+          { id: req.params.id },
+          { appointment_id: req.params.id }
+        ]
+      }
+    });
     if (!consultation) return res.status(404).json({ success: false, message: 'Consultation not found' });
 
-    await consultation.update({ status: 'Completed', completed_at: new Date() });
-    await Appointment.update({ status: 'Completed' }, { where: { id: consultation.appointment_id } });
+    const { diagnosis, doctorNotes, notes, symptoms, followUpDate, followUpNotes, labTests, medicines } = req.body;
+
+    await consultation.update({
+      status: 'Completed',
+      completed_at: new Date(),
+      diagnosis: diagnosis || consultation.diagnosis,
+      notes: doctorNotes || notes || consultation.notes,
+      symptoms: symptoms || consultation.symptoms,
+      follow_up_date: followUpDate || consultation.follow_up_date,
+      follow_up_notes: followUpNotes || consultation.follow_up_notes,
+      lab_tests: labTests || consultation.lab_tests,
+    });
+
+    await Appointment.update({ status: 'Completed' }, { where: { id: consultation.appointment_id, hospital_id: req.hospitalId } });
+
+    // Handle Prescriptions
+    if (diagnosis || (medicines && medicines.length > 0)) {
+      let prescription = await Prescription.findOne({ where: { consultation_id: consultation.id } });
+      if (prescription) {
+        await prescription.update({ diagnosis: diagnosis || '', instructions: req.body.instructions || '' });
+        await PrescriptionMedicine.destroy({ where: { prescription_id: prescription.id } });
+      } else {
+        prescription = await Prescription.create({
+          hospital_id: req.hospitalId,
+          consultation_id: consultation.id,
+          appointment_id: consultation.appointment_id,
+          patient_id: consultation.patient_id,
+          doctor_id: req.user.id,
+          diagnosis: diagnosis || '',
+          instructions: req.body.instructions || '',
+          status: 'Active',
+        });
+      }
+
+      if (medicines && medicines.length > 0) {
+        await PrescriptionMedicine.bulkCreate(
+          medicines.map(m => ({
+            prescription_id: prescription.id,
+            name: m.medicineName || m.name,
+            generic_name: m.generic_name || m.genericName,
+            dosage: m.dosage,
+            frequency: m.frequency,
+            duration: m.duration,
+            instructions: m.instructions,
+            quantity: m.quantity || 1,
+          }))
+        );
+      }
+    }
+
+    // Handle Lab Tests
+    if (labTests && labTests.length > 0) {
+      // First clear any existing lab tests for this consultation
+      await LabTest.destroy({ where: { consultation_id: consultation.id, hospital_id: req.hospitalId } });
+      
+      for (const testName of labTests) {
+        await LabTest.create({
+          hospital_id: req.hospitalId,
+          consultation_id: consultation.id,
+          patient_id: consultation.patient_id,
+          doctor_id: req.user.id,
+          test_name: testName,
+          status: 'Ordered',
+        });
+      }
+    }
 
     await AuditLog.create({
       hospital_id: req.hospitalId,
@@ -561,6 +668,74 @@ const completeConsultation = async (req, res) => {
   }
 };
 
+// POST /api/doctor/appointments — Book a follow-up appointment for a patient
+const bookFollowUpAppointment = async (req, res) => {
+  const t = await req.db.transaction();
+  try {
+    const { Appointment, Token, Patient } = req.models;
+    const { patientId, department, date_time, reason, notes } = req.body;
+
+    if (!patientId || !date_time) {
+      return res.status(400).json({ success: false, message: 'patientId and date_time are required' });
+    }
+
+    // Verify patient belongs to this hospital (data isolation)
+    const patient = await Patient.findOne({
+      where: { id: patientId, hospital_id: req.hospitalId },
+    });
+    if (!patient) return res.status(404).json({ success: false, message: 'Patient not found in this hospital' });
+
+    const appointmentDateTime = new Date(date_time);
+    const dayStart = new Date(appointmentDateTime); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd   = new Date(appointmentDateTime); dayEnd.setHours(23, 59, 59, 999);
+
+    // Auto token number for this doctor on this day
+    const tokenCount = await Appointment.count({
+      where: { hospital_id: req.hospitalId, doctor_id: req.user.id, date_time: { [Op.between]: [dayStart, dayEnd] } },
+      transaction: t,
+    });
+    const tokenNumber = tokenCount + 1;
+
+    const appointment = await Appointment.create({
+      hospital_id: req.hospitalId,
+      patient_id: patientId,
+      doctor_id: req.user.id,
+      department: department || req.user.department || 'General Medicine',
+      date_time: appointmentDateTime,
+      token_number: tokenNumber,
+      reason: reason || 'Follow-up Consultation',
+      notes: notes || '',
+      visit_type: 'Follow-Up',
+      booked_by: 'DOCTOR',
+      status: 'Confirmed',
+    }, { transaction: t });
+
+    await Token.create({
+      hospital_id: req.hospitalId,
+      appointment_id: appointment.id,
+      patient_id: patientId,
+      doctor_id: req.user.id,
+      token_number: tokenNumber,
+      token_date: appointmentDateTime.toISOString().split('T')[0],
+      status: 'Waiting',
+    }, { transaction: t });
+
+    await t.commit();
+
+    const io = req.app.get('io');
+    if (io) io.to(`hospital_${req.hospitalId}`).emit('new_appointment', { appointmentId: appointment.id, tokenNumber, patientId, doctorId: req.user.id });
+
+    res.status(201).json({
+      success: true,
+      message: 'Follow-up appointment booked',
+      data: { appointmentId: appointment.id, tokenNumber, patientName: patient.full_name },
+    });
+  } catch (error) {
+    await t.rollback();
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // GET /api/doctor/appointments/today
 const getTodayAppointments = async (req, res) => {
   try {
@@ -577,7 +752,17 @@ const getTodayAppointments = async (req, res) => {
       order: [['token_number', 'ASC']],
     });
 
-    res.json({ success: true, data: appointments });
+    const mapped = appointments.map(appt => {
+      const json = appt.toJSON();
+      json._id = json.id;
+      if (json.patient) {
+        json.patient._id = json.patient.id;
+        json.patient.name = json.patient.full_name;
+      }
+      return json;
+    });
+
+    res.json({ success: true, data: mapped });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -662,12 +847,14 @@ const getDoctorProfile = async (req, res) => {
   }
 };
 
-// PUT /api/doctor/profile
+// PUT /api/doctor/profile — update own profile (hospital_id guard added for isolation)
 const updateDoctorProfile = async (req, res) => {
   try {
     const { User } = req.models;
+    // Strip fields that must never be changed via this endpoint
     const { password, role, hospital_id, ...updates } = req.body;
-    await User.update(updates, { where: { id: req.user.id } });
+    // hospital_id in WHERE ensures a doctor can only update their own hospital-scoped record
+    await User.update(updates, { where: { id: req.user.id, hospital_id: req.hospitalId } });
     const updated = await User.findByPk(req.user.id, { attributes: { exclude: ['password'] } });
     res.json({ success: true, data: updated });
   } catch (error) {
@@ -698,6 +885,46 @@ const changeDoctorPassword = async (req, res) => {
   }
 };
 
+// PUT /api/doctor/appointment/:id/call
+const callPatient = async (req, res) => {
+  try {
+    const { Appointment, Consultation } = req.models;
+    const appointmentId = req.params.id;
+    const hospitalId = req.hospitalId;
+
+    const appointment = await Appointment.findOne({ where: { id: appointmentId, hospital_id: hospitalId } });
+    if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
+
+    // Update appointment status to In-Progress
+    await appointment.update({ status: 'In-Progress' });
+
+    // Find or create Consultation for this appointment
+    let consultation = await Consultation.findOne({ where: { appointment_id: appointmentId, hospital_id: hospitalId } });
+    if (!consultation) {
+      consultation = await Consultation.create({
+        hospital_id: hospitalId,
+        appointment_id: appointmentId,
+        patient_id: appointment.patient_id,
+        doctor_id: req.user.id,
+        status: 'In-Progress',
+        started_at: new Date(),
+      });
+    } else {
+      await consultation.update({ status: 'In-Progress', started_at: new Date() });
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`hospital_${hospitalId}`).emit('consultation_started', { consultationId: consultation.id, appointmentId });
+      io.to(`hospital_${hospitalId}`).emit('appointment_status_updated', { appointmentId, status: 'In-Progress' });
+    }
+
+    res.json({ success: true, message: 'Patient called', data: consultation });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   login,
   getDashboardStatsV2,
@@ -713,6 +940,7 @@ module.exports = {
   saveConsultationNotes,
   savePrescription,
   completeConsultation,
+  bookFollowUpAppointment,
   getTodayAppointments,
   getPrescriptions,
   getNotifications,
@@ -720,4 +948,5 @@ module.exports = {
   getDoctorProfile,
   updateDoctorProfile,
   changeDoctorPassword,
+  callPatient,
 };

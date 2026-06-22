@@ -137,12 +137,8 @@ export default function Doctors() {
   const [notifMessage, setNotifMessage] = useState('');
   const [notifPriority, setNotifPriority] = useState('medium');
 
-  // Hardcoded Lists matching design requirements
-  const departmentsList = [
-    'Cardiology', 'Neurology', 'Orthopedics', 'Gynecology', 
-    'General Medicine', 'Pediatrics', 'Dermatology', 'ENT', 
-    'Ophthalmology', 'Psychiatry', 'Urology', 'Oncology'
-  ];
+  // Departments loaded dynamically from admin dashboard
+  const [departmentsList, setDepartmentsList] = useState([]);
 
   const specializationsList = [
     'Cardiologist', 'Neurologist', 'Orthopedic Surgeon', 'Gynecologist', 
@@ -200,6 +196,25 @@ export default function Doctors() {
     }
   };
 
+  const fetchDepartmentsList = async () => {
+    try {
+      const res = await API.get('/departments');
+      if (res.data.success && Array.isArray(res.data.data)) {
+        const dbDepts = res.data.data
+          .filter(d => d.status === 'active' && d.name)
+          .map(d => d.name.trim());
+        // Replace with only the departments created in admin dashboard
+        setDepartmentsList(dbDepts);
+        // Set default selected department to the first available one
+        if (dbDepts.length > 0) {
+          setDocDept(dbDepts[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load departments list:', err);
+    }
+  };
+
   const fetchDoctorSubtabData = async (tab, doctorId) => {
     if (!doctorId) return;
     setTabLoading(true);
@@ -230,6 +245,7 @@ export default function Doctors() {
   useEffect(() => {
     fetchStats();
     fetchPatientsListHelper();
+    fetchDepartmentsList();
   }, []);
 
   // Reset to page 1 whenever search or any filter changes
@@ -359,7 +375,7 @@ export default function Doctors() {
     setDocEmployeeId('');
     setDocEmail('');
     setDocPhone('');
-    setDocDept('Cardiology');
+    setDocDept(departmentsList[0] || '');
     setDocSpec('Cardiologist');
     setDocQual('');
     setDocExp('');
@@ -392,7 +408,7 @@ export default function Doctors() {
     setDocWorkingStart(doc.workingHours?.start || '10:00');
     setDocWorkingEnd(doc.workingHours?.end || '18:00');
     setDocAvailableDays(doc.availableDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
-    setDocStatus(doc.status);
+    setDocStatus(doc.availabilityStatus === 'On Leave' ? 'On Leave' : (doc.status?.toLowerCase() === 'active' ? 'active' : 'inactive'));
     setDocBio(doc.bio || '');
     setDocPhoto(doc.profilePhoto || '');
     setDocPassword('');
@@ -862,13 +878,13 @@ export default function Doctors() {
                         
                         <td className="py-3.5">
                           <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${
-                            doc.status?.toLowerCase() === 'active' 
-                              ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                              : doc.status === 'On Leave'
+                            doc.availabilityStatus === 'On Leave'
                               ? 'bg-amber-50 text-amber-600 border-amber-100'
+                              : doc.status?.toLowerCase() === 'active' 
+                              ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
                               : 'bg-rose-50 text-rose-600 border-rose-100'
                           }`}>
-                            {doc.status?.toLowerCase() === 'active' ? 'Active' : doc.status === 'On Leave' ? 'On Leave' : 'Inactive'}
+                            {doc.availabilityStatus === 'On Leave' ? 'On Leave' : doc.status?.toLowerCase() === 'active' ? 'Active' : 'Inactive'}
                           </span>
                         </td>
 
@@ -971,13 +987,13 @@ export default function Doctors() {
               <span className="text-[10px] font-mono font-bold text-slate-400 mt-0.5">{selectedDoctor.employeeId}</span>
               
               <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border mt-2 ${
-                selectedDoctor.status?.toLowerCase() === 'active' 
-                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                  : selectedDoctor.status === 'On Leave'
+                selectedDoctor.availabilityStatus === 'On Leave'
                   ? 'bg-amber-50 text-amber-600 border-amber-100'
+                  : selectedDoctor.status?.toLowerCase() === 'active' 
+                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
                   : 'bg-rose-50 text-rose-600 border-rose-100'
               }`}>
-                {selectedDoctor.status?.toLowerCase() === 'active' ? 'Active' : selectedDoctor.status === 'On Leave' ? 'On Leave' : 'Inactive'}
+                {selectedDoctor.availabilityStatus === 'On Leave' ? 'On Leave' : selectedDoctor.status?.toLowerCase() === 'active' ? 'Active' : 'Inactive'}
               </span>
 
               {/* Minimal contacts grid */}
@@ -1118,8 +1134,14 @@ export default function Doctors() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Quick Actions</span>
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <button 
-                            onClick={() => setIsApptModalOpen(true)}
-                            className="p-2.5 bg-slate-50 border border-slate-200 hover:bg-primary/5 hover:border-primary/20 text-slate-600 hover:text-primary rounded-lg transition-all flex items-center gap-1.5 text-left"
+                            onClick={() => {
+                              if (selectedDoctor.availabilityStatus !== 'Available') {
+                                toast.warning(`Dr. ${selectedDoctor.name} is currently ${selectedDoctor.availabilityStatus.toLowerCase()} and cannot accept appointments.`);
+                                return;
+                              }
+                              setIsApptModalOpen(true);
+                            }}
+                            className={`p-2.5 bg-slate-50 border border-slate-200 hover:bg-primary/5 hover:border-primary/20 text-slate-600 hover:text-primary rounded-lg transition-all flex items-center gap-1.5 text-left ${selectedDoctor.availabilityStatus !== 'Available' ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             <Calendar className="w-4 h-4 shrink-0 text-slate-400" />
                             <span className="font-semibold">Book Appointment</span>
@@ -1285,13 +1307,13 @@ export default function Doctors() {
                             <span className="text-[10px] text-slate-400">Toggle whether this doctor is currently active/busy</span>
                           </div>
                           <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border capitalize ${
-                            selectedDoctor.status?.toLowerCase() === 'active' 
-                              ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                              : selectedDoctor.status === 'On Leave'
+                            selectedDoctor.availabilityStatus === 'On Leave'
                               ? 'bg-amber-50 text-amber-600 border-amber-100'
+                              : selectedDoctor.status?.toLowerCase() === 'active' 
+                              ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
                               : 'bg-rose-50 text-rose-600 border-rose-100'
                           }`}>
-                            {selectedDoctor.status}
+                            {selectedDoctor.availabilityStatus === 'On Leave' ? 'On Leave' : selectedDoctor.status?.toLowerCase() === 'active' ? 'Active' : 'Inactive'}
                           </span>
                         </div>
                       </div>

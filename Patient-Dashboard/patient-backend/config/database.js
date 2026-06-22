@@ -1,13 +1,23 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
+const dbName = process.env.DB_NAME;
+const dbUser = process.env.DB_USER;
+const dbPassword = process.env.DB_PASSWORD;
+const dbHost = process.env.DB_HOST;
+const dbPort = process.env.DB_PORT || 3306;
+
+if (!dbName || !dbUser || !dbHost) {
+  throw new Error('Database environment variables (DB_NAME, DB_USER, DB_HOST) are not fully configured in env.');
+}
+
 const sequelize = new Sequelize(
-  process.env.DB_NAME || 'hospitals_db',
-  process.env.DB_USER || 'root',
-  process.env.DB_PASSWORD || '',
+  dbName,
+  dbUser,
+  dbPassword,
   {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT) || 3306,
+    host: dbHost,
+    port: parseInt(dbPort),
     dialect: 'mysql',
     dialectModule: require('mysql2'),
     logging: false,
