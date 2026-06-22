@@ -24,7 +24,9 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:5176',
   'http://localhost:5177',
-  'http://localhost:5180'
+  'http://localhost:5180',
+  'https://health-dashboards-nurse-backend.vercel.app',
+  'https://health-dashboards-nurse-frontend.vercel.app',
 ].filter(Boolean);
 
 // Socket.IO with tenant-aware rooms

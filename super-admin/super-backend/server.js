@@ -23,7 +23,9 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:5176',
   'http://localhost:5177',
-  'http://localhost:5180'
+  'http://localhost:5180',
+  'https://health-dashboards-super-admin-backe.vercel.app',
+  'https://health-dashboards-super-admin-front.vercel.app',
 ].filter(Boolean);
 
 app.use(cors({

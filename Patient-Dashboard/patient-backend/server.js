@@ -37,7 +37,9 @@ const allowedOrigins = [
   'http://localhost:5175',
   'http://localhost:5176',
   'http://localhost:5177',
-  'http://localhost:5180'
+  'http://localhost:5180',
+  'https://health-dashboards-patient-backend.vercel.app',
+  'https://health-dashboards-patient-frontend.vercel.app',
 ].filter(Boolean);
 
 const io = new Server(server, {
@@ -128,9 +130,9 @@ app.post('/api/auth/verify-otp', verifyOtp);
 app.put('/api/auth/change-password', protect, changePassword);
 
 // OTP-based forgot password (public endpoints)
-app.post('/api/auth/forgot-password/send-otp',   sendForgotPasswordOtp);
+app.post('/api/auth/forgot-password/send-otp', sendForgotPasswordOtp);
 app.post('/api/auth/forgot-password/verify-otp', verifyForgotPasswordOtp);
-app.post('/api/auth/forgot-password/reset',      resetForgotPassword);
+app.post('/api/auth/forgot-password/reset', resetForgotPassword);
 
 
 // ────────────────────────────────────────────────────────────
@@ -833,11 +835,11 @@ app.get('/api/token/current', protect, async (req, res) => {
     // 1. Look for today's appointment first
     for (const conn of patientConns) {
       const appt = await conn.models.Appointment.findOne({
-        where: { 
-          hospital_id: conn.hospitalId, 
-          patient_id: conn.patientId, 
-          date_time: { [Op.between]: [today, todayEnd] }, 
-          status: { [Op.ne]: 'Cancelled' } 
+        where: {
+          hospital_id: conn.hospitalId,
+          patient_id: conn.patientId,
+          date_time: { [Op.between]: [today, todayEnd] },
+          status: { [Op.ne]: 'Cancelled' }
         },
         include: [
           { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
@@ -858,11 +860,11 @@ app.get('/api/token/current', protect, async (req, res) => {
     if (!activeAppt) {
       for (const conn of patientConns) {
         const appt = await conn.models.Appointment.findOne({
-          where: { 
-            hospital_id: conn.hospitalId, 
-            patient_id: conn.patientId, 
-            date_time: { [Op.gt]: todayEnd }, 
-            status: { [Op.notIn]: ['Cancelled', 'Completed'] } 
+          where: {
+            hospital_id: conn.hospitalId,
+            patient_id: conn.patientId,
+            date_time: { [Op.gt]: todayEnd },
+            status: { [Op.notIn]: ['Cancelled', 'Completed'] }
           },
           include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
           order: [['date_time', 'ASC']],
@@ -929,11 +931,11 @@ app.post('/api/token/refresh', protect, async (req, res) => {
 
     for (const conn of patientConns) {
       const appt = await conn.models.Appointment.findOne({
-        where: { 
-          hospital_id: conn.hospitalId, 
-          patient_id: conn.patientId, 
-          date_time: { [Op.between]: [today, todayEnd] }, 
-          status: { [Op.ne]: 'Cancelled' } 
+        where: {
+          hospital_id: conn.hospitalId,
+          patient_id: conn.patientId,
+          date_time: { [Op.between]: [today, todayEnd] },
+          status: { [Op.ne]: 'Cancelled' }
         },
         include: [
           { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
@@ -953,11 +955,11 @@ app.post('/api/token/refresh', protect, async (req, res) => {
     if (!activeAppt) {
       for (const conn of patientConns) {
         const appt = await conn.models.Appointment.findOne({
-          where: { 
-            hospital_id: conn.hospitalId, 
-            patient_id: conn.patientId, 
-            date_time: { [Op.gt]: todayEnd }, 
-            status: { [Op.notIn]: ['Cancelled', 'Completed'] } 
+          where: {
+            hospital_id: conn.hospitalId,
+            patient_id: conn.patientId,
+            date_time: { [Op.gt]: todayEnd },
+            status: { [Op.notIn]: ['Cancelled', 'Completed'] }
           },
           include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
           order: [['date_time', 'ASC']],
