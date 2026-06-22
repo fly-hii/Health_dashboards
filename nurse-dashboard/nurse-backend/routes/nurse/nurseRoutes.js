@@ -15,7 +15,7 @@ const { protect } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/roleCheck');
 
 router.use(protect);
-router.use(authorize('nurse', 'admin'));
+router.use(authorize('nurse', 'admin', 'hospital_admin'));
 
 router.get('/dashboard', getDashboardStats);
 router.get('/patient-queue', getPatientQueue);

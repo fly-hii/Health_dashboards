@@ -75,15 +75,28 @@ export default function LoginPage() {
     }
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!form.email) {
       setError('Please enter email address to request OTP');
       return;
     }
     setError('');
-    setCountdown(30);
-    setOtpSent(true);
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${API_BASE}/auth/login-otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'Failed to send OTP. Please try again.'); return; }
+      setCountdown(30);
+      setOtpSent(true);
+    } catch (_) {
+      setError('Network error. Could not send OTP. Please try again.');
+    }
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -137,7 +150,19 @@ export default function LoginPage() {
 
           {!isOtpMode ? (
             <div className="form-group">
-              <label>Password</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={{ margin: 0 }}>Password</label>
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--primary)', fontWeight: '600', fontSize: '12px',
+                  }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
               <div style={{ position: 'relative' }}>
                 <input
                   type={showPassword ? 'text' : 'password'}

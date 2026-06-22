@@ -2,12 +2,28 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const { masterDb } = require('../services/databaseResolver');
+const { loginOtpStore } = require('./forgotPasswordController');
+
+const isValidLoginOtp = (email, otp) => {
+  const record = loginOtpStore.get(email.toLowerCase());
+  if (!record) return false;
+  if (Date.now() > record.expiresAt) { loginOtpStore.delete(email.toLowerCase()); return false; }
+  if (record.otp !== otp.toString()) return false;
+  loginOtpStore.delete(email.toLowerCase());
+  return true;
+};
+
+const isOtpValid = (email, otp) => {
+  if (!otp) return false;
+  const record = loginOtpStore.get(email.toLowerCase());
+  return record && record.otp === otp.toString() && Date.now() <= record.expiresAt;
+};
 
 const checkUserInOtherPortals = async (email, password, otp) => {
   try {
     const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
     if (superAdmins && superAdmins.length > 0) {
-      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, superAdmins[0].password);
+      const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, superAdmins[0].password);
       if (ok) return true;
     }
   } catch (_) {}
@@ -16,7 +32,7 @@ const checkUserInOtherPortals = async (email, password, otp) => {
   try {
     const [users] = await sharedSaasDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
     if (users && users.length > 0) {
-      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+      const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, users[0].password);
       if (ok) return true;
     }
   } catch (_) {}
@@ -24,7 +40,7 @@ const checkUserInOtherPortals = async (email, password, otp) => {
   try {
     const [patients] = await sharedSaasDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
     if (patients && patients.length > 0) {
-      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+      const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, patients[0].password);
       if (ok) return true;
     }
   } catch (_) {}
@@ -43,13 +59,13 @@ const checkUserInOtherPortals = async (email, password, otp) => {
         });
         const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
         if (users && users.length > 0) {
-          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+          const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, users[0].password);
           await externalDb.close();
           if (ok) return true;
         }
         const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
         if (patients && patients.length > 0) {
-          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+          const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, patients[0].password);
           await externalDb.close();
           if (ok) return true;
         }
@@ -149,7 +165,7 @@ const login = async (req, res) => {
     }
 
     if (!['NURSE', 'HOSPITAL_ADMIN'].includes(user.role)) {
-      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, user.password);
+      const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, user.password);
       if (ok) {
         return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
       } else {
@@ -160,7 +176,7 @@ const login = async (req, res) => {
     if (user.status === 'Inactive') return res.status(403).json({ success: false, message: 'Account deactivated' });
 
     if (otp) {
-      if (otp !== '123456') return res.status(401).json({ success: false, message: 'Invalid OTP code' });
+      if (!isValidLoginOtp(email, otp)) return res.status(401).json({ success: false, message: 'Invalid or expired OTP code' });
     } else {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) return res.status(401).json({ success: false, message: 'Invalid credentials' });

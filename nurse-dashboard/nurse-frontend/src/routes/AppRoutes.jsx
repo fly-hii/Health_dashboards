@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NurseLayout from '../layouts/NurseLayout';
 import LoginPage from '../pages/auth/LoginPage';
+import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
 import DashboardHome from '../pages/nurse/DashboardHome';
 import PatientQueue from '../pages/nurse/PatientQueue';
 import VitalsEntry from '../pages/nurse/VitalsEntry';
@@ -34,6 +35,7 @@ const AppRoutes = () => {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         <Route
           path="/"

@@ -3,7 +3,9 @@ import io from 'socket.io-client';
 import { useAuth } from './context/AuthContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { Routes, Route, Navigate, BrowserRouter } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import Sidebar from './components/Sidebar';
 import TopNavbar from './components/TopNavbar';
 import DashboardView from './components/DashboardView';
@@ -157,7 +159,16 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <BrowserRouter>
+        <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    );
   }
 
   return (

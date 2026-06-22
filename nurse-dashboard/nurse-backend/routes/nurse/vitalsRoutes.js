@@ -11,8 +11,8 @@ const { authorize } = require('../../middleware/roleCheck');
 
 router.use(protect);
 
-router.post('/', authorize('nurse', 'admin'), recordVitals);
-router.put('/:id', authorize('nurse', 'admin'), updateVitals);
+router.post('/', authorize('nurse', 'admin', 'hospital_admin'), recordVitals);
+router.put('/:id', authorize('nurse', 'admin', 'hospital_admin'), updateVitals);
 router.get('/appointment/:appointmentId', getVitalsByAppointment);
 router.get('/patient/:patientId', getVitalsByPatient);
 

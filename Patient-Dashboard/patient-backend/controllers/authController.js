@@ -1,8 +1,19 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
+const crypto = require('crypto');
 const { Patient, Hospital, AuditLog } = require('../models');
 const { masterDb } = require('../services/databaseResolver');
+const { loginOtpStore } = require('./forgotPasswordController');
+const { sendOtpEmail } = require('../services/emailService');
+
+const maskEmail = (email) => {
+  if (!email) return '';
+  const [local, domain] = email.split('@');
+  const masked = local.length <= 2 ? local : local[0] + '***' + local.slice(-1);
+  return `${masked}@${domain}`;
+};
+
 
 const checkUserInOtherPortals = async (email, password) => {
   try {
@@ -266,9 +277,70 @@ const sendOtp = async (req, res) => {
     if (!target) {
       return res.status(400).json({ success: false, message: 'Mobile number or Email is required' });
     }
-    // Simple mock success for demonstration
-    res.json({ success: true, message: 'OTP sent successfully to ' + target });
+
+    const lookup = email ? { email: email.toLowerCase() } : { phone: mobileNumber };
+
+    const { getHospitalConnection, sharedSaasDb } = require('../services/databaseResolver');
+    const { createModels } = require('../services/modelFactory');
+
+    let patient;
+    let resolvedHospitalId;
+
+    // Check shared SaaS DB first
+    const sharedModels = createModels(sharedSaasDb);
+    patient = await sharedModels.Patient.findOne({ where: lookup });
+
+    if (!patient) {
+      // Search across tenant DBs
+      try {
+        const [connections] = await masterDb.query('SELECT * FROM db_connections WHERE is_active = 1');
+        for (const conn of connections) {
+          try {
+            const db = await getHospitalConnection(conn.hospital_id);
+            const tenantModels = createModels(db);
+            const found = await tenantModels.Patient.findOne({ where: lookup });
+            if (found) {
+              patient = found;
+              resolvedHospitalId = conn.hospital_id;
+              break;
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    } else {
+      resolvedHospitalId = patient.hospital_id;
+    }
+
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'No patient account found with these details.' });
+    }
+
+    if (patient.status === 'Inactive') {
+      return res.status(403).json({ success: false, message: 'Account is deactivated. Please contact support.' });
+    }
+
+    if (!patient.email) {
+      return res.status(400).json({ success: false, message: 'Patient account does not have a registered email address. Please contact support.' });
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+
+    loginOtpStore.set(target.toLowerCase(), {
+      otp,
+      expiresAt,
+      patientId: patient.id,
+      hospitalId: resolvedHospitalId
+    });
+
+    await sendOtpEmail(patient.email, patient.full_name || 'Patient', otp, 'Patient Portal', 'login');
+
+    res.json({
+      success: true,
+      message: `OTP sent to ${maskEmail(patient.email)}`
+    });
   } catch (error) {
+    console.error('Patient sendOtp error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -330,36 +402,35 @@ const verifyOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Identifier and OTP are required' });
     }
 
-    if (otp !== '123456') {
+    const record = loginOtpStore.get(target.toLowerCase());
+    if (!record) {
+      return res.status(400).json({ success: false, message: 'No OTP request found. Please request a new one.' });
+    }
+
+    if (Date.now() > record.expiresAt) {
+      loginOtpStore.delete(target.toLowerCase());
+      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
+    }
+
+    if (record.otp !== otp.toString()) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code' });
     }
 
-    const lookup = email ? { email } : { phone: mobileNumber };
+    // Single use: delete once validated
+    loginOtpStore.delete(target.toLowerCase());
 
-    const { masterDb, getHospitalConnection } = require('../services/databaseResolver');
+    const { getHospitalConnection, sharedSaasDb } = require('../services/databaseResolver');
     const { createModels } = require('../services/modelFactory');
 
-    let resolvedHospitalId;
-    let db, models;
-    let patient;
-
-    // Fallback: look up in shared database
-    patient = await Patient.findOne({ where: lookup });
-    if (patient) {
-      resolvedHospitalId = patient.hospital_id;
-      // Verify hospital status in master registry
-      const [hospRows] = await masterDb.query(
-        'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
-        { replacements: [resolvedHospitalId] }
-      );
-      const hospital = hospRows?.[0];
-      if (hospital?.status === 'suspended') {
-        return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
-      }
-      db = await getHospitalConnection(resolvedHospitalId);
-      models = createModels(db);
-      patient = await models.Patient.findOne({ where: lookup });
+    let db = sharedSaasDb;
+    if (record.hospitalId) {
+      try {
+        db = await getHospitalConnection(record.hospitalId);
+      } catch (_) {}
     }
+
+    const models = createModels(db);
+    const patient = await models.Patient.findOne({ where: { id: record.patientId } });
 
     if (!patient) {
       return res.status(404).json({ success: false, message: 'No patient account found matching these details' });

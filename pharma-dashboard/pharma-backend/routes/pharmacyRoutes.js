@@ -3,15 +3,33 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
+const crypto = require('crypto');
 const { protect } = require('../middleware/authMiddleware');
 const { masterDb } = require('../services/databaseResolver');
 const { decrypt } = require('../services/encryptionService');
+const { sendOtpEmail } = require('../services/emailService');
+
+const _otpStore = new Map();
+const _loginOtpStore = new Map();
+const _genOtp = () => crypto.randomInt(100000, 999999).toString();
+const _maskEmail = (email) => {
+  if (!email) return '';
+  const [local, domain] = email.split('@');
+  const masked = local.length <= 2 ? local : local[0] + '***' + local.slice(-1);
+  return `${masked}@${domain}`;
+};
 
 const checkUserInOtherPortals = async (email, password, otp) => {
+  const isOtpValid = (email, otp) => {
+    if (!otp) return false;
+    const record = _loginOtpStore.get(email.toLowerCase());
+    return record && record.otp === otp.toString() && Date.now() <= record.expiresAt;
+  };
+
   try {
     const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
     if (superAdmins && superAdmins.length > 0) {
-      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, superAdmins[0].password);
+      const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, superAdmins[0].password);
       if (ok) return true;
     }
   } catch (_) {}
@@ -20,7 +38,7 @@ const checkUserInOtherPortals = async (email, password, otp) => {
   try {
     const [users] = await sharedSaasDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
     if (users && users.length > 0) {
-      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+      const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, users[0].password);
       if (ok) return true;
     }
   } catch (_) {}
@@ -28,7 +46,7 @@ const checkUserInOtherPortals = async (email, password, otp) => {
   try {
     const [patients] = await sharedSaasDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
     if (patients && patients.length > 0) {
-      const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+      const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, patients[0].password);
       if (ok) return true;
     }
   } catch (_) {}
@@ -46,13 +64,13 @@ const checkUserInOtherPortals = async (email, password, otp) => {
         });
         const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
         if (users && users.length > 0) {
-          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, users[0].password);
+          const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, users[0].password);
           await externalDb.close();
           if (ok) return true;
         }
         const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
         if (patients && patients.length > 0) {
-          const ok = otp ? (otp === '123456') : await bcrypt.compare(password, patients[0].password);
+          const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, patients[0].password);
           await externalDb.close();
           if (ok) return true;
         }
@@ -63,6 +81,7 @@ const checkUserInOtherPortals = async (email, password, otp) => {
 
   return false;
 };
+
 
 const getPasswordComplexityError = (password) => {
   if (!password || password.length < 8) {
@@ -139,15 +158,202 @@ router.post('/auth/send-otp', async (req, res) => {
     if (!storeId) {
       return res.status(400).json({ message: 'Store ID or Email is required.' });
     }
+
+    const { getHospitalConnection, masterDb } = require('../services/databaseResolver');
+    const { createModels } = require('../services/modelFactory');
+    const { sequelize } = require('../config/db');
+    const { Op } = require('sequelize');
+
+    let user;
+    let resolvedHospitalId;
+
+    // 1. Try default database
+    const staticModels = createModels(sequelize);
+    user = await staticModels.User.findOne({
+      where: {
+        [Op.or]: [
+          { employee_id: storeId },
+          { email: storeId.toLowerCase() }
+        ]
+      }
+    });
+
+    if (user) {
+      resolvedHospitalId = user.hospital_id;
+    } else {
+      // 2. Try tenant databases
+      try {
+        const [connections] = await masterDb.query('SELECT * FROM db_connections WHERE is_active = 1');
+        for (const conn of connections) {
+          try {
+            const db = await getHospitalConnection(conn.hospital_id);
+            const tenantModels = createModels(db);
+            const found = await tenantModels.User.findOne({
+              where: {
+                [Op.or]: [
+                  { employee_id: storeId },
+                  { email: storeId.toLowerCase() }
+                ]
+              }
+            });
+            if (found) {
+              user = found;
+              resolvedHospitalId = conn.hospital_id;
+              break;
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this Store ID or Email.' });
+    }
+
+    if (!['PHARMACIST', 'HOSPITAL_ADMIN'].includes(user.role)) {
+      return res.status(403).json({ message: 'This account is not authorized as a Pharmacist.' });
+    }
+
+    if (user.status === 'Inactive') {
+      return res.status(403).json({ message: 'Account is deactivated. Contact hospital admin.' });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({ message: 'User does not have a registered email address.' });
+    }
+
+    const otp = _genOtp();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    _loginOtpStore.set(storeId.toLowerCase(), {
+      otp,
+      expiresAt,
+      userId: user.id,
+      hospitalId: resolvedHospitalId
+    });
+
+    await sendOtpEmail(user.email, user.name || 'Pharmacist', otp, 'Pharmacy Portal', 'login');
+
     res.json({
       success: true,
-      message: `OTP sent successfully. For testing, use code: 123456`,
-      otp: '123456'
+      message: `OTP sent to ${_maskEmail(user.email)}`
     });
   } catch (error) {
+    console.error('Pharma send OTP error:', error);
     res.status(500).json({ message: error.message });
   }
 });
+
+// ==========================================
+// FORGOT PASSWORD – OTP FLOW (real email)
+// ==========================================
+
+// @route POST /api/pharmacy/auth/forgot-password/send-otp
+router.post('/auth/forgot-password/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+
+    const { getHospitalConnection, masterDb } = require('../services/databaseResolver');
+    const { createModels } = require('../services/modelFactory');
+    const { sequelize } = require('../config/db');
+
+    // Try shared DB first, then all tenant DBs
+    let user;
+    const staticModels = createModels(sequelize);
+    user = await staticModels.User.findOne({ where: { email: email.toLowerCase() } });
+
+    if (!user) {
+      // Try each tenant DB from master
+      try {
+        const [connections] = await masterDb.query('SELECT * FROM db_connections WHERE is_active = 1');
+        for (const conn of connections) {
+          try {
+            const db = await getHospitalConnection(conn.hospital_id);
+            const tenantModels = createModels(db);
+            const found = await tenantModels.User.findOne({ where: { email: email.toLowerCase() } });
+            if (found) { user = found; break; }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    if (!user) return res.status(404).json({ success: false, message: 'No account found with this email. Please contact your hospital admin.' });
+    if (!['PHARMACIST', 'HOSPITAL_ADMIN'].includes(user.role)) return res.status(403).json({ success: false, message: 'This email is not registered as a Pharmacist in this portal.' });
+    if (user.status === 'Inactive') return res.status(403).json({ success: false, message: 'Account is deactivated. Contact your hospital admin.' });
+
+    const otp = _genOtp();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    _otpStore.set(email.toLowerCase(), { otp, expiresAt, verified: false, userId: user.id, hospitalId: user.hospital_id });
+
+    await sendOtpEmail(user.email, user.name || 'Pharmacist', otp, 'Pharmacy Portal');
+
+    res.json({ success: true, message: `OTP sent to ${_maskEmail(user.email)}` });
+  } catch (error) {
+    console.error('Pharma send OTP error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send OTP. Please try again.' });
+  }
+});
+
+// @route POST /api/pharmacy/auth/forgot-password/verify-otp
+router.post('/auth/forgot-password/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+
+    const record = _otpStore.get(email.toLowerCase());
+    if (!record) return res.status(400).json({ success: false, message: 'No OTP requested. Please request a new one.' });
+    if (Date.now() > record.expiresAt) {
+      _otpStore.delete(email.toLowerCase());
+      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
+    }
+    if (record.otp !== otp.toString()) return res.status(400).json({ success: false, message: 'Invalid OTP code. Please try again.' });
+
+    record.verified = true;
+    _otpStore.set(email.toLowerCase(), record);
+    res.json({ success: true, message: 'OTP verified successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route POST /api/pharmacy/auth/forgot-password/reset
+router.post('/auth/forgot-password/reset', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) return res.status(400).json({ success: false, message: 'Email, OTP, and new password are required' });
+
+    const record = _otpStore.get(email.toLowerCase());
+    if (!record || !record.verified) return res.status(400).json({ success: false, message: 'OTP not verified. Please verify OTP first.' });
+    if (Date.now() > record.expiresAt) {
+      _otpStore.delete(email.toLowerCase());
+      return res.status(400).json({ success: false, message: 'OTP session expired. Please start over.' });
+    }
+    if (record.otp !== otp.toString()) return res.status(400).json({ success: false, message: 'Invalid OTP.' });
+    if (!newPassword || newPassword.length < 6) return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+
+    const { getHospitalConnection } = require('../services/databaseResolver');
+    const { createModels } = require('../services/modelFactory');
+    const { sequelize } = require('../config/db');
+
+    let db = sequelize;
+    if (record.hospitalId) {
+      try { db = await getHospitalConnection(record.hospitalId); } catch (_) {}
+    }
+    const { User } = createModels(db);
+    const user = await User.findOne({ where: { id: record.userId } });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const salt = await bcrypt.genSalt(10);
+    await user.update({ password: await bcrypt.hash(newPassword, salt) });
+
+    _otpStore.delete(email.toLowerCase());
+    res.json({ success: true, message: 'Password reset successfully. You can now log in.' });
+  } catch (error) {
+    console.error('Pharma reset password error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 
 // @desc    Pharmacist login
 // @route   POST /api/pharmacy/auth/login
@@ -232,11 +438,17 @@ router.post('/auth/login', async (req, res) => {
     }
 
     if (!['PHARMACIST', 'HOSPITAL_ADMIN'].includes(user.role)) {
-      const ok = password ? await bcrypt.compare(password, user.password) : (otp === '123456');
+      let ok = false;
+      if (password) {
+        ok = await bcrypt.compare(password, user.password);
+      } else if (otp) {
+        const record = _loginOtpStore.get(storeId.toLowerCase());
+        ok = record && record.otp === otp.toString() && Date.now() <= record.expiresAt;
+      }
       if (ok) {
         return res.status(403).json({ success: false, message: "you don't have authorization for this portal" });
       } else {
-        return res.status(400).json({ message: 'Incorrect password.' });
+        return res.status(400).json({ message: 'Incorrect password or OTP.' });
       }
     }
 
@@ -246,7 +458,14 @@ router.post('/auth/login', async (req, res) => {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) return res.status(400).json({ message: 'Incorrect password.' });
     } else if (otp) {
-      if (otp !== '123456') return res.status(400).json({ message: 'Invalid OTP code.' });
+      const record = _loginOtpStore.get(storeId.toLowerCase());
+      if (!record) return res.status(400).json({ message: 'No OTP requested. Please request a new one.' });
+      if (Date.now() > record.expiresAt) {
+        _loginOtpStore.delete(storeId.toLowerCase());
+        return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+      }
+      if (record.otp !== otp.toString()) return res.status(400).json({ message: 'Invalid OTP code.' });
+      _loginOtpStore.delete(storeId.toLowerCase());
     } else {
       return res.status(400).json({ message: 'Password or OTP is required.' });
     }

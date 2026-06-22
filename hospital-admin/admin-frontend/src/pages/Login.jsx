@@ -77,14 +77,21 @@ export default function Login() {
     }
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!email) {
       return toast.warning('Please enter email address to request OTP');
     }
-    setCountdown(30);
-    setOtpSent(true);
-    toast.info('OTP code sent successfully! For testing, use: 123456');
+    try {
+      const res = await API.post('/auth/login-otp/send', { email });
+      setCountdown(30);
+      setOtpSent(true);
+      toast.success(res.data.message || 'OTP sent to your registered email!');
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to send OTP. Please try again.';
+      toast.error(msg);
+    }
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -210,7 +217,7 @@ export default function Login() {
                   <button
                     type="button"
                     className="text-xs text-primary hover:underline focus:outline-none"
-                    onClick={() => toast.info('Please contact your IT administrator to reset your password.')}
+                    onClick={() => navigate('/forgot-password')}
                   >
                     Forgot password?
                   </button>

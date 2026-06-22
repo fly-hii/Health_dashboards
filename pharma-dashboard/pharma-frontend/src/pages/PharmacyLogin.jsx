@@ -375,7 +375,7 @@ export default function PharmacyLogin() {
                       <button
                         type="button"
                         className="text-[13px] font-semibold text-[#2E7D32] hover:text-[#256C2A] hover:underline cursor-pointer focus:outline-none"
-                        onClick={() => toast.info('Please contact your IT administrator to reset your password.')}
+                        onClick={() => navigate('/pharmacy/forgot-password')}
                       >
                         Forgot Password?
                       </button>

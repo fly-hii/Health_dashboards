@@ -15,6 +15,7 @@ import CreateOrder from '../pages/PrescriptionQueue/CreateOrder';
 import Notifications from '../pages/Notifications';
 import Profile from '../pages/Profile';
 import PharmacyLogin from '../pages/PharmacyLogin';
+import PharmacyForgotPassword from '../pages/PharmacyForgotPassword';
 
 // Placeholder for Reports & Analytics
 const ReportsAnalytics = () => (
@@ -42,6 +43,7 @@ export default function AppRoutes() {
       {/* Public routes */}
       <Route element={<PublicRoute />}>
         <Route path="pharmacy/login" element={<PharmacyLogin />} />
+        <Route path="pharmacy/forgot-password" element={<PharmacyForgotPassword />} />
       </Route>
 
       {/* Protected routes */}

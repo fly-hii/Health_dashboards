@@ -1,0 +1,11 @@
+{
+  "name": "careplus-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CarePlus SaaS Workspace Quick Start",
+  "scripts": {
+    "install-all": "node scripts/install-all.js",
+    "start-all": "node scripts/start-all.js",
+    "dev": "node scripts/start-all.js"
+  }
+}

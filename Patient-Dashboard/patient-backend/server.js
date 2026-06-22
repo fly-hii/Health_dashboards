@@ -16,6 +16,8 @@ const {
 
 const { protect } = require('./middleware/authMiddleware');
 const { register, login, getProfile, updateProfile, changePassword, sendOtp, verifyOtp } = require('./controllers/authController');
+const { sendForgotPasswordOtp, verifyForgotPasswordOtp, resetForgotPassword } = require('./controllers/forgotPasswordController');
+
 
 const app = express();
 const PORT = process.env.PORT || 5050;
@@ -117,6 +119,12 @@ app.post('/api/auth/register', register);
 app.post('/api/auth/send-otp', sendOtp);
 app.post('/api/auth/verify-otp', verifyOtp);
 app.put('/api/auth/change-password', protect, changePassword);
+
+// OTP-based forgot password (public endpoints)
+app.post('/api/auth/forgot-password/send-otp',   sendForgotPasswordOtp);
+app.post('/api/auth/forgot-password/verify-otp', verifyForgotPasswordOtp);
+app.post('/api/auth/forgot-password/reset',      resetForgotPassword);
+
 
 // ────────────────────────────────────────────────────────────
 // PROFILE ROUTES

@@ -31,10 +31,10 @@ const sharedSaasDb = new Sequelize(
     dialectModule: require('mysql2'),
     logging: false,
     pool:    { max: 5, min: 0, acquire: 30000, idle: 10000 },
-    dialectOptions:
-      process.env.DB_SSL === 'true'
-        ? { ssl: { require: true, rejectUnauthorized: false } }
-        : {},
+    dialectOptions: {
+      connectTimeout: 60000,
+      ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+    },
   }
 );
 

@@ -78,15 +78,28 @@ const LoginPage = () => {
     }
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!form.email) {
       setErrors({ email: 'Email is required to request OTP' });
       return;
     }
-    setCountdown(30);
-    setOtpSent(true);
-    toast.info('OTP code sent successfully! For testing, use: 123456');
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+      const res = await fetch(`${API_URL}/auth/login-otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErrors({ email: data.message || 'Failed to send OTP' }); return; }
+      setCountdown(30);
+      setOtpSent(true);
+      toast.success(data.message || 'OTP sent to your registered email!');
+    } catch (_) {
+      setErrors({ email: 'Network error. Could not send OTP.' });
+    }
   };
+
 
   const validate = () => {
     const errs = {};
@@ -183,7 +196,7 @@ const LoginPage = () => {
                 <button
                   type="button"
                   className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
-                  onClick={(e) => { e.preventDefault(); toast.info("Please contact your IT administrator to reset your password."); }}
+                  onClick={() => navigate('/forgot-password')}
                 >
                   Forgot Password?
                 </button>

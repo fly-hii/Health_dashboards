@@ -78,16 +78,30 @@ export default function LoginPage() {
     }
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!loginForm.email) {
       setError('Please enter doctor ID or email to request OTP');
       return;
     }
     setError('');
-    setCountdown(30);
-    setOtpSent(true);
-    setSuccessMsg('OTP code sent successfully! For testing, use: 123456');
+    setSuccessMsg('');
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5051/api';
+      const res = await fetch(`${API_BASE}/auth/login-otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginForm.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || 'Failed to send OTP. Please try again.'); return; }
+      setCountdown(30);
+      setOtpSent(true);
+      setSuccessMsg(data.message || 'OTP sent to your registered email!');
+    } catch (_) {
+      setError('Network error. Could not send OTP. Please try again.');
+    }
   };
+
 
   const handleLoginChange = (e) => {
     setLoginForm((p) => ({ ...p, [e.target.name]: e.target.value }));
@@ -250,7 +264,7 @@ export default function LoginPage() {
                 <div className="form-group">
                   <div className="flex justify-between items-center">
                     <label className="form-label">Password</label>
-                    <a href="#forgot" className="forgot-pass-link" onClick={(e) => { e.preventDefault(); setError("Please contact your IT administrator to reset your password."); }}>Forgot Password?</a>
+                    <a href="#forgot" className="forgot-pass-link" onClick={(e) => { e.preventDefault(); window.location.href = '/forgot-password'; }}>Forgot Password?</a>
                   </div>
                   <div className="input-icon-wrapper">
                     <svg className="form-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

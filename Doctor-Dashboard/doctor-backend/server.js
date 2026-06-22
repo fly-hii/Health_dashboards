@@ -18,6 +18,8 @@ const {
 const { getMedicalRecords, getMedicalRecordById, getPatientMedicalRecords } = require('./controllers/medicalRecordController');
 const { getReportsV3, getReportDetailsV3, uploadReportV3, deleteReportV3, downloadReportV3, upload } = require('./controllers/reportController');
 const { protect, authorizeDoctor, tenantMiddleware } = require('./middleware/authMiddleware');
+const { sendForgotPasswordOtp, verifyForgotPasswordOtp, resetForgotPassword, loginOtpStore } = require('./controllers/forgotPasswordController');
+const { sendOtpEmail } = require('./services/emailService');
 
 const app = express();
 const PORT = process.env.PORT || 5051;
@@ -54,6 +56,41 @@ app.use(morgan('dev'));
 
 // ── Auth ────────────────────────────────────────────────────
 app.post('/api/auth/login', login);
+
+// ── Login OTP (real email) ───────────────────────────────────
+app.post('/api/auth/login-otp/send', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+
+    const { sharedSaasDb } = require('./services/databaseResolver');
+    const { createModels } = require('./services/modelFactory');
+    const { User } = createModels(sharedSaasDb);
+    const user = await User.findOne({ where: { email: email.toLowerCase() } });
+    if (!user) return res.status(404).json({ success: false, message: 'No account found with this email address.' });
+
+    const crypto = require('crypto');
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    loginOtpStore.set(email.toLowerCase(), { otp, expiresAt });
+
+    try {
+      await sendOtpEmail(user.email, user.name || 'Doctor', otp, 'Doctor Portal', 'login');
+    } catch (emailErr) {
+      console.error('Doctor login OTP email error:', emailErr.message);
+    }
+
+    res.json({ success: true, message: 'OTP sent to your registered email' });
+  } catch (err) {
+    console.error('Doctor login OTP send error:', err);
+    res.status(500).json({ success: false, message: 'Failed to send OTP. Please try again.' });
+  }
+});
+
+// ── Forgot Password (OTP flow) ───────────────────────────────
+app.post('/api/auth/forgot-password/send-otp',   sendForgotPasswordOtp);
+app.post('/api/auth/forgot-password/verify-otp', verifyForgotPasswordOtp);
+app.post('/api/auth/forgot-password/reset',      resetForgotPassword);
 
 // ── Doctor Dashboard ────────────────────────────────────────
 app.get('/api/doctor/dashboard/stats', protect, authorizeDoctor, tenantMiddleware, getDashboardStatsV2);
