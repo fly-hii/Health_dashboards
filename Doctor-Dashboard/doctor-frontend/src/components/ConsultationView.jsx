@@ -29,6 +29,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
 
   // Live Consultation State
   const [status, setStatus] = useState(appointment.status || 'waiting');
+  const isCompleted = ['completed', 'consultation_done'].includes(status?.toLowerCase());
   const [symptoms, setSymptoms] = useState(appointment.symptoms || '');
   const [diagnosis, setDiagnosis] = useState(appointment.diagnosis || '');
   const [icdCode, setIcdCode] = useState('');
@@ -46,18 +47,30 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem('doctor_token')}` };
       const res = await axios.get(`/api/consultations/${appointment._id}`, { headers });
-      if (res.data && res.data._id) {
-        const data = res.data;
+      if (res.data && res.data.success && res.data.data) {
+        const data = res.data.data;
         setStatus(data.status);
         setSymptoms(data.symptoms || '');
         setDiagnosis(data.diagnosis || '');
-        setDoctorNotes(data.doctorNotes || '');
-        setLabTests(data.labTests || []);
-        if (data.medicines && data.medicines.length > 0) {
+        setDoctorNotes(data.doctorNotes || data.notes || '');
+        setLabTests(data.labTests || data.lab_tests || []);
+
+        const prescriptionMedicines = data.prescription?.medicines || [];
+        if (prescriptionMedicines.length > 0) {
+          setMedicines(prescriptionMedicines.map(m => ({
+            medicineName: m.medicine_name || m.medicineName || '',
+            dosage: m.dosage || '',
+            frequency: m.frequency || '',
+            duration: m.duration || '',
+            instructions: m.instructions || ''
+          })));
+        } else if (data.medicines && data.medicines.length > 0) {
           setMedicines(data.medicines);
         }
-        if (data.followUpDate) {
-          setFollowUpDate(format(new Date(data.followUpDate), 'yyyy-MM-dd'));
+
+        if (data.followUpDate || data.follow_up_date) {
+          const fDate = data.followUpDate || data.follow_up_date;
+          setFollowUpDate(format(new Date(fDate), 'yyyy-MM-dd'));
         }
       }
     } catch (err) {
@@ -283,7 +296,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
         {activeTab === 'details' && (
           <div className="flex flex-col gap-6">
             {/* If Not Started Consultation (Waiting/Checked-In) */}
-            {status !== 'in_consultation' && status !== 'completed' ? (
+            {!['in_consultation', 'completed', 'consultation_done'].includes(status?.toLowerCase()) ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
                   {/* Card 1: Patient Information */}
@@ -426,7 +439,9 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
             ) : (
               /* Consultation Workspace Form */
               <form onSubmit={handleCompleteConsultation} className="bg-white border border-[#E5E7EB] rounded-[20px] p-6 shadow-sm flex flex-col gap-6 text-left">
-                <h3 className="font-bold text-lg text-[#0B1F3A] border-b border-slate-100 pb-3">Consultation Workspace</h3>
+                <h3 className="font-bold text-lg text-[#0B1F3A] border-b border-slate-100 pb-3">
+                  {isCompleted ? 'Completed Consultation Record' : 'Consultation Workspace'}
+                </h3>
                 
                 {/* Inputs Section */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -439,6 +454,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                       value={symptoms}
                       onChange={(e) => setSymptoms(e.target.value)}
                       required
+                      readOnly={isCompleted}
                     />
                   </div>
 
@@ -451,6 +467,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                       value={diagnosis}
                       onChange={(e) => setDiagnosis(e.target.value)}
                       required
+                      readOnly={isCompleted}
                     />
                   </div>
 
@@ -462,6 +479,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                       placeholder="e.g. I20.9"
                       value={icdCode}
                       onChange={(e) => setIcdCode(e.target.value)}
+                      readOnly={isCompleted}
                     />
                   </div>
                 </div>
@@ -475,6 +493,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                     placeholder="Enter clinical notes, recommendations, or findings..."
                     value={doctorNotes}
                     onChange={(e) => setDoctorNotes(e.target.value)}
+                    readOnly={isCompleted}
                   />
                 </div>
 
@@ -488,6 +507,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                           type="checkbox"
                           checked={labTests.includes(test)}
                           onChange={() => handleLabCheckboxChange(test)}
+                          disabled={isCompleted}
                           className="w-4 h-4 rounded text-[#0F9D8A] focus:ring-[#0F9D8A] border-[#E5E7EB] cursor-pointer"
                         />
                         <span>{test}</span>
@@ -500,14 +520,16 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-semibold text-[#0B1F3A]">Prescription Section</label>
-                    <button
-                      type="button"
-                      onClick={handleAddMedicine}
-                      className="flex items-center gap-1.5 text-xs font-bold text-[#0F9D8A] hover:text-[#0c8776]"
-                    >
-                      <PlusCircle className="w-4 h-4" />
-                      <span>Add Medicine</span>
-                    </button>
+                    {!isCompleted && (
+                      <button
+                        type="button"
+                        onClick={handleAddMedicine}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[#0F9D8A] hover:text-[#0c8776]"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        <span>Add Medicine</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="overflow-x-auto">
@@ -519,7 +541,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                           <th className="pb-2 pl-3">Frequency</th>
                           <th className="pb-2 pl-3">Duration</th>
                           <th className="pb-2 pl-3">Instructions</th>
-                          <th className="pb-2 text-center" style={{ width: 60 }}>Action</th>
+                          {!isCompleted && <th className="pb-2 text-center" style={{ width: 60 }}>Action</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#F1F5F9]">
@@ -533,6 +555,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                                 value={med.medicineName}
                                 onChange={(e) => handleMedicineChange(index, 'medicineName', e.target.value)}
                                 required={index === 0}
+                                readOnly={isCompleted}
                               />
                             </td>
                             <td className="py-2.5 px-3">
@@ -542,6 +565,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                                 className="w-full border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[#0F9D8A]"
                                 value={med.dosage}
                                 onChange={(e) => handleMedicineChange(index, 'dosage', e.target.value)}
+                                readOnly={isCompleted}
                               />
                             </td>
                             <td className="py-2.5 px-3">
@@ -551,6 +575,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                                 className="w-full border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[#0F9D8A]"
                                 value={med.frequency}
                                 onChange={(e) => handleMedicineChange(index, 'frequency', e.target.value)}
+                                readOnly={isCompleted}
                               />
                             </td>
                             <td className="py-2.5 px-3">
@@ -560,6 +585,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                                 className="w-full border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[#0F9D8A]"
                                 value={med.duration}
                                 onChange={(e) => handleMedicineChange(index, 'duration', e.target.value)}
+                                readOnly={isCompleted}
                               />
                             </td>
                             <td className="py-2.5 px-3">
@@ -569,17 +595,20 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                                 className="w-full border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-[#0F9D8A]"
                                 value={med.instructions}
                                 onChange={(e) => handleMedicineChange(index, 'instructions', e.target.value)}
+                                readOnly={isCompleted}
                               />
                             </td>
-                            <td className="py-2.5 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveMedicine(index)}
-                                className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50"
-                              >
-                                <Trash2 className="w-4.5 h-4.5" />
-                              </button>
-                            </td>
+                            {!isCompleted && (
+                              <td className="py-2.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMedicine(index)}
+                                  className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4.5 h-4.5" />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -597,26 +626,39 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
                       className="border border-[#E5E7EB] hover:border-slate-300 focus:border-[#0F9D8A] focus:outline-none rounded-xl py-2.5 pl-10 pr-4 text-xs text-[#0B1F3A] transition-all w-full"
                       value={followUpDate}
                       onChange={(e) => setFollowUpDate(e.target.value)}
+                      disabled={isCompleted}
                     />
                   </div>
                 </div>
 
                 {/* Form submit footer */}
                 <div className="flex justify-end gap-4 pt-4 border-t border-[#F1F5F9]">
-                  <button
-                    type="button"
-                    onClick={onBackToQueue}
-                    className="border border-[#E5E7EB] hover:bg-slate-50 text-[#64748B] font-semibold text-sm rounded-xl py-3 px-6 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="bg-[#0F9D8A] hover:bg-[#0c8776] text-white font-semibold text-sm rounded-xl py-3 px-6 transition-all shadow-sm"
-                  >
-                    {submitting ? 'Completing...' : 'Complete Consultation'}
-                  </button>
+                  {isCompleted ? (
+                    <button
+                      type="button"
+                      onClick={onBackToQueue}
+                      className="bg-[#0F9D8A] hover:bg-[#0c8776] text-white font-semibold text-sm rounded-xl py-3 px-6 transition-all shadow-sm"
+                    >
+                      Back to Queue
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={onBackToQueue}
+                        className="border border-[#E5E7EB] hover:bg-slate-50 text-[#64748B] font-semibold text-sm rounded-xl py-3 px-6 transition-all"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="bg-[#0F9D8A] hover:bg-[#0c8776] text-white font-semibold text-sm rounded-xl py-3 px-6 transition-all shadow-sm"
+                      >
+                        {submitting ? 'Completing...' : 'Complete Consultation'}
+                      </button>
+                    </>
+                  )}
                 </div>
               </form>
             )}

@@ -187,6 +187,7 @@ export default function AppointmentsView({ initialSelectedId, onClearDeepLink })
     if (appt.rawStatus === 'In-Progress') return 'In-Progress';
     if (appt.rawStatus === 'Confirmed')   return 'Confirmed';
     if (appt.rawStatus === 'Pending')     return 'Pending';
+    if (appt.rawStatus === 'No-Show')     return 'Missed';
     return appt.status; // Completed / Cancelled / Upcoming
   };
 

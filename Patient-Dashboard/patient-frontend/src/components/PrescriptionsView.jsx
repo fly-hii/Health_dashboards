@@ -43,7 +43,7 @@ export default function PrescriptionsView({ prescriptions }) {
                 {prescriptions.map((presc) => (
                   <tr key={presc.id} onClick={() => setSelectedPresc(presc)} className="interactive-row">
                     <td className="font-semibold text-primary">{presc.id}</td>
-                    <td>{presc.doctor}</td>
+                    <td>{presc.doctor?.name || presc.doctor}</td>
                     <td>{presc.date}</td>
                     <td>{presc.medicineCount || presc.medicines.length} Medicines</td>
                     <td className="flex gap-4">
@@ -108,7 +108,7 @@ export default function PrescriptionsView({ prescriptions }) {
               </div>
               <div className="receipt-row">
                 <span className="lbl font-medium text-muted">Doctor</span>
-                <span className="val">{selectedPresc.doctor}</span>
+                <span className="val">{selectedPresc.doctor?.name || selectedPresc.doctor}</span>
               </div>
               <div className="receipt-row">
                 <span className="lbl font-medium text-muted">Date Issued</span>

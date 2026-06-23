@@ -261,7 +261,7 @@ export default function NotificationDetailsView({
                   <div className="ndv-related-content flex flex-col gap-3">
                     <div className="ndv-presc-header">
                       <h5>Prescription {relatedData.id || 'RXM2216'}</h5>
-                      <p className="sub">Prescribed by {relatedData.doctor || 'Dr. Rohit Mehta'}</p>
+                      <p className="sub">Prescribed by {relatedData.doctor?.name || relatedData.doctor || 'Dr. Rohit Mehta'}</p>
                     </div>
                     
                     <div className="ndv-medicine-list-box mt-2">

@@ -112,7 +112,10 @@ ${line}
     );
   };
 
-  const StatusBadge = ({ status }) => {
+  const StatusBadge = ({ status, rawStatus }) => {
+    if (rawStatus === 'No-Show') {
+      return <span className="dv-badge dv-badge--cancelled">Missed</span>;
+    }
     const cls = status === 'Upcoming'
       ? 'dv-badge--upcoming'
       : status === 'Completed'
@@ -259,7 +262,7 @@ ${line}
                 </div>
                 <div className="dv-info-item">
                   <span className="dv-info-label">Status</span>
-                  <StatusBadge status={appointment.status} />
+                  <StatusBadge status={appointment.status} rawStatus={appointment.rawStatus} />
                 </div>
               </div>
             </div>

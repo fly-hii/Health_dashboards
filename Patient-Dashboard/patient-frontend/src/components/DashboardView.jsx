@@ -311,7 +311,7 @@ export default function DashboardView({ profile, appointments, token, prescripti
                 {consultations.slice(0, 3).map((item, idx) => (
                   <tr key={idx}>
                     <td>{item.date}</td>
-                    <td className="font-semibold">{item.doctor}</td>
+                    <td className="font-semibold">{item.doctorName || item.doctor}</td>
                     <td>{item.department}</td>
                     <td>{item.diagnosis}</td>
                     <td>

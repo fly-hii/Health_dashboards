@@ -37,10 +37,11 @@ const mapOrderResponse = (order) => {
     medicines: srcMedicines,
     totalAmount: parseFloat(json.total_amount) || 120,
     paidAmount: json.payment_status === 'Paid' ? (parseFloat(json.total_amount) || 120) : 0,
+    // Sequelize aliases timestamp columns: created_at → createdAt, updated_at → updatedAt
     startedAt: json.processed_at,
-    readyAt: json.updated_at,
+    readyAt: json.updatedAt,
     deliveredAt: json.delivered_at,
-    createdAt: json.created_at,
+    createdAt: json.createdAt,
   };
 };
 
@@ -237,10 +238,61 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
+// @desc    Get daily order counts for last 7 days
+// @route   GET /api/orders/stats/daily-trend
+// @access  Private
+const getDailyTrend = async (req, res) => {
+  try {
+    const { PharmacyOrder } = req.models;
+    const { Sequelize } = require('sequelize');
+    const { Op } = require('sequelize');
+
+    // Build last 7 days array (newest last)
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(d.toISOString().split('T')[0]); // 'YYYY-MM-DD'
+    }
+
+    // Count orders per day using raw query for reliability across MySQL dialects
+    const db = req.db;
+    const [rows] = await db.query(
+      `SELECT DATE(created_at) as day, COUNT(*) as count
+       FROM pharmacy_orders
+       WHERE hospital_id = :hospitalId
+         AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+       GROUP BY DATE(created_at)
+       ORDER BY day ASC`,
+      { replacements: { hospitalId: req.hospitalId } }
+    );
+
+    // Map to all 7 days, filling 0 for days with no orders
+    const countByDay = {};
+    rows.forEach(row => {
+      const dayStr = row.day instanceof Date
+        ? row.day.toISOString().split('T')[0]
+        : String(row.day).slice(0, 10);
+      countByDay[dayStr] = Number(row.count);
+    });
+
+    const trend = days.map(day => {
+      const date = new Date(day + 'T00:00:00');
+      const label = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      return { name: label, orders: countByDay[day] || 0 };
+    });
+
+    res.json(trend);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getOrders,
   getOrderById,
   updateOrderStatus,
   updateOrderMedicines,
-  getDashboardStats
+  getDashboardStats,
+  getDailyTrend
 };

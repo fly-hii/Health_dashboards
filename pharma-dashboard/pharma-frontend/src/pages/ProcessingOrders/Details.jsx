@@ -295,13 +295,13 @@ export default function ProcessingOrderDetails() {
             Cancel Order
           </button>
 
-          {/* Mark as Packed */}
+          {/* Mark as Ready */}
           <button
             onClick={handleMarkPacked}
             disabled={updating}
             className="flex-1 lg:flex-initial h-11 px-8 bg-[#0F9D8A] hover:bg-[#0B7F71] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-sm rounded-[10px] transition-all shadow-sm shadow-[#0F9D8A]/10 cursor-pointer"
           >
-            Mark as Packed
+            Mark as Ready
           </button>
         </div>
       </div>

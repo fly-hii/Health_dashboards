@@ -79,6 +79,18 @@ function createModels(sequelize) {
     status:               { type: DataTypes.ENUM('Active','Inactive'), defaultValue: 'Active' },
     phone:                DataTypes.STRING(20),
     profile_image:        DataTypes.TEXT,
+    avatar: {
+      type: DataTypes.VIRTUAL,
+      get() {
+        return this.getDataValue('profile_image');
+      }
+    },
+    profileImage: {
+      type: DataTypes.VIRTUAL,
+      get() {
+        return this.getDataValue('profile_image');
+      }
+    },
     employee_id:          DataTypes.STRING(50),
     specialization:       DataTypes.STRING(200),
     experience:           DataTypes.INTEGER,

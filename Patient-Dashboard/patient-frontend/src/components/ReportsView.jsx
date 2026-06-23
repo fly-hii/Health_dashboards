@@ -354,7 +354,7 @@ export default function ReportsView({ reports, profile, onUploadSuccess }) {
   };
 
   // Dynamic filter logic checking both category text and reportType database fields
-  const filteredReports = reports.filter(rep => {
+  const filteredReports = Array.isArray(reports) ? reports.filter(rep => {
     // 1. Tab category filter matching
     const category = rep.category || rep.reportType || '';
     const categoryLower = category.toLowerCase();
@@ -393,7 +393,7 @@ export default function ReportsView({ reports, profile, onUploadSuccess }) {
     }
 
     return true;
-  });
+  }) : [];
 
   return (
     <div className="reports-view">

@@ -11,10 +11,10 @@ import TopNavbar from './components/TopNavbar';
 import DashboardView from './components/DashboardView';
 import OverviewView from './components/OverviewView';
 import BookAppointmentView from './components/BookAppointmentView';
-import PatientQueueView from './components/PatientQueueView';
 import ConsultationView from './components/ConsultationView';
 import ConsultationsListView from './components/ConsultationsListView';
 import PatientHistoryView from './components/PatientHistoryView';
+import { api } from './utils/api';
 import PatientDirectoryView from './components/PatientDirectoryView';
 import MedicalRecordsPage from './pages/MedicalRecordsPage';
 import TokensView from './components/TokensView';
@@ -53,6 +53,11 @@ export default function App() {
     socket.on('connect', () => {
       console.log('🔌 Connected to Socket.IO backend');
       socket.emit('join_room', user._id || user.id);
+      const hospitalId = user.hospital_id || user.hospitalId;
+      if (hospitalId) {
+        socket.emit('join_hospital', hospitalId);
+        console.log(`🏥 Doctor joined hospital room: hospital_${hospitalId}`);
+      }
     });
 
     socket.on('connect_error', (err) => {
@@ -77,7 +82,30 @@ export default function App() {
     return () => { socket.disconnect(); };
   }, [isAuthenticated, user]);
 
+  const fetchCentralQueue = async () => {
+    if (!isAuthenticated || !user) return;
+    try {
+      const res = await api.getQueue();
+      if (res && res.success) {
+        setQueue(res.queue || []);
+      }
+    } catch (err) {
+      console.error('Error fetching central queue:', err);
+    }
+  };
 
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    fetchCentralQueue();
+
+    window.addEventListener('dashboard_refresh', fetchCentralQueue);
+    const interval = setInterval(fetchCentralQueue, 15000);
+
+    return () => {
+      window.removeEventListener('dashboard_refresh', fetchCentralQueue);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, user]);
 
   const handleDiagnosePatient = (appointment) => {
     setActiveAppointment(appointment);
@@ -86,7 +114,7 @@ export default function App() {
 
   const handleBackToQueue = () => {
     setActiveAppointment(null);
-    setActiveTab('queue');
+    setActiveTab('consultations');
   };
 
   const renderActiveView = () => {
@@ -103,11 +131,10 @@ export default function App() {
         return <BookAppointmentView />;
       case 'appointments':
       case 'queue':
+      case 'consultations':
         return (
-          <PatientQueueView
+          <ConsultationsListView
             onDiagnosePatient={handleDiagnosePatient}
-            searchQuery={searchQuery}
-            onQueueFetched={setQueue}
           />
         );
       case 'consultation':
@@ -117,12 +144,6 @@ export default function App() {
             onBackToQueue={handleBackToQueue}
           />
         ) : (
-          <ConsultationsListView
-            onDiagnosePatient={handleDiagnosePatient}
-          />
-        );
-      case 'consultations':
-        return (
           <ConsultationsListView
             onDiagnosePatient={handleDiagnosePatient}
           />

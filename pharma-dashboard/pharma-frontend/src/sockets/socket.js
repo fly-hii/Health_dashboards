@@ -25,6 +25,26 @@ export const socket = io(URL, {
   timeout: 5000,
 });
 
+// Decode hospitalId from stored JWT (without a library — just parse the payload)
+const getHospitalIdFromToken = () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.hospitalId || null;
+  } catch {
+    return null;
+  }
+};
+
+// Automatically join the correct hospital room once connected
+socket.on('connect', () => {
+  const hospitalId = getHospitalIdFromToken();
+  if (hospitalId) {
+    socket.emit('join_hospital', hospitalId);
+  }
+});
+
 if (shouldDisableSocket) {
   socket.connect = () => {
     console.warn('Socket connection disabled in Vercel serverless environment (real-time updates disabled)');

@@ -42,7 +42,12 @@ export const NotificationProvider = ({ children }) => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('join_nurse_room', user._id);
+      socket.emit('join_nurse_room', user._id || user.id);
+      const hospitalId = user.hospital_id || user.hospitalId;
+      if (hospitalId) {
+        socket.emit('join_hospital', hospitalId);
+        console.log(`🏥 Nurse joined hospital room: hospital_${hospitalId}`);
+      }
     });
 
     socket.on('new_notification', (notification) => {

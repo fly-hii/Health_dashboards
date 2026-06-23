@@ -69,13 +69,13 @@ export default function PrescriptionDetails() {
     }
   };
 
+  // From Prescription Queue, we only allow marking Pending → Processing.
+  // Further progression (Processing → Ready → Delivered) happens in the
+  // Processing Orders and Ready Orders pages respectively.
   const getNextStatus = (currentStatus) => {
     const status = capitalizeStatus(currentStatus);
     if (status === 'Pending') return 'Processing';
-    if (status === 'Processing') return 'Packed';
-    if (status === 'Packed') return 'Ready';
-    if (status === 'Ready') return 'Delivered';
-    return null;
+    return null; // No further action from prescription queue
   };
 
   const handleStatusTransition = async () => {
@@ -333,7 +333,7 @@ export default function PrescriptionDetails() {
               </button>
             </div>
 
-            {/* State transitions */}
+            {/* State transitions - only allow Pending → Processing from this page */}
             {nextStatus ? (
               <button
                 onClick={handleStatusTransition}
@@ -348,19 +348,11 @@ export default function PrescriptionDetails() {
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
-                    Mark as {nextStatus}
+                    Mark as Processing
                   </>
                 )}
               </button>
-            ) : (
-              <button
-                disabled
-                className="w-full sm:w-auto flex items-center justify-center gap-2 h-11 px-7 bg-gray-100 text-gray-400 font-bold text-sm rounded-[10px] border border-gray-200 cursor-not-allowed select-none"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Order Completed
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
 

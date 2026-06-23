@@ -5,6 +5,8 @@ const morgan = require('morgan');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { connectDB } = require('./config/database');
+const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -13,7 +15,7 @@ const {
   getPatientReports, getConsultationByAppointmentId, startConsultation, saveConsultationNotes,
   savePrescription, completeConsultation, bookFollowUpAppointment, getTodayAppointments, getPrescriptions,
   getNotifications, markNotificationRead, getDoctorProfile, updateDoctorProfile, changeDoctorPassword,
-  callPatient,
+  callPatient, uploadDoctorAvatar,
 } = require('./controllers/doctorController');
 
 const { getMedicalRecords, getMedicalRecordById, getPatientMedicalRecords } = require('./controllers/medicalRecordController');
@@ -54,6 +56,13 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // ── Auth ────────────────────────────────────────────────────
 app.post('/api/auth/login', login);
@@ -115,6 +124,7 @@ app.get('/api/medical-records/patient/:patientId', protect, authorizeDoctor, ten
 app.get('/api/doctors/profile', protect, authorizeDoctor, getDoctorProfile);
 app.put('/api/doctors/profile', protect, authorizeDoctor, updateDoctorProfile);
 app.put('/api/doctors/change-password', protect, authorizeDoctor, changeDoctorPassword);
+app.post('/api/doctors/upload-avatar', protect, authorizeDoctor, upload.single('avatar'), uploadDoctorAvatar);
 
 // ── Patient Data ────────────────────────────────────────────
 app.get('/api/patients/:id', protect, authorizeDoctor, tenantMiddleware, getPatientById);

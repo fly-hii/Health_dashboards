@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { Patient, Hospital, AuditLog } = require('../models');
 const { masterDb } = require('../services/databaseResolver');
 const { loginOtpStore } = require('./forgotPasswordController');
@@ -178,6 +180,13 @@ const register = async (req, res) => {
 
     const token = generateToken(patient);
     const { password: _, ...patientData } = patient.toJSON();
+    
+    // Map database fields to the names the frontend expects
+    patientData.fullName = patientData.full_name;
+    patientData.mobile = patientData.phone;
+    patientData.bloodGroup = patientData.blood_group;
+    patientData.profileImage = patientData.profile_image;
+    patientData._id = patientData.id;
 
     res.status(201).json({ success: true, token, user: patientData });
   } catch (error) {
@@ -262,6 +271,13 @@ const login = async (req, res) => {
 
     const token = generateToken(patient);
     const { password: _, ...patientData } = patient.toJSON();
+    
+    // Map database fields to the names the frontend expects
+    patientData.fullName = patientData.full_name;
+    patientData.mobile = patientData.phone;
+    patientData.bloodGroup = patientData.blood_group;
+    patientData.profileImage = patientData.profile_image;
+    patientData._id = patientData.id;
 
     res.json({ success: true, token, user: patientData });
   } catch (error) {
@@ -345,10 +361,33 @@ const sendOtp = async (req, res) => {
   }
 };
 
+const saveBase64Locally = async (req, base64Data, fileName) => {
+  const matches = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 image data format');
+  }
+  const buffer = Buffer.from(matches[2], 'base64');
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  const filePath = path.join(uploadsDir, fileName);
+  await fs.promises.writeFile(filePath, buffer);
+  
+  const protocol = req.protocol;
+  const host = req.get('host');
+  return `${protocol}://${host}/uploads/${fileName}`;
+};
+
 // GET /api/profile
 const getProfile = async (req, res) => {
   try {
     const { password: _, ...patientData } = req.user.toJSON();
+    patientData.fullName = patientData.full_name;
+    patientData.mobile = patientData.phone;
+    patientData.bloodGroup = patientData.blood_group;
+    patientData.profileImage = patientData.profile_image;
+    patientData._id = patientData.id;
     res.json({ success: true, user: patientData });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -358,10 +397,79 @@ const getProfile = async (req, res) => {
 // PUT /api/profile
 const updateProfile = async (req, res) => {
   try {
-    const { password, email, hospital_id, patient_id, ...updates } = req.body;
+    const { fullName, dob, gender, mobile, address, bloodGroup, profileImage } = req.body;
+
+    const updates = {};
+    if (fullName !== undefined) updates.full_name = fullName;
+    if (dob !== undefined) updates.dob = dob;
+    if (gender !== undefined) updates.gender = gender;
+    if (mobile !== undefined) updates.phone = mobile;
+    if (address !== undefined) updates.address = address;
+    if (bloodGroup !== undefined) updates.blood_group = bloodGroup;
+
+    if (profileImage !== undefined) {
+      if (profileImage && profileImage.startsWith('data:image/')) {
+        const matches = profileImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          const extension = contentType.split('/')[1] || 'jpg';
+          const fileName = `avatar-${req.user.id}-${Date.now()}.${extension}`;
+          
+          const s3Bucket = process.env.AWS_S3_BUCKET;
+          const s3AccessKey = process.env.AWS_ACCESS_KEY_ID;
+          const s3SecretKey = process.env.AWS_SECRET_ACCESS_KEY;
+          const s3Region = process.env.AWS_REGION || 'ap-south-1';
+
+          const hasS3Config = s3Bucket && s3AccessKey && s3SecretKey && 
+                              s3AccessKey !== 'your_access_key' && 
+                              s3SecretKey !== 'your_secret_key';
+
+          if (hasS3Config) {
+            try {
+              const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+              const s3Client = new S3Client({
+                region: s3Region,
+                credentials: {
+                  accessKeyId: s3AccessKey,
+                  secretAccessKey: s3SecretKey,
+                },
+              });
+
+              const s3Key = `hospitals/${req.hospitalId || req.user.hospital_id}/patients/${req.user.id}/${fileName}`;
+
+              await s3Client.send(new PutObjectCommand({
+                Bucket: s3Bucket,
+                Key: s3Key,
+                Body: buffer,
+                ContentType: contentType,
+              }));
+
+              updates.profile_image = `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${s3Key}`;
+              console.log(`Uploaded patient avatar to S3: ${updates.profile_image}`);
+            } catch (s3Err) {
+              console.error('Failed to upload patient avatar to S3, falling back to local storage:', s3Err);
+              updates.profile_image = await saveBase64Locally(req, profileImage, fileName);
+            }
+          } else {
+            console.log('AWS S3 not configured, storing patient avatar locally.');
+            updates.profile_image = await saveBase64Locally(req, profileImage, fileName);
+          }
+        }
+      } else {
+        updates.profile_image = profileImage;
+      }
+    }
+
     await req.user.update(updates);
     const { password: _, ...patientData } = req.user.toJSON();
-    res.json({ success: true, user: patientData, message: 'Profile updated successfully' });
+    patientData.fullName = patientData.full_name;
+    patientData.mobile = patientData.phone;
+    patientData.bloodGroup = patientData.blood_group;
+    patientData.profileImage = patientData.profile_image;
+    patientData._id = patientData.id;
+    
+    res.json({ success: true, user: patientData, profile: patientData, message: 'Profile updated successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -444,6 +552,13 @@ const verifyOtp = async (req, res) => {
 
     const token = generateToken(patient);
     const { password: _, ...patientData } = patient.toJSON();
+    
+    // Map database fields to the names the frontend expects
+    patientData.fullName = patientData.full_name;
+    patientData.mobile = patientData.phone;
+    patientData.bloodGroup = patientData.blood_group;
+    patientData.profileImage = patientData.profile_image;
+    patientData._id = patientData.id;
 
     res.json({ success: true, token, user: patientData });
   } catch (error) {

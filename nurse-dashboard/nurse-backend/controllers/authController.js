@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const { masterDb } = require('../services/databaseResolver');
 const { loginOtpStore } = require('./forgotPasswordController');
+const fs = require('fs');
+const path = require('path');
 
 const isValidLoginOtp = (email, otp) => {
   const record = loginOtpStore.get(email.toLowerCase());
@@ -197,7 +199,10 @@ const login = async (req, res) => {
     }
 
     const token = generateToken(user);
-    const { password: _, ...userData } = user.toJSON();
+    const userData = user.toJSON();
+    delete userData.password;
+    userData.avatar = userData.profile_image || '';
+    userData.profileImage = userData.profile_image || '';
     res.json({ success: true, token, user: userData });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -207,7 +212,10 @@ const login = async (req, res) => {
 // GET /api/auth/profile
 const getProfile = async (req, res) => {
   try {
-    const { password: _, ...userData } = req.user.toJSON();
+    const userData = req.user.toJSON();
+    delete userData.password;
+    userData.avatar = userData.profile_image || '';
+    userData.profileImage = userData.profile_image || '';
     res.json({ success: true, data: { user: userData } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -218,12 +226,91 @@ const getProfile = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const { password, role, hospital_id, ...updates } = req.body;
+
+    let profileImage = updates.avatar || updates.profileImage;
+    if (profileImage && profileImage.startsWith('data:image/')) {
+      const matches = profileImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const contentType = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        const extension = contentType.split('/')[1] || 'jpg';
+        const fileName = `avatar-${req.user.id}-${Date.now()}.${extension}`;
+        
+        const s3Bucket = process.env.AWS_S3_BUCKET;
+        const s3AccessKey = process.env.AWS_ACCESS_KEY_ID;
+        const s3SecretKey = process.env.AWS_SECRET_ACCESS_KEY;
+        const s3Region = process.env.AWS_REGION || 'ap-south-1';
+
+        const hasS3Config = s3Bucket && s3AccessKey && s3SecretKey && 
+                            s3AccessKey !== 'your_access_key' && 
+                            s3SecretKey !== 'your_secret_key';
+
+        if (hasS3Config) {
+          try {
+            const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+            const s3Client = new S3Client({
+              region: s3Region,
+              credentials: {
+                accessKeyId: s3AccessKey,
+                secretAccessKey: s3SecretKey,
+              },
+            });
+
+            const s3Key = `hospitals/${req.hospitalId || req.user.hospital_id}/nurses/${req.user.id}/${fileName}`;
+
+            await s3Client.send(new PutObjectCommand({
+              Bucket: s3Bucket,
+              Key: s3Key,
+              Body: buffer,
+              ContentType: contentType,
+            }));
+
+            updates.profile_image = `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${s3Key}`;
+            console.log(`Uploaded nurse avatar to S3: ${updates.profile_image}`);
+          } catch (s3Err) {
+            console.error('Failed to upload nurse avatar to S3, falling back to local storage:', s3Err);
+            updates.profile_image = await saveBase64Locally(req, profileImage, fileName);
+          }
+        } else {
+          console.log('AWS S3 not configured, storing nurse avatar locally.');
+          updates.profile_image = await saveBase64Locally(req, profileImage, fileName);
+        }
+      }
+    } else if (profileImage !== undefined) {
+      updates.profile_image = profileImage;
+    }
+
+    // Clean unmapped/virtual fields before Sequelize update
+    delete updates.avatar;
+    delete updates.profileImage;
+
     await req.user.update(updates);
-    const { password: _, ...userData } = req.user.toJSON();
+    const userData = req.user.toJSON();
+    delete userData.password;
+    userData.avatar = userData.profile_image || '';
+    userData.profileImage = userData.profile_image || '';
     res.json({ success: true, user: userData, data: { user: userData }, message: 'Profile updated successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+};
+
+const saveBase64Locally = async (req, base64Data, fileName) => {
+  const matches = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 image data format');
+  }
+  const buffer = Buffer.from(matches[2], 'base64');
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  const filePath = path.join(uploadsDir, fileName);
+  await fs.promises.writeFile(filePath, buffer);
+  
+  const protocol = req.protocol;
+  const host = req.get('host');
+  return `${protocol}://${host}/uploads/${fileName}`;
 };
 
 // PUT /api/auth/change-password

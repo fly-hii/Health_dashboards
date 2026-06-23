@@ -84,10 +84,14 @@ export default function App() {
         transports: ['websocket', 'polling']
       });
 
-      socket.emit('join', profile._id);
-
       socket.on('connect', () => {
         console.log('🔌 Connected to Socket.IO server');
+        socket.emit('join_patient', profile.id || profile._id);
+        const hospitalId = profile.hospital_id || profile.hospitalId;
+        if (hospitalId) {
+          socket.emit('join_hospital', hospitalId);
+          console.log(`🏥 Joined hospital room: hospital_${hospitalId}`);
+        }
       });
 
       socket.on('appointment_confirmed', (data) => {

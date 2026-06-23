@@ -37,7 +37,7 @@ export default function HistoryView({ history }) {
                   <div className="card timeline-entry-card text-left">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="entry-doctor font-semibold">{item.doctor}</h4>
+                        <h4 className="entry-doctor font-semibold">{item.doctorName || item.doctor}</h4>
                         <span className="entry-dept-badge">{item.department}</span>
                       </div>
                       <button 
@@ -78,7 +78,7 @@ export default function HistoryView({ history }) {
                 </div>
                 <div className="receipt-row-history">
                   <span className="lbl font-medium text-muted">Consulting Doctor</span>
-                  <span className="val font-semibold">{selectedEntry.doctor}</span>
+                  <span className="val font-semibold">{selectedEntry.doctorName || selectedEntry.doctor}</span>
                 </div>
                 <div className="receipt-row-history">
                   <span className="lbl font-medium text-muted">Specialty Department</span>

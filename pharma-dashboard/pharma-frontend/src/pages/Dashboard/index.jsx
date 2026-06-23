@@ -27,25 +27,42 @@ export default function Dashboard() {
     revenue: 0
   });
   const [recentOrders, setRecentOrders] = useState([]);
+  const [lineData, setLineData] = useState([]);
+  const [trendLoading, setTrendLoading] = useState(true);
 
   const fetchStats = async () => {
     try {
-      const res = await api.get('/api/orders/stats/dashboard');
-      setStats(res.data);
-      
-      const ordersRes = await api.get('/api/orders?limit=5');
-      setRecentOrders(ordersRes.data.slice(0, 5));
+      const [statsRes, ordersRes] = await Promise.all([
+        api.get('/api/orders/stats/dashboard'),
+        api.get('/api/orders?limit=5'),
+      ]);
+      setStats(statsRes.data);
+      setRecentOrders((ordersRes.data || []).slice(0, 5));
     } catch (error) {
       console.error('Failed to fetch dashboard stats', error);
     }
   };
 
+  const fetchTrend = async () => {
+    setTrendLoading(true);
+    try {
+      const res = await api.get('/api/orders/stats/daily-trend');
+      setLineData(res.data || []);
+    } catch (error) {
+      console.error('Failed to fetch daily trend', error);
+    } finally {
+      setTrendLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
+    fetchTrend();
     
     socket.connect();
     socket.on('orderStatusUpdated', () => {
       fetchStats();
+      fetchTrend();
     });
 
     return () => {
@@ -61,15 +78,6 @@ export default function Dashboard() {
     { name: 'Delivered', value: stats.deliveredOrders },
   ];
 
-  const lineData = [
-    { name: '01 May', orders: 12 },
-    { name: '02 May', orders: 19 },
-    { name: '03 May', orders: 15 },
-    { name: '04 May', orders: 22 },
-    { name: '05 May', orders: 28 },
-    { name: '06 May', orders: 25 },
-    { name: '07 May', orders: 32 },
-  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -125,17 +133,25 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 lg:col-span-2 hover:shadow-md transition-shadow">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Daily Order Trend</h3>
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Daily Order Trend <span className="text-xs font-medium text-gray-400 ml-1">(Last 7 days)</span></h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height={256}>
-              <LineChart data={lineData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} dx={-10} />
-                <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                <Line type="monotone" dataKey="orders" stroke="#0F766E" strokeWidth={3} dot={{r: 4, fill: '#0F766E'}} activeDot={{r: 6}} />
-              </LineChart>
-            </ResponsiveContainer>
+            {trendLoading ? (
+              <div className="w-full h-full flex items-end gap-3 px-2 pb-4">
+                {[40, 65, 50, 80, 55, 70, 90].map((h, i) => (
+                  <div key={i} className="flex-1 bg-gray-100 rounded-t animate-pulse" style={{ height: `${h}%` }} />
+                ))}
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={256}>
+                <LineChart data={lineData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#6B7280', fontSize: 12}} dx={-10} allowDecimals={false} />
+                  <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value) => [value, 'Orders']} />
+                  <Line type="monotone" dataKey="orders" stroke="#0F766E" strokeWidth={3} dot={{r: 4, fill: '#0F766E'}} activeDot={{r: 6}} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -200,7 +216,13 @@ export default function Dashboard() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {format(new Date(order.createdAt), 'hh:mm a')}
+                    {(() => {
+                      try {
+                        return order.createdAt ? format(new Date(order.createdAt), 'hh:mm a') : 'N/A';
+                      } catch (e) {
+                        return 'N/A';
+                      }
+                    })()}
                   </td>
                 </tr>
               ))}

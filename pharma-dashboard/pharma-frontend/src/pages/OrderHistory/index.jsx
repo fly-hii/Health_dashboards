@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, Calendar, RotateCcw } from 'lucide-react';
 import api from '../../services/api';
 import { format } from 'date-fns';
+import { socket } from '../../sockets/socket';
 
 export default function OrderHistory() {
   const [orders, setOrders] = useState([]);
@@ -12,8 +13,8 @@ export default function OrderHistory() {
   const todayStr = new Date().toISOString().split('T')[0];
   const ninetyDaysAgoStr = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // Filters state
-  const [statusFilter, setStatusFilter] = useState('All Status');
+  // Filters state - default to showing Delivered orders (order history = completed orders)
+  const [statusFilter, setStatusFilter] = useState('Delivered');
   const [startDate, setStartDate] = useState(ninetyDaysAgoStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -22,20 +23,35 @@ export default function OrderHistory() {
   const [appliedStartDate, setAppliedStartDate] = useState(ninetyDaysAgoStr);
   const [appliedEndDate, setAppliedEndDate] = useState(todayStr);
 
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Fetch only Delivered orders from the backend
+      const res = await api.get('/api/orders?status=Delivered');
+      setOrders(res.data || []);
+    } catch (error) {
+      console.error('Failed to fetch history', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get('/api/orders');
-        setOrders(res.data || []);
-      } catch (error) {
-        console.error('Failed to fetch history', error);
-      } finally {
-        setLoading(false);
+    fetchOrders();
+
+    // Listen for real-time status updates — refresh when any order becomes Delivered
+    socket.connect();
+    const handleStatusUpdate = (updatedOrder) => {
+      if (updatedOrder?.status === 'Delivered') {
+        fetchOrders();
       }
     };
-    fetchOrders();
-  }, []);
+    socket.on('orderStatusUpdated', handleStatusUpdate);
+
+    return () => {
+      socket.off('orderStatusUpdated', handleStatusUpdate);
+    };
+  }, [fetchOrders]);
 
   const handleApplyFilters = () => {
     setAppliedStartDate(startDate);
@@ -44,7 +60,7 @@ export default function OrderHistory() {
   };
 
   const handleResetFilters = () => {
-    setStatusFilter('All Status');
+    setStatusFilter('Delivered');
     setStartDate(ninetyDaysAgoStr);
     setEndDate(todayStr);
     setAppliedStartDate(ninetyDaysAgoStr);

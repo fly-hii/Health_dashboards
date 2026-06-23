@@ -21,7 +21,7 @@ export default function PrescriptionQueue() {
   const ninetyDaysAgoStr = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   // Filters state
-  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [statusFilter, setStatusFilter] = useState('Pending');
   const [startDate, setStartDate] = useState(ninetyDaysAgoStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -122,7 +122,7 @@ export default function PrescriptionQueue() {
   const handleResetFilters = () => {
     const today = new Date().toISOString().split('T')[0];
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    setStatusFilter('All Status');
+    setStatusFilter('Pending');
     setStartDate(ninetyDaysAgo);
     setEndDate(today);
     setSearchTerm('');

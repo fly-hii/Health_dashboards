@@ -90,7 +90,7 @@ export default function TokensView({ token: initialToken, pastTokens: initialPas
 
   // Socket.IO real-time events
   useEffect(() => {
-    if (!user?._id) return;
+    if (!user?.id && !user?._id) return;
     const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
     const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : 'http://localhost:5050';
     const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
@@ -99,7 +99,11 @@ export default function TokensView({ token: initialToken, pastTokens: initialPas
       transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
-    socket.emit('join', user._id);
+    socket.emit('join_patient', user.id || user._id);
+    const hospitalId = user.hospital_id || user.hospitalId;
+    if (hospitalId) {
+      socket.emit('join_hospital', hospitalId);
+    }
 
     socket.on('TOKEN_CREATED',      (data) => { showToast(`Token ${data.tokenNumber} generated for ${data.department}!`, 'success'); refreshTokenData(); });
     socket.on('token_generated',    ()     => refreshTokenData());

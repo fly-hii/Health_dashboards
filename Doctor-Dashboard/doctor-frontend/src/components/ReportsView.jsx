@@ -204,7 +204,7 @@ export default function ReportsView() {
         api.getPatients()
       ]);
       if (repRes.success) {
-        setReports(repRes.reports);
+        setReports(repRes.data || repRes.reports || []);
       }
       if (patRes.success) {
         setPatients(patRes.patients);
@@ -355,7 +355,7 @@ export default function ReportsView() {
         // Refresh local reports
         const repRes = await api.getReportsV3();
         if (repRes.success) {
-          setReports(repRes.reports);
+          setReports(repRes.data || repRes.reports || []);
         }
       }
     } catch (err) {
@@ -388,7 +388,7 @@ export default function ReportsView() {
   };
 
   // Filtering reports
-  const filteredReports = reports.filter(rep => {
+  const filteredReports = Array.isArray(reports) ? reports.filter(rep => {
     // 1. Patient matching
     const repPatientId = rep.patientId || rep.patient?._id || rep.patient;
     if (selectedPatientId && repPatientId?.toString() !== selectedPatientId) return false;
@@ -416,9 +416,9 @@ export default function ReportsView() {
     if (typeFilter !== 'all' && rep.reportType !== typeFilter) return false;
 
     return true;
-  });
+  }) : [];
 
-  const selectedPatientObj = patients.find(p => p._id === selectedPatientId);
+  const selectedPatientObj = patients.find(p => p._id?.toString() === selectedPatientId?.toString());
 
   // Skeleton grid helper
   const renderSkeletons = () => (

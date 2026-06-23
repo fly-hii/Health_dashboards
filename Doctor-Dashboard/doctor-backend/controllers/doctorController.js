@@ -2,6 +2,8 @@ const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { loginOtpStore } = require('./forgotPasswordController');
+const fs = require('fs');
+const path = require('path');
 
 const isValidLoginOtp = (email, otp) => {
   const record = loginOtpStore.get(email.toLowerCase());
@@ -319,9 +321,25 @@ const getDashboardChart = async (req, res) => {
 // GET /api/doctor/patients
 const getPatients = async (req, res) => {
   try {
-    const { Patient } = req.models;
-    const patients = await Patient.findAll({
+    const { Patient, Appointment } = req.models;
+
+    // Fetch unique patient IDs from appointments in this hospital
+    const appointments = await Appointment.findAll({
       where: { hospital_id: req.hospitalId },
+      attributes: ['patient_id'],
+      raw: true
+    });
+    const patientIdsFromAppointments = [...new Set(appointments.map(a => a.patient_id).filter(Boolean))];
+
+    const orConditions = [{ hospital_id: req.hospitalId }];
+    if (patientIdsFromAppointments.length > 0) {
+      orConditions.push({ id: { [Op.in]: patientIdsFromAppointments } });
+    }
+
+    const patients = await Patient.findAll({
+      where: {
+        [Op.or]: orConditions
+      },
       order: [['full_name', 'ASC']],
     });
 
@@ -369,7 +387,7 @@ const getPatientQueue = async (req, res) => {
         hospital_id: req.hospitalId,
         doctor_id: req.user.id,
         date_time: { [Op.between]: [today, todayEnd] },
-        status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] },
+        status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress', 'Completed'] },
       },
       include: [
         { model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id', 'phone', 'gender', 'dob', 'blood_group'] },
@@ -397,8 +415,21 @@ const getPatientQueue = async (req, res) => {
 // GET /api/patients/:id
 const getPatientById = async (req, res) => {
   try {
-    const { Patient } = req.models;
-    const patient = await Patient.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
+    const { Patient, Appointment } = req.models;
+
+    // Check if patient has any appointment in this hospital
+    const appt = await Appointment.findOne({
+      where: {
+        patient_id: req.params.id,
+        hospital_id: req.hospitalId
+      }
+    });
+
+    const whereClause = appt
+      ? { id: req.params.id }
+      : { id: req.params.id, hospital_id: req.hospitalId };
+
+    const patient = await Patient.findOne({ where: whereClause });
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
     res.json({ success: true, data: patient });
   } catch (error) {
@@ -569,7 +600,7 @@ const savePrescription = async (req, res) => {
 // PATCH /api/consultations/:id/complete
 const completeConsultation = async (req, res) => {
   try {
-    const { Consultation, Appointment, AuditLog, Prescription, PrescriptionMedicine, LabTest } = req.models;
+    const { Consultation, Appointment, AuditLog, Prescription, PrescriptionMedicine, LabTest, PharmacyOrder } = req.models;
     const consultation = await Consultation.findOne({
       where: {
         hospital_id: req.hospitalId,
@@ -628,6 +659,22 @@ const completeConsultation = async (req, res) => {
             quantity: m.quantity || 1,
           }))
         );
+      }
+
+      // Automatically create a PharmacyOrder for the newly completed prescription
+      let order = await PharmacyOrder.findOne({ where: { prescription_id: prescription.id, hospital_id: req.hospitalId } });
+      if (!order) {
+        const appointmentObj = await Appointment.findByPk(consultation.appointment_id);
+        const tokenNumberStr = appointmentObj ? (appointmentObj.token_number ? `T-${appointmentObj.token_number}` : '') : '';
+        await PharmacyOrder.create({
+          hospital_id: req.hospitalId,
+          prescription_id: prescription.id,
+          patient_id: consultation.patient_id,
+          status: 'Pending',
+          total_amount: 0,
+          payment_status: 'Unpaid',
+          notes: tokenNumberStr || `T-${consultation.appointment_id}`
+        });
       }
     }
 
@@ -841,7 +888,11 @@ const getDoctorProfile = async (req, res) => {
   try {
     const { User } = req.models;
     const doctor = await User.findByPk(req.user.id, { attributes: { exclude: ['password'] } });
-    res.json({ success: true, data: doctor });
+    if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+    const doctorJson = doctor.toJSON();
+    doctorJson.avatar = doctorJson.profile_image || '';
+    doctorJson.profileImage = doctorJson.profile_image || '';
+    res.json({ success: true, data: doctorJson });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -853,13 +904,104 @@ const updateDoctorProfile = async (req, res) => {
     const { User } = req.models;
     // Strip fields that must never be changed via this endpoint
     const { password, role, hospital_id, ...updates } = req.body;
+    
+    // Convert avatar or profileImage from req.body if sent, to profile_image
+    if (updates.avatar) updates.profile_image = updates.avatar;
+    if (updates.profileImage) updates.profile_image = updates.profileImage;
+
     // hospital_id in WHERE ensures a doctor can only update their own hospital-scoped record
     await User.update(updates, { where: { id: req.user.id, hospital_id: req.hospitalId } });
     const updated = await User.findByPk(req.user.id, { attributes: { exclude: ['password'] } });
-    res.json({ success: true, data: updated });
+    if (!updated) return res.status(404).json({ success: false, message: 'Doctor not found' });
+    const updatedJson = updated.toJSON();
+    updatedJson.avatar = updatedJson.profile_image || '';
+    updatedJson.profileImage = updatedJson.profile_image || '';
+    res.json({ success: true, data: updatedJson, profile: updatedJson });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+};
+
+// POST /api/doctors/upload-avatar
+const uploadDoctorAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const { User } = req.models;
+    const doctorId = req.user.id;
+    const hospitalId = req.hospitalId;
+
+    // Get file info
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    const fileName = `avatar-${doctorId}-${Date.now()}${ext}`;
+
+    let imageUrl = '';
+
+    // Check S3 config
+    const s3Bucket = process.env.AWS_S3_BUCKET;
+    const s3AccessKey = process.env.AWS_ACCESS_KEY_ID;
+    const s3SecretKey = process.env.AWS_SECRET_ACCESS_KEY;
+    const s3Region = process.env.AWS_REGION || 'ap-south-1';
+
+    const hasS3Config = s3Bucket && s3AccessKey && s3SecretKey && 
+                        s3AccessKey !== 'your_access_key' && 
+                        s3SecretKey !== 'your_secret_key';
+
+    if (hasS3Config) {
+      try {
+        const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+        const s3Client = new S3Client({
+          region: s3Region,
+          credentials: {
+            accessKeyId: s3AccessKey,
+            secretAccessKey: s3SecretKey,
+          },
+        });
+
+        const s3Key = `hospitals/${hospitalId}/doctors/${doctorId}/${fileName}`;
+
+        await s3Client.send(new PutObjectCommand({
+          Bucket: s3Bucket,
+          Key: s3Key,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+        }));
+
+        imageUrl = `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${s3Key}`;
+        console.log(`Uploaded doctor avatar to S3: ${imageUrl}`);
+      } catch (s3Err) {
+        console.error('Failed to upload doctor avatar to S3, falling back to local storage:', s3Err);
+        imageUrl = await saveFileLocally(req, fileName);
+      }
+    } else {
+      console.log('AWS S3 not fully configured or contains placeholders, storing doctor avatar locally.');
+      imageUrl = await saveFileLocally(req, fileName);
+    }
+
+    // Update user in DB
+    await User.update({ profile_image: imageUrl }, { where: { id: doctorId, hospital_id: hospitalId } });
+
+    res.json({ success: true, imageUrl });
+  } catch (error) {
+    console.error('Doctor avatar upload controller error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const saveFileLocally = async (req, fileName) => {
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  const filePath = path.join(uploadsDir, fileName);
+  await fs.promises.writeFile(filePath, req.file.buffer);
+  
+  // Return the full local URL
+  const protocol = req.protocol;
+  const host = req.get('host');
+  return `${protocol}://${host}/uploads/${fileName}`;
 };
 
 // PUT /api/doctors/change-password
@@ -949,4 +1091,5 @@ module.exports = {
   updateDoctorProfile,
   changeDoctorPassword,
   callPatient,
+  uploadDoctorAvatar,
 };

@@ -148,7 +148,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
           <div className="mt-4 flex flex-col text-left">
             <span className="text-3xl font-bold text-[#0B1F3A]">{loading ? '—' : stats.patientsInQueue}</span>
             <button 
-              onClick={() => setActiveTab('queue')}
+              onClick={() => setActiveTab('consultations')}
               className="text-xs font-bold text-[#0F9D8A] hover:underline mt-2 text-left"
             >
               View Queue
@@ -167,7 +167,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
           <div className="mt-4 flex flex-col text-left">
             <span className="text-3xl font-bold text-[#0B1F3A]">{loading ? '—' : stats.todayConsultations}</span>
             <button 
-              onClick={() => setActiveTab('queue')}
+              onClick={() => setActiveTab('consultations')}
               className="text-xs font-bold text-[#0F9D8A] hover:underline mt-2 text-left"
             >
               View All
@@ -205,7 +205,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
           <div className="mt-4 flex flex-col text-left">
             <span className="text-3xl font-bold text-[#0B1F3A]">{loading ? '—' : stats.followUps}</span>
             <button 
-              onClick={() => setActiveTab('queue')}
+              onClick={() => setActiveTab('consultations')}
               className="text-xs font-bold text-[#0F9D8A] hover:underline mt-2 text-left"
             >
               View All
@@ -259,7 +259,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
 
           <div className="pt-4 border-t border-[#F1F5F9] mt-auto">
             <button 
-              onClick={() => setActiveTab('queue')}
+              onClick={() => setActiveTab('consultations')}
               className="text-sm font-bold text-[#005AE2] hover:underline"
             >
               View Full Schedule

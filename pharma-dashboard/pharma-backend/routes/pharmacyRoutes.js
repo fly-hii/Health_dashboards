@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { protect } = require('../middleware/authMiddleware');
 const { masterDb } = require('../services/databaseResolver');
 const { decrypt } = require('../services/encryptionService');
@@ -139,10 +141,11 @@ const mapOrderResponse = (order) => {
     medicines: srcMedicines,
     totalAmount: parseFloat(json.total_amount) || 120,
     paidAmount: json.payment_status === 'Paid' ? (parseFloat(json.total_amount) || 120) : 0,
+    // Sequelize aliases: created_at → createdAt, updated_at → updatedAt in toJSON()
     startedAt: json.processed_at,
-    readyAt: json.updated_at,
+    readyAt: json.updatedAt,
     deliveredAt: json.delivered_at,
-    createdAt: json.created_at,
+    createdAt: json.createdAt,
   };
 };
 
@@ -542,11 +545,85 @@ router.put('/profile', protect, async (req, res) => {
   }
 });
 
+const saveBase64Locally = async (req, base64Data, fileName) => {
+  const matches = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 image data format');
+  }
+  const buffer = Buffer.from(matches[2], 'base64');
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  const filePath = path.join(uploadsDir, fileName);
+  await fs.promises.writeFile(filePath, buffer);
+  
+  const protocol = req.protocol;
+  const host = req.get('host');
+  return `${protocol}://${host}/uploads/${fileName}`;
+};
+
 router.post('/profile/photo', protect, async (req, res) => {
   try {
     const { photoUrl } = req.body;
-    await req.user.update({ profile_image: photoUrl });
-    res.json({ success: true, message: 'Photo updated' });
+    
+    let imageUrl = '';
+    if (photoUrl && photoUrl.startsWith('data:image/')) {
+      const matches = photoUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const contentType = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        const extension = contentType.split('/')[1] || 'jpg';
+        const fileName = `avatar-${req.user.id}-${Date.now()}.${extension}`;
+        
+        const s3Bucket = process.env.AWS_S3_BUCKET;
+        const s3AccessKey = process.env.AWS_ACCESS_KEY_ID;
+        const s3SecretKey = process.env.AWS_SECRET_ACCESS_KEY;
+        const s3Region = process.env.AWS_REGION || 'ap-south-1';
+
+        const hasS3Config = s3Bucket && s3AccessKey && s3SecretKey && 
+                            s3AccessKey !== 'your_access_key' && 
+                            s3SecretKey !== 'your_secret_key';
+
+        if (hasS3Config) {
+          try {
+            const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+            const s3Client = new S3Client({
+              region: s3Region,
+              credentials: {
+                accessKeyId: s3AccessKey,
+                secretAccessKey: s3SecretKey,
+              },
+            });
+
+            const s3Key = `hospitals/${req.hospitalId || req.user.hospital_id}/pharmacists/${req.user.id}/${fileName}`;
+
+            await s3Client.send(new PutObjectCommand({
+              Bucket: s3Bucket,
+              Key: s3Key,
+              Body: buffer,
+              ContentType: contentType,
+            }));
+
+            imageUrl = `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${s3Key}`;
+            console.log(`Uploaded pharmacy avatar to S3: ${imageUrl}`);
+          } catch (s3Err) {
+            console.error('Failed to upload pharmacy avatar to S3, falling back to local storage:', s3Err);
+            imageUrl = await saveBase64Locally(req, photoUrl, fileName);
+          }
+        } else {
+          console.log('AWS S3 not configured, storing pharmacy avatar locally.');
+          imageUrl = await saveBase64Locally(req, photoUrl, fileName);
+        }
+      } else {
+        imageUrl = photoUrl;
+      }
+    } else {
+      imageUrl = photoUrl;
+    }
+
+    await req.user.update({ profile_image: imageUrl });
+    res.json({ success: true, profilePhoto: imageUrl, message: 'Photo updated' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -57,11 +57,17 @@ io.on('connection', (socket) => {
   console.log(`🔌 Patient socket: ${socket.id}`);
 
   // Patient joins their own room + hospital room
+  socket.on('join', (patientId) => {
+    socket.join(`patient_${patientId}`);
+    console.log(`🔌 Patient socket: ${socket.id} joined patient_${patientId} via join event`);
+  });
   socket.on('join_patient', (patientId) => {
     socket.join(`patient_${patientId}`);
+    console.log(`🔌 Patient socket: ${socket.id} joined patient_${patientId} via join_patient event`);
   });
   socket.on('join_hospital', (hospitalId) => {
     socket.join(`hospital_${hospitalId}`);
+    console.log(`🏥 Patient socket: ${socket.id} joined hospital_${hospitalId}`);
   });
   socket.on('disconnect', () => {
     console.log(`🔌 Patient socket disconnected: ${socket.id}`);
@@ -104,6 +110,14 @@ const notifyNurse = (data) => {
 };
 
 // ── Middleware ──────────────────────────────────────────────
+const path = require('path');
+const fs = require('fs');
+
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
@@ -116,6 +130,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use('/uploads', express.static(uploadsDir));
 
 // ────────────────────────────────────────────────────────────
 // AUTH ROUTES
@@ -402,6 +417,38 @@ async function getPatientConnectionsAcrossHospitals(email) {
   return results;
 }
 
+// Helper to automatically mark past appointments (date_time < NOW) that are still Pending, Confirmed, or In-Progress as 'No-Show'
+async function autoCancelPastAppointments(patientConns) {
+  const now = new Date();
+  for (const conn of patientConns) {
+    try {
+      const { Appointment, Token } = conn.models;
+      const pastAppts = await Appointment.findAll({
+        where: {
+          hospital_id: conn.hospitalId,
+          patient_id: conn.patientId,
+          date_time: { [Op.lt]: now },
+          status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] }
+        }
+      });
+
+      if (pastAppts.length > 0) {
+        const ids = pastAppts.map(a => a.id);
+        await Appointment.update(
+          { status: 'No-Show', notes: 'Auto-marked as No-Show: Appointment time passed.' },
+          { where: { id: { [Op.in]: ids } } }
+        );
+        await Token.update(
+          { status: 'Cancelled' },
+          { where: { appointment_id: { [Op.in]: ids } } }
+        );
+      }
+    } catch (err) {
+      console.error(`[Auto-Cancel] Error in hospital ${conn.hospitalId}:`, err.message);
+    }
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // APPOINTMENT ROUTES
 // ────────────────────────────────────────────────────────────
@@ -410,6 +457,7 @@ async function getPatientConnectionsAcrossHospitals(email) {
 app.get('/api/appointments', protect, async (req, res) => {
   try {
     const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    await autoCancelPastAppointments(patientConns);
     const allAppointments = [];
 
     for (const conn of patientConns) {
@@ -426,7 +474,7 @@ app.get('/api/appointments', protect, async (req, res) => {
         department: a.department,
         dateTime: a.date_time ? new Date(a.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
         tokenNumber: a.token_number,
-        status: a.status === 'Completed' ? 'Completed' : a.status === 'Cancelled' ? 'Cancelled' : 'Upcoming',
+        status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
         rawStatus: a.status,
       }));
 
@@ -448,6 +496,7 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
     const { search, department, status, startDate, endDate, page = 1, limit = 5 } = req.query;
 
     const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    await autoCancelPastAppointments(patientConns);
     const allRows = [];
 
     for (const conn of patientConns) {
@@ -457,7 +506,7 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
       if (status) {
         if (status.toLowerCase() === 'upcoming') where.status = { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] };
         else if (status.toLowerCase() === 'completed') where.status = 'Completed';
-        else if (status.toLowerCase() === 'cancelled') where.status = 'Cancelled';
+        else if (status.toLowerCase() === 'cancelled') where.status = { [Op.in]: ['Cancelled', 'No-Show'] };
       }
       if (startDate || endDate) {
         where.date_time = {};
@@ -480,7 +529,7 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
         appointmentTime: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
         tokenNumber: a.token_number,
         reason: a.reason || 'Routine checkup',
-        status: a.status === 'Completed' ? 'Completed' : a.status === 'Cancelled' ? 'Cancelled' : 'Upcoming',
+        status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
         rawStatus: a.status,
         createdAt: a.created_at,
         hospitalId: conn.hospitalId,
@@ -514,6 +563,7 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
 app.get('/api/patient/appointments/:id', protect, async (req, res) => {
   try {
     const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    await autoCancelPastAppointments(patientConns);
     let appt = null;
     let activeConn = null;
 
@@ -541,7 +591,7 @@ app.get('/api/patient/appointments/:id', protect, async (req, res) => {
         appointmentDate: appt.date_time ? new Date(appt.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         appointmentTime: appt.date_time ? new Date(appt.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
         tokenNumber: appt.token_number,
-        status: appt.status === 'Completed' ? 'Completed' : appt.status === 'Cancelled' ? 'Cancelled' : 'Upcoming',
+        status: appt.status === 'Completed' ? 'Completed' : (appt.status === 'Cancelled' || appt.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
         rawStatus: appt.status,
         createdAt: appt.created_at,
       },
@@ -824,6 +874,7 @@ app.get('/api/token/current', protect, async (req, res) => {
     const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
 
     const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    await autoCancelPastAppointments(patientConns);
 
     let activeAppt = null;
     let activeModels = null;
@@ -836,7 +887,7 @@ app.get('/api/token/current', protect, async (req, res) => {
           hospital_id: conn.hospitalId,
           patient_id: conn.patientId,
           date_time: { [Op.between]: [today, todayEnd] },
-          status: { [Op.ne]: 'Cancelled' }
+          status: { [Op.notIn]: ['Cancelled', 'No-Show'] }
         },
         include: [
           { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
@@ -861,7 +912,7 @@ app.get('/api/token/current', protect, async (req, res) => {
             hospital_id: conn.hospitalId,
             patient_id: conn.patientId,
             date_time: { [Op.gt]: todayEnd },
-            status: { [Op.notIn]: ['Cancelled', 'Completed'] }
+            status: { [Op.notIn]: ['Cancelled', 'Completed', 'No-Show'] }
           },
           include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
           order: [['date_time', 'ASC']],
@@ -921,6 +972,7 @@ app.post('/api/token/refresh', protect, async (req, res) => {
     const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
 
     const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    await autoCancelPastAppointments(patientConns);
 
     let activeAppt = null;
     let activeModels = null;
@@ -932,7 +984,7 @@ app.post('/api/token/refresh', protect, async (req, res) => {
           hospital_id: conn.hospitalId,
           patient_id: conn.patientId,
           date_time: { [Op.between]: [today, todayEnd] },
-          status: { [Op.ne]: 'Cancelled' }
+          status: { [Op.notIn]: ['Cancelled', 'No-Show'] }
         },
         include: [
           { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
@@ -956,7 +1008,7 @@ app.post('/api/token/refresh', protect, async (req, res) => {
             hospital_id: conn.hospitalId,
             patient_id: conn.patientId,
             date_time: { [Op.gt]: todayEnd },
-            status: { [Op.notIn]: ['Cancelled', 'Completed'] }
+            status: { [Op.notIn]: ['Cancelled', 'Completed', 'No-Show'] }
           },
           include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
           order: [['date_time', 'ASC']],
