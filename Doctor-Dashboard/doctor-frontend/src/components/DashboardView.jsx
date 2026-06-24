@@ -244,8 +244,8 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
                     </td>
                   </tr>
                 ) : (
-                  schedule.map((item) => (
-                    <tr key={item._id} className="hover:bg-slate-50 transition-all">
+                  schedule.map((item, idx) => (
+                    <tr key={item._id || item.id || idx} className="hover:bg-slate-50 transition-all">
                       <td className="py-4 text-sm font-semibold text-[#64748B]">{item.time}</td>
                       <td className="py-4 text-sm font-bold text-[#0B1F3A] pl-4">{item.patientName}</td>
                       <td className="py-4 text-sm font-semibold text-[#64748B] pl-4">{item.visitType}</td>

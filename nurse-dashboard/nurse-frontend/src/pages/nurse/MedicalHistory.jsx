@@ -154,7 +154,7 @@ const MedicalHistory = () => {
       setProfileData(null);
       return;
     }
-    const appt = queuePatients.find(a => a.patient?._id === patientId);
+    const appt = queuePatients.find(a => (a.patient?._id || a.patient?.id) === patientId);
     setSelectedAppt(appt || null);
     setSelectedId(patientId);
     setProfileData(null);
@@ -222,7 +222,7 @@ const MedicalHistory = () => {
         <div className="flex items-center gap-3 shrink-0 self-start">
           {patient && (
             <Button
-              onClick={() => navigate(`/patient/${patient._id}`)}
+              onClick={() => navigate(`/patient/${patient._id || patient.id}`)}
               className="flex items-center gap-1.5 px-4 py-2 bg-[#0EA5A4] hover:bg-[#0F766E] text-white text-xs font-bold rounded-xl shadow-sm cursor-pointer transition-colors"
             >
               <User size={14} strokeWidth={2.5} />
@@ -261,7 +261,7 @@ const MedicalHistory = () => {
               {queuePatients.map((appt, idx) => {
                 const p = appt.patient;
                 return (
-                  <option key={appt._id || idx} value={p?._id}>
+                  <option key={appt._id || appt.id || idx} value={p?._id || p?.id}>
                     {appt.tokenNumber}  ·  {p?.name || 'Unknown'}  ·  {p?.age ? `${p.age}Y` : '—'} / {p?.gender || '—'}  ·  {appt.department}
                   </option>
                 );
@@ -463,7 +463,7 @@ const MedicalHistory = () => {
                       </thead>
                       <tbody className="divide-y divide-[#E5E7EB]">
                         {filteredVisits.map(a => (
-                          <tr key={a._id} className="hover:bg-slate-50/50 transition-colors group">
+                          <tr key={a._id || a.id} className="hover:bg-slate-50/50 transition-colors group">
                             <td className="py-3.5 px-6 text-sm font-bold text-slate-800 whitespace-nowrap">
                               {fmtDate(a.appointmentDate)}
                               {a.appointmentTime && <p className="text-[10px] text-slate-400 font-normal">{a.appointmentTime}</p>}
@@ -488,7 +488,7 @@ const MedicalHistory = () => {
                             <td className="py-3.5 px-6">
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => navigate(`/appointment/${a._id}`)}
+                                  onClick={() => navigate(`/appointment/${a._id || a.id}`)}
                                   className="w-8 h-8 rounded-lg border border-[#E5E7EB] bg-white flex items-center justify-center text-slate-500 hover:text-[#0EA5A4] hover:bg-teal-50/50 hover:border-teal-200 transition-all cursor-pointer"
                                   title="View Appointment"
                                 >
@@ -531,7 +531,7 @@ const MedicalHistory = () => {
                         const bpOk = !v.bloodPressure?.systolic || v.bloodPressure.systolic < 140;
                         const spo2Ok = !v.spo2 || v.spo2 >= 95;
                         return (
-                          <tr key={v._id || idx} className="hover:bg-slate-50/50 transition-colors">
+                          <tr key={v._id || v.id || idx} className="hover:bg-slate-50/50 transition-colors">
                             <td className="py-3.5 px-6 text-sm font-bold text-slate-800 whitespace-nowrap">
                               {fmtDate(v.createdAt)}
                               <p className="text-[10px] text-slate-400 font-normal">

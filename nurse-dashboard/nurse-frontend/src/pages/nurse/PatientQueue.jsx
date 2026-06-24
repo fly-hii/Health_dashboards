@@ -439,7 +439,7 @@ const PatientQueue = () => {
                         ? new Date(appt.appointmentDate) > new Date()
                         : false;
                       return (
-                        <tr key={appt._id} className="hover:bg-slate-50/50 transition-colors group">
+                        <tr key={appt._id || appt.id} className="hover:bg-slate-50/50 transition-colors group">
                           {/* Token Number */}
                           <td className="py-4 px-6 text-sm font-bold text-[#0EA5A4] font-mono">
                             {appt.tokenNumber || '—'}
@@ -481,7 +481,7 @@ const PatientQueue = () => {
                             <div className="flex items-center gap-2">
                               {/* View */}
                               <button
-                                onClick={() => navigate(`/appointment/${appt._id}`)}
+                                onClick={() => navigate(`/appointment/${appt._id || appt.id}`)}
                                 className="w-8 h-8 rounded-lg border border-[#E5E7EB] bg-white flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors outline-none cursor-pointer"
                                 title="View Patient"
                               >
@@ -500,7 +500,7 @@ const PatientQueue = () => {
                               {/* Vitals */}
                               {(appt.status === 'checked_in' || appt.status === 'waiting_for_vitals' || appt.status === 'waiting') && (
                                 <button
-                                  onClick={() => navigate(`/vitals/${appt._id}`)}
+                                  onClick={() => navigate(`/vitals/${appt._id || appt.id}`)}
                                   className="w-8 h-8 rounded-lg border border-teal-200 bg-teal-50/50 flex items-center justify-center text-[#0EA5A4] hover:text-white hover:bg-[#0EA5A4] transition-colors outline-none cursor-pointer"
                                   title="Send to Vitals"
                                 >

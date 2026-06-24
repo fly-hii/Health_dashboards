@@ -128,30 +128,33 @@ export default function PatientMedicalHistory({ patientId, onBack, onViewRecord 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F1F5F9]">
-                  {records.map((record) => (
-                    <tr key={record._id} className="hover:bg-slate-50 transition-all">
-                      <td className="py-5 text-sm font-bold text-[#0B1F3A]">
-                        {format(new Date(record.visitDate), 'dd MMM yyyy')}
-                      </td>
-                      <td className="py-5 pl-4 font-bold text-[#0B1F3A] text-sm">
-                        Dr. {record.doctorId?.name || 'Unknown'}
-                      </td>
-                      <td className="py-5 pl-4 text-sm font-bold text-[#0B1F3A]">
-                        {record.department}
-                      </td>
-                      <td className="py-5 pl-4 text-sm font-bold text-[#0B1F3A] max-w-[200px] truncate">
-                        {record.diagnosis || '—'}
-                      </td>
-                      <td className="py-5 pl-4 text-right pr-4">
-                        <button
-                          onClick={() => onViewRecord(record._id)}
-                          className="font-bold text-[#0F9D8A] hover:text-[#0c8776] text-sm"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {records.map((record) => {
+                    const recId = record._id || record.id;
+                    return (
+                      <tr key={recId} className="hover:bg-slate-50 transition-all">
+                        <td className="py-5 text-sm font-bold text-[#0B1F3A]">
+                          {format(new Date(record.visitDate), 'dd MMM yyyy')}
+                        </td>
+                        <td className="py-5 pl-4 font-bold text-[#0B1F3A] text-sm">
+                          Dr. {record.doctorId?.name || 'Unknown'}
+                        </td>
+                        <td className="py-5 pl-4 text-sm font-bold text-[#0B1F3A]">
+                          {record.department}
+                        </td>
+                        <td className="py-5 pl-4 text-sm font-bold text-[#0B1F3A] max-w-[200px] truncate">
+                          {record.diagnosis || '—'}
+                        </td>
+                        <td className="py-5 pl-4 text-right pr-4">
+                          <button
+                            onClick={() => onViewRecord(recId)}
+                            className="font-bold text-[#0F9D8A] hover:text-[#0c8776] text-sm"
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

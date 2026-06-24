@@ -50,9 +50,10 @@ export default function PatientQueueView({ onDiagnosePatient, searchQuery = '', 
   // Handle call next or start consultation
   const handleStartConsultation = async (appt) => {
     try {
-      setActionLoadingId(appt._id);
+      const apptId = appt._id || appt.id;
+      setActionLoadingId(apptId);
       // Update status to in_progress in backend
-      await api.callPatient(appt._id);
+      await api.callPatient(apptId);
       // Trigger diagnose callback
       onDiagnosePatient(appt);
     } catch (err) {
@@ -126,7 +127,7 @@ export default function PatientQueueView({ onDiagnosePatient, searchQuery = '', 
     if (filterType === 'in_consultation') return '0 min';
     // waiting wait times: e.g. T-101 has 15 mins, T-102 has 10 mins, T-103 has 5 mins...
     const waitingAppts = filteredQueue.filter(a => getFilterType(a.status) === 'waiting');
-    const waitingIndex = waitingAppts.findIndex(a => a._id === appt._id);
+    const waitingIndex = waitingAppts.findIndex(a => (a._id || a.id) === (appt._id || appt.id));
     if (waitingIndex !== -1) {
       return `${(waitingAppts.length - waitingIndex - 1) * 5 + 5} mins`;
     }
@@ -295,9 +296,10 @@ export default function PatientQueueView({ onDiagnosePatient, searchQuery = '', 
                   const filterType = getFilterType(appt.status);
                   const serialNo = (currentPage - 1) * itemsPerPage + idx + 101;
                   const tokenNo = appt.tokenNumber || `T-${serialNo}`;
+                  const apptId = appt._id || appt.id;
 
                   return (
-                    <tr key={appt._id} className="hover:bg-slate-50 transition-all">
+                    <tr key={apptId} className="hover:bg-slate-50 transition-all">
                       <td className="py-4 font-bold text-[#0B1F3A]">{tokenNo}</td>
                       <td className="py-4 pl-4 font-bold text-[#0B1F3A]">{patient.name || 'Unknown'}</td>
                       <td className="py-4 pl-4 text-sm font-semibold text-[#64748B]">
@@ -313,11 +315,11 @@ export default function PatientQueueView({ onDiagnosePatient, searchQuery = '', 
                       <td className="py-4 pl-4">
                         {filterType === 'waiting' ? (
                           <button
-                            disabled={actionLoadingId === appt._id}
+                            disabled={actionLoadingId === apptId}
                             onClick={() => handleStartConsultation(appt)}
                             className="bg-[#0F9D8A] hover:bg-[#0c8776] text-white text-xs font-bold rounded-xl px-5 py-2 transition-all"
                           >
-                            {actionLoadingId === appt._id ? 'Starting...' : 'Start'}
+                            {actionLoadingId === apptId ? 'Starting...' : 'Start'}
                           </button>
                         ) : (
                           <button

@@ -67,7 +67,7 @@ export default function PatientHistoryView({ patientId, patientName }) {
             });
 
             return (
-              <div key={record._id} className="timeline-item">
+              <div key={record._id || record.id || index} className="timeline-item">
                 <div className="timeline-badge-dot"></div>
                 <div className="timeline-content card">
                   <div className="timeline-meta flex justify-between items-center">

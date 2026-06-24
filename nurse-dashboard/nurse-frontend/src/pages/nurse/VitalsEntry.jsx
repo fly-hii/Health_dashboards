@@ -135,7 +135,7 @@ const VitalsEntry = () => {
 
   const handleEditSave = async (e) => {
     e.preventDefault();
-    if (!selectedPatient?._id) return;
+    if (!selectedPatient?._id && !selectedPatient?.id) return;
     setEditLoading(true);
     try {
       const payload = {
@@ -154,7 +154,7 @@ const VitalsEntry = () => {
           relation: editForm.emergencyRelation,
         },
       };
-      const res = await nurseService.updatePatient(selectedPatient._id, payload);
+      const res = await nurseService.updatePatient(selectedPatient._id || selectedPatient.id, payload);
       setSelectedPatient(res.data.data);
       toast.success('Patient details updated successfully');
       setEditOpen(false);
@@ -191,13 +191,13 @@ const VitalsEntry = () => {
     if (!selectedPatient && !appointment?.patient) { toast.warning('Please select a patient first.'); return; }
     setLoading(true);
     try {
-      const patientId = selectedPatient?._id || appointment?.patient?._id;
-      const apptId    = appointmentId || appointment?._id;
+      const patientId = selectedPatient?._id || selectedPatient?.id || appointment?.patient?._id || appointment?.patient?.id;
+      const apptId    = appointmentId || appointment?._id || appointment?.id;
       const payload   = { patientId, appointmentId: apptId, ...form, isDraft: false };
 
       // 1. Save / update vitals
       if (existingVitals) {
-        await vitalsService.updateVitals(existingVitals._id, { ...form, isDraft: false });
+        await vitalsService.updateVitals(existingVitals._id || existingVitals.id, { ...form, isDraft: false });
       } else {
         await vitalsService.recordVitals(payload);
       }
@@ -265,9 +265,9 @@ const VitalsEntry = () => {
               Select Patient from Queue
             </label>
             <select
-              value={selectedPatient?._id || ''}
+              value={selectedPatient?._id || selectedPatient?.id || ''}
               onChange={e => {
-                const appt = queuePatients.find(a => a.patient?._id === e.target.value);
+                const appt = queuePatients.find(a => (a.patient?._id || a.patient?.id) === e.target.value);
                 if (appt) {
                   setSelectedPatient(appt.patient);
                   setAppointment(appt);
@@ -285,7 +285,7 @@ const VitalsEntry = () => {
                 const pat    = appt.patient;
                 const badge  = getStatusBadge(appt.status);
                 return (
-                  <option key={appt._id || idx} value={pat?._id}>
+                  <option key={appt._id || appt.id || idx} value={pat?._id || pat?.id}>
                     {appt.tokenNumber}  ·  {pat?.name || 'Unknown'}  ·  {pat?.age ? `${pat.age}Y` : '—'} / {pat?.gender || '—'}  ·  {appt.department}  [{badge.label}]
                   </option>
                 );

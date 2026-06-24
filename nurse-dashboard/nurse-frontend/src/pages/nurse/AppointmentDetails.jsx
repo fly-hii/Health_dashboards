@@ -163,7 +163,7 @@ const AppointmentDetails = () => {
 
   /* socket */
   useEffect(() => {
-    if (!user?._id) return;
+    if (!user?._id && !user?.id) return;
     // config.socketUrl is null on Vercel (serverless can't handle WebSockets)
     if (!config.socketUrl) return;
     const socket = io(config.socketUrl, {
@@ -173,12 +173,12 @@ const AppointmentDetails = () => {
       timeout: 5000,
     });
     socketRef.current = socket;
-    socket.emit('join', user._id);
+    socket.emit('join', user._id || user.id);
     socket.on('appointment_status_updated', ({ appointmentId }) => {
       if (String(appointmentId) === String(id)) loadAppt();
     });
     return () => socket.disconnect();
-  }, [user?._id, id]);
+  }, [user?._id, user?.id, id]);
 
   /* send to doctor */
   const handleSendToDoctor = async () => {
@@ -274,9 +274,9 @@ const AppointmentDetails = () => {
         </div>
 
         {/* Full Profile button */}
-        {patient?._id && (
+        {(patient?._id || patient?.id) && (
           <button
-            onClick={() => navigate(`/patient/${patient._id}`)}
+            onClick={() => navigate(`/patient/${patient._id || patient.id}`)}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#0F9D8A] hover:bg-[#0b8a79] text-white text-[13px] font-bold rounded-xl shadow-sm transition-colors cursor-pointer shrink-0"
           >
             <ExternalLink size={14} strokeWidth={2.5} />

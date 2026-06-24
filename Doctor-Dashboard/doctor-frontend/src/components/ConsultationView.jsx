@@ -42,11 +42,11 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
   const [history, setHistory] = useState([]);
   const [reports, setReports] = useState([]);
 
-  // Fetch consultation if it already exists in database
   const fetchConsultation = async () => {
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem('doctor_token')}` };
-      const res = await axios.get(`/api/consultations/${appointment._id}`, { headers });
+      const apptId = appointment._id || appointment.id;
+      const res = await axios.get(`/api/consultations/${apptId}`, { headers });
       if (res.data && res.data.success && res.data.data) {
         const data = res.data.data;
         setStatus(data.status);
@@ -81,9 +81,10 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
   const fetchHistoryAndReports = async () => {
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem('doctor_token')}` };
+      const patientId = patient._id || patient.id;
       const [historyRes, reportsRes] = await Promise.all([
-        axios.get(`/api/patients/${patient._id}/history`, { headers }),
-        axios.get(`/api/patients/${patient._id}/reports`, { headers })
+        axios.get(`/api/patients/${patientId}/history`, { headers }),
+        axios.get(`/api/patients/${patientId}/reports`, { headers })
       ]);
       setHistory(historyRes.data || []);
       setReports(reportsRes.data || []);
@@ -95,14 +96,13 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
   useEffect(() => {
     fetchConsultation();
     fetchHistoryAndReports();
-  }, [appointment._id]);
+  }, [appointment._id, appointment.id]);
 
-  // Start Consultation
   const handleStartConsultation = async () => {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem('doctor_token')}` };
-      const res = await axios.patch(`/api/consultations/${appointment._id}/start`, {}, { headers });
+      const res = await axios.patch(`/api/consultations/${appointment._id || appointment.id}/start`, {}, { headers });
       if (res.data && res.data.success) {
         setStatus('in_consultation');
         // Dispatch event for socket update
@@ -163,7 +163,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
         followUpDate: followUpDate || null
       };
 
-      const res = await axios.patch(`/api/consultations/${appointment._id}/complete`, payload, { headers });
+      const res = await axios.patch(`/api/consultations/${appointment._id || appointment.id}/complete`, payload, { headers });
       if (res.data) {
         window.dispatchEvent(new CustomEvent('dashboard_refresh'));
         onBackToQueue();
@@ -180,7 +180,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${localStorage.getItem('doctor_token')}` };
-      const res = await axios.patch(`/api/consultations/${appointment._id}/notes`, {
+      const res = await axios.patch(`/api/consultations/${appointment._id || appointment.id}/notes`, {
         symptoms,
         diagnosis,
         doctorNotes
@@ -821,7 +821,7 @@ export default function ConsultationView({ appointment, onBackToQueue }) {
         {activeTab === 'reports' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
             {reports.map((report) => (
-              <div key={report._id} className="bg-white border border-[#E5E7EB] rounded-[20px] p-5 shadow-sm flex flex-col justify-between hover:shadow-md transition-all h-[150px]">
+              <div key={report._id || report.id} className="bg-white border border-[#E5E7EB] rounded-[20px] p-5 shadow-sm flex flex-col justify-between hover:shadow-md transition-all h-[150px]">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 bg-[#EFF6FF] rounded-xl flex items-center justify-center text-[#2563EB] shrink-0">
                     <FileText className="w-5 h-5" />

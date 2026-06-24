@@ -73,24 +73,28 @@ export default function TokensView() {
             ) : queue.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No active tokens.</p>
             ) : (
-              queue.map((apt) => (
-                <div 
-                  key={apt._id}
-                  className={`token-item flex justify-between items-center card ${selectedApt?._id === apt._id ? 'active' : ''}`}
-                  onClick={() => setSelectedApt(apt)}
-                  style={{ cursor: 'pointer', padding: '12px' }}
-                >
-                  <div>
-                    <strong>#{apt.tokenNumber}</strong>
-                    <span className="token-patient-name" style={{ display: 'block', fontSize: 13 }}>
-                      {apt.patient?.name}
+              queue.map((apt, idx) => {
+                const aptId = apt._id || apt.id || idx;
+                const isSelected = (selectedApt?._id || selectedApt?.id) === (apt._id || apt.id);
+                return (
+                  <div 
+                    key={aptId}
+                    className={`token-item flex justify-between items-center card ${isSelected ? 'active' : ''}`}
+                    onClick={() => setSelectedApt(apt)}
+                    style={{ cursor: 'pointer', padding: '12px' }}
+                  >
+                    <div>
+                      <strong>#{apt.tokenNumber}</strong>
+                      <span className="token-patient-name" style={{ display: 'block', fontSize: 13 }}>
+                        {apt.patient?.name}
+                      </span>
+                    </div>
+                    <span className={`badge badge-${apt.status}`}>
+                      {apt.status === 'vitals_done' ? 'Ready' : (apt.status || '').replace(/_/g, ' ')}
                     </span>
                   </div>
-                  <span className={`badge badge-${apt.status}`}>
-                    {apt.status === 'vitals_done' ? 'Ready' : (apt.status || '').replace(/_/g, ' ')}
-                  </span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -142,7 +146,9 @@ export default function TokensView() {
                   <div className="token-info-box card flex-1">
                     <span className="info-label">People Ahead</span>
                     <strong>
-                      {queue.findIndex(q => q._id === selectedApt._id) || '0'}
+                      {queue.findIndex(q => (q._id || q.id) === (selectedApt._id || selectedApt.id)) !== -1
+                        ? queue.findIndex(q => (q._id || q.id) === (selectedApt._id || selectedApt.id))
+                        : '0'}
                     </strong>
                   </div>
                 </div>

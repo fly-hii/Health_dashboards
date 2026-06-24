@@ -129,7 +129,8 @@ export default function PrescriptionsView() {
     
     setSaving(true);
     try {
-      const res = await api.updatePrescription(editingPresc._id, {
+      const prescId = editingPresc._id || editingPresc.id;
+      const res = await api.updatePrescription(prescId, {
         medicines: activeMedicines,
         notes: editNotes
       });
