@@ -374,3 +374,15 @@ a {
 .text-right { text-align: right; }
 .gap-3 { gap: 12px; }
 
+@media (max-width: 768px) {
+  .p-8 {
+    padding: 1rem !important;
+  }
+  .gap-8 {
+    gap: 1rem !important;
+  }
+  .px-8 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}

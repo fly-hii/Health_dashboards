@@ -44,10 +44,17 @@ const Sidebar = ({ collapsed, mobileOpen, onMobileClose }) => {
 
   return (
     <>
+      {/* Mobile Sidebar Overlay */}
+      {mobileOpen && (
+        <div
+          onClick={onMobileClose}
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-[49] lg:hidden transition-opacity duration-300 animate-fadeIn"
+        />
+      )}
       {/* Sidebar Container */}
       <aside
-        className={`fixed left-0 top-0 h-screen z-40 bg-white border-r border-[#E5E7EB] flex flex-col transition-all duration-300 ${
-          mobileOpen ? 'left-0' : 'max-lg:-left-[280px]'
+        className={`fixed left-0 top-0 h-screen z-50 bg-white border-r border-[#E5E7EB] flex flex-col transition-all duration-300 ${
+          mobileOpen ? 'mobile-open' : ''
         }`}
         style={{
           width: collapsed ? '72px' : '280px',
@@ -133,7 +140,10 @@ const Sidebar = ({ collapsed, mobileOpen, onMobileClose }) => {
 
       <style>{`
         @media (max-width: 1024px) {
-          aside { left: -300px !important; }
+          aside { 
+            left: -300px !important; 
+            width: 280px !important;
+          }
           aside.mobile-open { left: 0 !important; }
         }
       `}</style>

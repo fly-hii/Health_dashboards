@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const http = require('http');
 const { Server } = require('socket.io');
 const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
 const { connectDB } = require('./config/database');
 const path = require('path');
 const fs = require('fs');
@@ -46,12 +47,42 @@ const io = new Server(server, {
   },
 });
 
+// Socket.IO JWT middleware — validate token before any event is processed
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token ||
+                socket.handshake.headers?.authorization?.replace('Bearer ', '');
+  if (!token) return next(new Error('Authentication required'));
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!['NURSE', 'HOSPITAL_ADMIN', 'SYSTEM'].includes(decoded.role)) {
+      return next(new Error('Not authorized for this portal'));
+    }
+    socket.role        = decoded.role;
+    socket.hospitalId  = parseInt(decoded.hospitalId);
+    socket.userId      = decoded.id;
+    next();
+  } catch (err) {
+    next(new Error('Invalid or expired token'));
+  }
+});
+
 io.on('connection', (socket) => {
-  console.log(`🔌 Nurse socket connected: ${socket.id}`);
+  console.log(`🔌 Nurse socket connected: ${socket.id} (role: ${socket.role})`);
+
+  if (socket.role === 'SYSTEM') {
+    socket.join('system_relay');
+    console.log(`🔌 System relay socket joined system_relay room: ${socket.id}`);
+  }
 
   socket.on('join_hospital', (hospitalId) => {
-    socket.join(`hospital_${hospitalId}`);
-    console.log(`🏥 Nurse socket joined hospital_${hospitalId}`);
+    // Only allow joining the hospital that matches the authenticated token
+    if (parseInt(hospitalId) === socket.hospitalId || socket.role === 'SYSTEM') {
+      socket.join(`hospital_${hospitalId}`);
+      console.log(`🏥 Nurse socket joined hospital_${hospitalId}`);
+    } else {
+      console.warn(`⚠️  Socket ${socket.id} tried to join hospital_${hospitalId} but token is for hospital_${socket.hospitalId}`);
+      socket.emit('error', { message: 'Not authorized to join this hospital room' });
+    }
   });
 
   socket.on('disconnect', () => {
@@ -62,7 +93,7 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 // Middleware
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
@@ -70,8 +101,12 @@ app.use(cors({
       callback(null, false);
     }
   },
-  credentials: true
-}));
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Search, Bell, MessageSquare, ChevronDown, Menu } from 'lucide-react';
 
-export default function TopNavbar({ searchQuery, setSearchQuery, queue, onDiagnosePatient, activeTab, setActiveTab }) {
+export default function TopNavbar({ searchQuery, setSearchQuery, queue, onDiagnosePatient, activeTab, setActiveTab, onToggleSidebar }) {
   const { user } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -25,13 +25,17 @@ export default function TopNavbar({ searchQuery, setSearchQuery, queue, onDiagno
   const avatarUrl = user?.avatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300';
 
   return (
-    <header className="w-full h-[90px] bg-white border-b border-[#E5E7EB] flex items-center justify-between px-8 shrink-0 font-sans">
+    <header className="w-full h-[90px] bg-white border-b border-[#E5E7EB] flex items-center justify-between px-4 md:px-8 shrink-0 font-sans">
       {/* Search & Toggle Menu */}
       <div className="flex items-center gap-6 flex-1">
-        <button className="p-2 hover:bg-slate-50 rounded-lg text-[#475569] transition-all">
+        <button 
+          className="p-2 hover:bg-slate-50 rounded-lg text-[#475569] transition-all md:hidden"
+          onClick={onToggleSidebar}
+          aria-label="Toggle sidebar menu"
+        >
           <Menu className="w-5 h-5 text-[#0B1F3A]" />
         </button>
-        <div className="relative flex items-center w-full max-w-[460px]">
+        <div className="relative hidden md:flex items-center w-full max-w-[460px]">
           <Search className="w-[18px] h-[18px] text-[#94a3b8] absolute left-4 pointer-events-none" />
           <input
             type="text"

@@ -173,10 +173,30 @@ const io = new Server(httpServer, {
   },
 });
 
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next(new Error('Authentication error: no token provided'));
+  }
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = decoded; // { id, hospitalId, role }
+    next();
+  } catch (err) {
+    next(new Error('Authentication error: invalid token'));
+  }
+});
+
 io.on('connection', (socket) => {
-  console.log(`🔌 Doctor socket connected: ${socket.id}`);
+  console.log(`🔌 Doctor socket connected: ${socket.id} (hospital ${socket.user?.hospitalId})`);
 
   socket.on('join_hospital', (hospitalId) => {
+    // Only allow joining the room that matches the authenticated token
+    if (parseInt(hospitalId) !== parseInt(socket.user?.hospitalId)) {
+      console.warn(`⚠️  Doctor socket ${socket.id} attempted to join hospital_${hospitalId} but token has hospitalId=${socket.user?.hospitalId}`);
+      return;
+    }
     socket.join(`hospital_${hospitalId}`);
     console.log(`🏥 Doctor socket joined hospital_${hospitalId}`);
   });

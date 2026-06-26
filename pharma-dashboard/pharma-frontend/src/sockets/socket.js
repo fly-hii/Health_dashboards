@@ -23,12 +23,18 @@ export const socket = io(URL, {
   transports: ['websocket'],
   reconnectionAttempts: 3,
   timeout: 5000,
+  auth: {
+    // Pass JWT so the backend JWT middleware can authenticate the socket connection
+    get token() {
+      return localStorage.getItem('token') || localStorage.getItem('pharma_token') || '';
+    },
+  },
 });
 
 // Decode hospitalId from stored JWT (without a library — just parse the payload)
 const getHospitalIdFromToken = () => {
   try {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || localStorage.getItem('pharma_token');
     if (!token) return null;
     const payload = JSON.parse(atob(token.split('.')[1]));
     return payload.hospitalId || null;

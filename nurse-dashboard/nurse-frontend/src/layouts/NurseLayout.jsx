@@ -18,10 +18,9 @@ const NurseLayout = () => {
 
       {/* Main Content Area */}
       <div 
-        className="flex-1 flex flex-col transition-all duration-300 min-w-0"
-        style={{
-          paddingLeft: sidebarCollapsed ? '72px' : '280px'
-        }}
+        className={`flex-1 flex flex-col transition-all duration-300 min-w-0 pl-0 ${
+          sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-[280px]'
+        }`}
       >
         {/* Top Navbar */}
         <TopNavbar
@@ -36,13 +35,6 @@ const NurseLayout = () => {
         </main>
       </div>
 
-      {/* Mobile Sidebar Overlay */}
-      {mobileSidebarOpen && (
-        <div
-          onClick={() => setMobileSidebarOpen(false)}
-          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
-        />
-      )}
     </div>
   );
 };

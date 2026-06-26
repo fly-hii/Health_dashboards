@@ -916,10 +916,30 @@ router.post('/orders/manual', protect, async (req, res) => {
     const code = Math.floor(10000 + Math.random() * 90000);
     const tokenNumber = `RXN${code}`;
 
+    const { User } = req.models;
+    let doctor = await User.findOne({
+      where: { hospital_id: req.hospitalId, role: 'DOCTOR', name: doctorName }
+    });
+    if (!doctor) {
+      // Strip 'Dr. ' prefix if present and check again
+      const cleanName = doctorName.replace(/^Dr\.\s+/i, '');
+      doctor = await User.findOne({
+        where: { hospital_id: req.hospitalId, role: 'DOCTOR', name: cleanName }
+      });
+    }
+    if (!doctor) {
+      // Fallback: first available active doctor in the hospital
+      doctor = await User.findOne({
+        where: { hospital_id: req.hospitalId, role: 'DOCTOR', status: 'Active' },
+        order: [['id', 'ASC']]
+      });
+    }
+    const doctor_id = doctor?.id ?? 1;
+
     const prescription = await Prescription.create({
       hospital_id: req.hospitalId,
       patient_id: patientId,
-      doctor_id: 1, // default doctor
+      doctor_id,
       diagnosis: 'Created manually at counter.',
       instructions: 'Created manually at counter.',
       status: 'Active',
@@ -983,7 +1003,7 @@ router.put('/notifications/:id/read', protect, async (req, res) => {
   try {
     const { Notification } = req.models;
     const notification = await Notification.findOne({
-      where: { id: req.params.id, hospital_id: req.hospitalId }
+      where: { id: req.params.id, hospital_id: req.hospitalId, user_id: req.user.id }
     });
     if (notification) {
       notification.status = 'read';

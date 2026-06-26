@@ -213,7 +213,8 @@ export const api = {
       }
     });
     const query = params.toString();
-    return fetch(`${BASE_URL}/patient/notifications${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse).then(res => res.hasOwnProperty('data') ? res.data : res);
+    // Returns { success, notifications, pagination } — do NOT unwrap .data
+    return fetch(`${BASE_URL}/patient/notifications${query ? `?${query}` : ''}`, { headers: getHeaders() }).then(handleResponse);
   },
   getNotificationById: (id) =>
     fetch(`${BASE_URL}/patient/notifications/${id}`, { headers: getHeaders() }).then(handleResponse),

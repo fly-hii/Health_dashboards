@@ -97,6 +97,7 @@ export default function TokensView({ token: initialToken, pastTokens: initialPas
     const socket = io(socketUrl, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
+      auth: { token: localStorage.getItem('patient_token') || localStorage.getItem('token') || '' },
     });
     socketRef.current = socket;
     socket.emit('join_patient', user.id || user._id);

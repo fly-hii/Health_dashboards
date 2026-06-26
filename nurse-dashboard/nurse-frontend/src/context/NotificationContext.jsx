@@ -37,6 +37,7 @@ export const NotificationProvider = ({ children }) => {
       reconnection: true,
       reconnectionAttempts: 3,
       timeout: 5000,
+      auth: { token },
     });
 
     socketRef.current = socket;

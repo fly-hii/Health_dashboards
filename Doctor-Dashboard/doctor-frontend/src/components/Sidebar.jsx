@@ -21,7 +21,7 @@ const RxIcon = (props) => (
   </svg>
 );
 
-export default function Sidebar({ activeTab, setActiveTab }) {
+export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) {
   const { logout } = useAuth();
 
   const menuItems = [
@@ -37,10 +37,22 @@ export default function Sidebar({ activeTab, setActiveTab }) {
 
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
+    if (setIsOpen) {
+      setIsOpen(false);
+    }
   };
 
   return (
-    <aside className="w-[280px] h-screen bg-white border-r border-[#E5E7EB] flex flex-col justify-between p-6 shrink-0 font-sans">
+    <>
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-[99] md:hidden transition-opacity duration-300"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      <aside className={`fixed md:sticky top-0 left-0 z-[100] w-[280px] h-screen bg-white border-r border-[#E5E7EB] flex flex-col justify-between p-6 shrink-0 font-sans transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
       <div className="flex flex-col gap-6">
         {/* Brand Logo */}
         <div 
@@ -101,5 +113,6 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         </button>
       </div>
     </aside>
+    </>
   );
 }

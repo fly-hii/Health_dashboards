@@ -53,19 +53,46 @@ const io = new Server(server, {
   },
 });
 
-io.on('connection', (socket) => {
-  console.log(`🔌 Patient socket: ${socket.id}`);
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next(new Error('Authentication error: no token provided'));
+  }
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = decoded; // { id, hospitalId, role }
+    next();
+  } catch (err) {
+    next(new Error('Authentication error: invalid token'));
+  }
+});
 
-  // Patient joins their own room + hospital room
+io.on('connection', (socket) => {
+  console.log(`🔌 Patient socket: ${socket.id} (hospital ${socket.user?.hospitalId})`);
+
+  // Patient joins their own room — only allow the room matching their token id
   socket.on('join', (patientId) => {
+    if (parseInt(patientId) !== parseInt(socket.user?.id)) {
+      console.warn(`⚠️  Patient socket ${socket.id} attempted join patient_${patientId} but token id=${socket.user?.id}`);
+      return;
+    }
     socket.join(`patient_${patientId}`);
-    console.log(`🔌 Patient socket: ${socket.id} joined patient_${patientId} via join event`);
+    console.log(`🔌 Patient socket: ${socket.id} joined patient_${patientId}`);
   });
   socket.on('join_patient', (patientId) => {
+    if (parseInt(patientId) !== parseInt(socket.user?.id)) {
+      console.warn(`⚠️  Patient socket ${socket.id} attempted join_patient patient_${patientId} but token id=${socket.user?.id}`);
+      return;
+    }
     socket.join(`patient_${patientId}`);
-    console.log(`🔌 Patient socket: ${socket.id} joined patient_${patientId} via join_patient event`);
+    console.log(`🔌 Patient socket: ${socket.id} joined patient_${patientId} via join_patient`);
   });
   socket.on('join_hospital', (hospitalId) => {
+    if (parseInt(hospitalId) !== parseInt(socket.user?.hospitalId)) {
+      console.warn(`⚠️  Patient socket ${socket.id} attempted join hospital_${hospitalId} but token hospitalId=${socket.user?.hospitalId}`);
+      return;
+    }
     socket.join(`hospital_${hospitalId}`);
     console.log(`🏥 Patient socket: ${socket.id} joined hospital_${hospitalId}`);
   });
@@ -81,12 +108,33 @@ if (nurseSocketDisabled) {
   console.warn('⚠️  NURSE_SOCKET_URL not set or is a Vercel URL — real-time nurse relay disabled.');
 }
 let nurseSocket = null;
+
+// Dynamically generate service token with SYSTEM role for service-to-service auth
+const getServiceToken = () => {
+  if (process.env.NURSE_SERVICE_TOKEN) return process.env.NURSE_SERVICE_TOKEN;
+  if (process.env.JWT_SERVICE_TOKEN) return process.env.JWT_SERVICE_TOKEN;
+  
+  try {
+    const jwt = require('jsonwebtoken');
+    return jwt.sign(
+      { id: 0, hospitalId: 0, role: 'SYSTEM' },
+      process.env.JWT_SECRET || 'careplus_hospital_jwt_secret_2026_change_this',
+      { expiresIn: '365d' }
+    );
+  } catch (err) {
+    console.error('Failed to sign service token:', err.message);
+    return '';
+  }
+};
+
 const connectNurseSocket = () => {
   nurseSocket = ioClient(NURSE_SOCKET_URL, {
     transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionDelay: 5000,
     reconnectionAttempts: Infinity,
+    // Service-to-service token so the nurse backend's JWT middleware accepts the relay connection
+    auth: { token: getServiceToken() },
   });
   nurseSocket.on('connect', () => console.log('✅ Patient relay → Nurse socket connected'));
   nurseSocket.on('connect_error', () => { /* silent */ });
@@ -94,7 +142,7 @@ const connectNurseSocket = () => {
   // Forward vitals updates to patient's room
   nurseSocket.on('vitals_recorded', (data) => {
     if (data.patientId) {
-      io.to(`patient_${data.patientId}`).emit('vitals_updated', data);
+      io.to(`patient_${data.patientId}`).emit('VITALS_UPDATED', data);
     }
   });
   nurseSocket.on('appointment_status_updated', (data) => {
@@ -118,7 +166,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
@@ -127,7 +175,11 @@ app.use(cors({
     }
   },
   credentials: true,
-}));
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/uploads', express.static(uploadsDir));
@@ -1290,6 +1342,191 @@ app.put('/api/notifications/read-all', protect, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+app.delete('/api/notifications/:id', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let deleted = false;
+    for (const conn of patientConns) {
+      const notif = await conn.models.Notification.findOne({
+        where: { id: req.params.id, user_id: conn.patientId, hospital_id: conn.hospitalId },
+      });
+      if (notif) {
+        await notif.destroy();
+        deleted = true;
+        break;
+      }
+    }
+    res.json({ success: true, message: deleted ? 'Notification deleted' : 'Notification not found' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────
+// PATIENT NOTIFICATIONS (paginated + filtered)
+// Called by NotificationsView via api.getPatientNotifications()
+// ────────────────────────────────────────────────────────────
+
+// GET /api/patient/notifications?page=1&limit=5&search=&type=&startDate=&endDate=
+app.get('/api/patient/notifications', protect, async (req, res) => {
+  try {
+    const { search, type, startDate, endDate, page = 1, limit = 5 } = req.query;
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allNotifications = [];
+
+    for (const conn of patientConns) {
+      const where = {
+        hospital_id: conn.hospitalId,
+        user_id: conn.patientId,
+      };
+
+      // Type/category filter
+      if (type && type !== 'All') {
+        where.type = type.toLowerCase();
+      }
+
+      // Date range filter
+      if (startDate || endDate) {
+        where.created_at = {};
+        if (startDate) where.created_at[Op.gte] = new Date(startDate);
+        if (endDate) {
+          const e = new Date(endDate); e.setHours(23, 59, 59, 999);
+          where.created_at[Op.lte] = e;
+        }
+      }
+
+      // Keyword search across title + message
+      if (search) {
+        where[Op.or] = [
+          { title: { [Op.like]: `%${search}%` } },
+          { message: { [Op.like]: `%${search}%` } },
+        ];
+      }
+
+      const notifications = await conn.models.Notification.findAll({
+        where,
+        order: [['created_at', 'DESC']],
+      });
+
+      // Normalise fields for the frontend
+      const mapped = notifications.map(n => ({
+        _id: n.id,
+        notifId: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type || 'general',
+        status: n.status || 'unread',
+        read: n.status === 'read',
+        priority: n.priority || 'medium',
+        metadata: n.metadata || {},
+        createdAt: n.created_at,
+        hospitalId: conn.hospitalId,
+        hospitalName: conn.hospitalName,
+      }));
+
+      allNotifications.push(...mapped);
+    }
+
+    // Sort all by createdAt descending
+    allNotifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Paginate in-memory (cross-hospital data is already merged)
+    const total = allNotifications.length;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    const offset = (pageNum - 1) * limitNum;
+    const paginated = allNotifications.slice(offset, offset + limitNum);
+
+    res.json({
+      success: true,
+      notifications: paginated,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/patient/notifications/unread-count
+app.get('/api/patient/notifications/unread-count', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let count = 0;
+    for (const conn of patientConns) {
+      const c = await conn.models.Notification.count({
+        where: { hospital_id: conn.hospitalId, user_id: conn.patientId, status: 'unread' },
+      });
+      count += c;
+    }
+    res.json({ success: true, count });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/patient/notifications/:id
+app.get('/api/patient/notifications/:id', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let notif = null;
+
+    for (const conn of patientConns) {
+      notif = await conn.models.Notification.findOne({
+        where: { id: req.params.id, user_id: conn.patientId, hospital_id: conn.hospitalId },
+      });
+      if (notif) break;
+    }
+
+    if (!notif) return res.status(404).json({ success: false, message: 'Notification not found' });
+
+    // Auto-mark as read on view
+    if (notif.status !== 'read') {
+      await notif.update({ status: 'read', read_at: new Date() });
+    }
+
+    res.json({ success: true, data: notif });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PATCH /api/patient/notifications/:id/read
+app.patch('/api/patient/notifications/:id/read', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let updated = false;
+    for (const conn of patientConns) {
+      const [count] = await conn.models.Notification.update(
+        { status: 'read', read_at: new Date() },
+        { where: { id: req.params.id, user_id: conn.patientId, hospital_id: conn.hospitalId } }
+      );
+      if (count > 0) { updated = true; break; }
+    }
+    res.json({ success: true, message: updated ? 'Marked as read' : 'Notification not found' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/patient/notifications/:id
+app.delete('/api/patient/notifications/:id', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let deleted = false;
+    for (const conn of patientConns) {
+      const notif = await conn.models.Notification.findOne({
+        where: { id: req.params.id, user_id: conn.patientId, hospital_id: conn.hospitalId },
+      });
+      if (notif) { await notif.destroy(); deleted = true; break; }
+    }
+    res.json({ success: true, message: deleted ? 'Notification deleted' : 'Notification not found' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 
 // ────────────────────────────────────────────────────────────
 // MEDICAL HISTORY (past completed appointments)

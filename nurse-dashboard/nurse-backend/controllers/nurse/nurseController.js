@@ -15,12 +15,14 @@ const getDashboardStats = async (req, res, next) => {
       vitalsCompleted,
       activeAppointments,
       completedConsultations,
+      missedAppointments,
     ] = await Promise.all([
       Appointment.count({ where: whereToday }),
       Appointment.count({ where: { ...whereToday, status: { [Op.in]: ['Pending', 'Confirmed'] } } }),
       Appointment.count({ where: { ...whereToday, status: 'In-Progress' } }),
       Appointment.count({ where: { ...whereToday, status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] } } }),
       Appointment.count({ where: { ...whereToday, status: 'Completed' } }),
+      Appointment.count({ where: { ...whereToday, status: 'No-Show' } }),
     ]);
 
     // Department wise
@@ -54,7 +56,7 @@ const getDashboardStats = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        stats: { totalPatientsToday, waitingForVitals, vitalsCompleted, activeAppointments, completedConsultations },
+        stats: { totalPatientsToday, waitingForVitals, vitalsCompleted, activeAppointments, completedConsultations, missedAppointments },
         departmentWise: departmentData.map(d => ({ department: d.department, count: parseInt(d.dataValues.count) })),
         recentActivities: mappedActivities,
         opdTiming: process.env.OPD_TIMING || '09:00 AM - 06:00 PM',
@@ -151,6 +153,8 @@ const updateAppointmentStatus = async (req, res, next) => {
     if (io) {
       io.to(`hospital_${req.hospitalId}`).emit('appointment_status_updated', { appointmentId: appointment.id, status, hospitalId: req.hospitalId });
       if (status === 'Completed') io.to(`hospital_${req.hospitalId}`).emit('visit_completed', { appointmentId: appointment.id, hospitalId: req.hospitalId });
+      io.to('system_relay').emit('appointment_status_updated', { appointmentId: appointment.id, status, hospitalId: req.hospitalId });
+      if (status === 'Completed') io.to('system_relay').emit('visit_completed', { appointmentId: appointment.id, hospitalId: req.hospitalId });
     }
 
     res.json({ success: true, message: 'Status updated', data: appointment });
@@ -331,11 +335,17 @@ const addWalkInPatient = async (req, res, next) => {
     });
     const tokenNumber = tokenCount + 1;
 
+    // Find first available doctor in this hospital
+    const defaultDoctor = await User.findOne({
+      where: { hospital_id: hospitalId, role: 'DOCTOR' },
+      order: [['id', 'ASC']],
+    });
+
     // Create walk-in appointment
     const appointment = await Appointment.create({
       hospital_id: hospitalId,
       patient_id: patient.id,
-      doctor_id: 1, // Default doctor or first available
+      doctor_id: defaultDoctor?.id ?? null,
       department,
       date_time: new Date(),
       token_number: tokenNumber,

@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import './Sidebar.css';
 
-export default function Sidebar({ activeTab, setActiveTab, unreadCount }) {
+export default function Sidebar({ activeTab, setActiveTab, unreadCount, isOpen, setIsOpen }) {
   const { logout } = useAuth();
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: (
@@ -52,49 +52,59 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCount }) {
     )},
   ];
 
+  const handleItemClick = (id) => {
+    setActiveTab(id);
+    if (setIsOpen) setIsOpen(false);
+  };
+
   return (
-    <aside className="sidebar">
-      <div className="logo-area" onClick={() => setActiveTab('dashboard')} style={{ cursor: 'pointer' }}>
-        <div className="logo-icon">
-          <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="3">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-        </div>
-        <span className="logo-text">{import.meta.env.VITE_HOSPITAL_NAME || 'CarePlus'}<span className="logo-subtext"> {import.meta.env.VITE_HOSPITAL_SUBTITLE || 'HOSPITAL'}</span></span>
-      </div>
-
-      <nav className="sidebar-nav">
-        {menuItems.map((item) => {
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`nav-item ${isActive ? 'active' : ''}`}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              <span className="nav-label">{item.label}</span>
-              {item.badge && unreadCount > 0 && (
-                <span className="unread-badge">{unreadCount}</span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="sidebar-footer">
-        <button 
-          onClick={logout} 
-          className="logout-button nav-item"
-        >
-          <span className="nav-icon text-danger">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 01-3-3h4a3 3 0 013 3v1" />
+    <>
+      {isOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsOpen(false)} />
+      )}
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+        <div className="logo-area" onClick={() => handleItemClick('dashboard')} style={{ cursor: 'pointer' }}>
+          <div className="logo-icon">
+            <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="3">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-          </span>
-          <span className="nav-label">Logout</span>
-        </button>
-      </div>
-    </aside>
+          </div>
+          <span className="logo-text">{import.meta.env.VITE_HOSPITAL_NAME || 'CarePlus'}<span className="logo-subtext"> {import.meta.env.VITE_HOSPITAL_SUBTITLE || 'HOSPITAL'}</span></span>
+        </div>
+
+        <nav className="sidebar-nav">
+          {menuItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleItemClick(item.id)}
+                className={`nav-item ${isActive ? 'active' : ''}`}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-label">{item.label}</span>
+                {item.badge && unreadCount > 0 && (
+                  <span className="unread-badge">{unreadCount}</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-footer">
+          <button 
+            onClick={logout} 
+            className="logout-button nav-item"
+          >
+            <span className="nav-icon text-danger">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 01-3-3h4a3 3 0 013 3v1" />
+              </svg>
+            </span>
+            <span className="nav-label">Logout</span>
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

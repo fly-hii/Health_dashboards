@@ -18,6 +18,12 @@ const socket = isVercel
       reconnectionAttempts: 3,
       timeout: 5000,
       transports: ['websocket'],
+      auth: {
+        // Pass JWT so the backend JWT middleware can authenticate the socket connection
+        get token() {
+          return localStorage.getItem('admin_token') || localStorage.getItem('token') || '';
+        },
+      },
     });
 
 export default socket;

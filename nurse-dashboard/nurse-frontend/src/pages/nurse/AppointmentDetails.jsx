@@ -166,11 +166,13 @@ const AppointmentDetails = () => {
     if (!user?._id && !user?.id) return;
     // config.socketUrl is null on Vercel (serverless can't handle WebSockets)
     if (!config.socketUrl) return;
+    const token = localStorage.getItem('nurse_token');
     const socket = io(config.socketUrl, {
       withCredentials: true,
       transports: ['websocket'],
       reconnectionAttempts: 3,
       timeout: 5000,
+      auth: { token },
     });
     socketRef.current = socket;
     socket.emit('join', user._id || user.id);

@@ -323,7 +323,7 @@ const getPatients = async (req, res) => {
   try {
     const { Patient, Appointment } = req.models;
 
-    // Fetch unique patient IDs from appointments in this hospital
+    // Fetch unique patient IDs from appointments scoped to this hospital
     const appointments = await Appointment.findAll({
       where: { hospital_id: req.hospitalId },
       attributes: ['patient_id'],
@@ -331,15 +331,15 @@ const getPatients = async (req, res) => {
     });
     const patientIdsFromAppointments = [...new Set(appointments.map(a => a.patient_id).filter(Boolean))];
 
-    const orConditions = [{ hospital_id: req.hospitalId }];
+    // Always scope by hospital_id — the appointment-based OR is removed to prevent
+    // cross-hospital leakage if patientIds ever contain foreign-hospital IDs.
+    const patientWhere = { hospital_id: req.hospitalId };
     if (patientIdsFromAppointments.length > 0) {
-      orConditions.push({ id: { [Op.in]: patientIdsFromAppointments } });
+      patientWhere.id = { [Op.in]: patientIdsFromAppointments };
     }
 
     const patients = await Patient.findAll({
-      where: {
-        [Op.or]: orConditions
-      },
+      where: patientWhere,
       order: [['full_name', 'ASC']],
     });
 
@@ -417,19 +417,8 @@ const getPatientById = async (req, res) => {
   try {
     const { Patient, Appointment } = req.models;
 
-    // Check if patient has any appointment in this hospital
-    const appt = await Appointment.findOne({
-      where: {
-        patient_id: req.params.id,
-        hospital_id: req.hospitalId
-      }
-    });
-
-    const whereClause = appt
-      ? { id: req.params.id }
-      : { id: req.params.id, hospital_id: req.hospitalId };
-
-    const patient = await Patient.findOne({ where: whereClause });
+    // Always scope by hospital_id to prevent cross-hospital patient lookup
+    const patient = await Patient.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
     res.json({ success: true, data: patient });
   } catch (error) {
@@ -859,9 +848,10 @@ const getNotifications = async (req, res) => {
 const markNotificationRead = async (req, res) => {
   try {
     const { Notification } = req.models;
+    // user_id scoping prevents one doctor from marking another's notification as read
     await Notification.update(
       { status: 'read', read_at: new Date() },
-      { where: { id: req.params.id, hospital_id: req.hospitalId } }
+      { where: { id: req.params.id, hospital_id: req.hospitalId, user_id: req.user.id } }
     );
     res.json({ success: true, message: 'Notification marked as read' });
   } catch (error) {
@@ -887,7 +877,11 @@ const getPatientReports = async (req, res) => {
 const getDoctorProfile = async (req, res) => {
   try {
     const { User } = req.models;
-    const doctor = await User.findByPk(req.user.id, { attributes: { exclude: ['password'] } });
+    // hospital_id scope ensures doctor cannot retrieve a profile outside their tenant
+    const doctor = await User.findOne({
+      where: { id: req.user.id, hospital_id: req.hospitalId },
+      attributes: { exclude: ['password'] },
+    });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
     const doctorJson = doctor.toJSON();
     doctorJson.avatar = doctorJson.profile_image || '';
@@ -1015,7 +1009,9 @@ const changeDoctorPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: pwdError });
     }
 
-    const user = await User.findByPk(req.user.id);
+    // hospital_id scope prevents a doctor token from changing a user in another tenant
+    const user = await User.findOne({ where: { id: req.user.id, hospital_id: req.hospitalId } });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ success: false, message: 'Current password is incorrect' });
 

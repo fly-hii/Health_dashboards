@@ -324,7 +324,7 @@ const changePassword = async (req, res) => {
     }
 
     const { User } = req.models;
-    const user = await User.findByPk(req.user.id);
+    const user = await User.findOne({ where: { id: req.user.id, hospital_id: req.hospitalId } });
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ success: false, message: 'Current password is incorrect' });
 

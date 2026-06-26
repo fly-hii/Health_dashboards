@@ -40,11 +40,31 @@ const io = new Server(server, {
   },
 });
 
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next(new Error('Authentication error: no token provided'));
+  }
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = decoded; // { id, hospitalId, role }
+    next();
+  } catch (err) {
+    next(new Error('Authentication error: invalid token'));
+  }
+});
+
 // Tenant-aware socket rooms
 io.on('connection', (socket) => {
-  console.log(`🔌 Pharma socket connected: ${socket.id}`);
+  console.log(`🔌 Pharma socket connected: ${socket.id} (hospital ${socket.user?.hospitalId})`);
 
   socket.on('join_hospital', (hospitalId) => {
+    // Only allow joining the room that matches the authenticated token
+    if (parseInt(hospitalId) !== parseInt(socket.user?.hospitalId)) {
+      console.warn(`⚠️  Pharma socket ${socket.id} attempted to join hospital_${hospitalId} but token has hospitalId=${socket.user?.hospitalId}`);
+      return;
+    }
     socket.join(`hospital_${hospitalId}`);
     console.log(`🏥 Pharma socket joined hospital_${hospitalId}`);
   });
@@ -57,7 +77,7 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 // Middleware
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
@@ -65,8 +85,12 @@ app.use(cors({
       callback(null, false);
     }
   },
-  credentials: true
-}));
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));

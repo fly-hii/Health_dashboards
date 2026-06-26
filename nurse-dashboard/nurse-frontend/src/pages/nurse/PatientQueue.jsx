@@ -44,7 +44,8 @@ const PatientQueue = () => {
     totalPatientsToday: 0,
     waitingForVitals: 0,
     inProgress: 0,
-    completedConsultations: 0
+    completedConsultations: 0,
+    missedAppointments: 0
   });
 
   // Filter States
@@ -82,7 +83,8 @@ const PatientQueue = () => {
         inProgress: (s.activeAppointments != null && s.completedConsultations != null)
           ? Math.max(0, s.activeAppointments - s.completedConsultations)
           : 0,
-        completedConsultations: s.completedConsultations ?? 0
+        completedConsultations: s.completedConsultations ?? 0,
+        missedAppointments: s.missedAppointments ?? 0
       });
     } catch {
       // Keep defaults (all zeros)
@@ -99,6 +101,9 @@ const PatientQueue = () => {
 
       if (view === 'completed') {
         apiStatus = 'consultation_done';
+        apiView   = 'today';
+      } else if (view === 'missed') {
+        apiStatus = 'No-Show';
         apiView   = 'today';
       } else if (view === 'upcoming') {
         // Tomorrow only — build tomorrow's date string (YYYY-MM-DD)
@@ -224,6 +229,12 @@ const PatientQueue = () => {
     if (statusVal === 'consultation_done' || statusVal === 'completed') {
       return { label: 'Completed', bg: 'bg-emerald-50 text-emerald-700 border border-emerald-200' };
     }
+    if (statusVal === 'No-Show' || statusVal === 'no_show') {
+      return { label: 'Missed', bg: 'bg-rose-50 text-rose-700 border border-rose-200' };
+    }
+    if (statusVal === 'Cancelled' || statusVal === 'cancelled') {
+      return { label: 'Cancelled', bg: 'bg-slate-50 text-slate-700 border border-slate-200' };
+    }
     return { label: 'Waiting', bg: 'bg-amber-50 text-amber-700 border border-amber-200' };
   };
 
@@ -260,7 +271,7 @@ const PatientQueue = () => {
       </div>
 
       {/* Quick Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Card 1: Total Patients */}
         <Card className="p-6 flex flex-col justify-between min-h-[110px] hover:shadow-md transition-all duration-200">
           <div className="flex justify-between items-start">
@@ -299,6 +310,19 @@ const PatientQueue = () => {
             </div>
           </div>
         </Card>
+
+        {/* Card 4: Missed */}
+        <Card className="p-6 flex flex-col justify-between min-h-[110px] hover:shadow-md transition-all duration-200">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Missed</span>
+              <div className="text-3xl font-extrabold text-rose-600">{stats.missedAppointments}</div>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-rose-50/50 text-rose-600 flex items-center justify-center">
+              <AlertCircle size={18} strokeWidth={2.5} />
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* Main Body: Table */}
@@ -308,12 +332,13 @@ const PatientQueue = () => {
               <div className="p-6 border-b border-[#E5E7EB] flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/20">
                 <div className="flex flex-wrap items-center gap-3 flex-1 max-w-[720px]">
 
-                  {/* Waiting / Completed / Upcoming toggle */}
+                  {/* Waiting / Completed / Upcoming / Missed toggle */}
                   <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
                     {[
                       { id: 'waiting',   label: 'Waiting'   },
                       { id: 'completed', label: 'Completed' },
                       { id: 'upcoming',  label: 'Upcoming'  },
+                      { id: 'missed',    label: 'Missed'    },
                     ].map(({ id, label }) => (
                       <button
                         key={id}
@@ -426,6 +451,8 @@ const PatientQueue = () => {
                           ? 'No completed consultations today.'
                           : view === 'upcoming'
                           ? "No appointments scheduled for tomorrow."
+                          : view === 'missed'
+                          ? "No missed appointments today."
                           : 'No patients currently waiting in the queue.'}
                       </td>
                     </tr>

@@ -34,6 +34,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [latestVitals, setLatestVitals] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [deepLinkedApptId, setDeepLinkedApptId] = useState(null);
   const [deepLinkedNotifId, setDeepLinkedNotifId] = useState(null);
 
@@ -81,7 +82,8 @@ export default function App() {
       const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
       const socket = io(socketUrl, {
         withCredentials: true,
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        auth: { token: localStorage.getItem('patient_token') || localStorage.getItem('token') || '' },
       });
 
       socket.on('connect', () => {
@@ -346,6 +348,8 @@ export default function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         unreadCount={unreadNotifCount} 
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
       />
       
       <div className="main-content-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -355,6 +359,7 @@ export default function App() {
           onReadAll={handleReadAllNotifications}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
         />
         
         <main className="content-body" style={{ flexGrow: 1 }}>

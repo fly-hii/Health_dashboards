@@ -30,6 +30,7 @@ export default function App() {
   const [activeAppointment, setActiveAppointment] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [queue, setQueue] = useState([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -198,7 +199,12 @@ export default function App() {
 
   return (
     <div className="app-container">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
+      />
       <div className="main-content-layout">
         <TopNavbar
           searchQuery={searchQuery}
@@ -207,6 +213,7 @@ export default function App() {
           onDiagnosePatient={handleDiagnosePatient}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          onToggleSidebar={() => setIsSidebarOpen(true)}
         />
         <main className="content-body">
           {renderActiveView()}

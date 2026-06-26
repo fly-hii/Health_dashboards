@@ -240,3 +240,33 @@
   height: 100%;
   object-fit: cover;
 }
+
+.mobile-toggle-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .top-navbar {
+    padding: 0 16px;
+  }
+  
+  .mobile-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-main);
+    padding: 8px;
+  }
+  
+  .search-bar {
+    display: none;
+  }
+  
+  .welcome-tag {
+    display: none;
+  }
+}
+

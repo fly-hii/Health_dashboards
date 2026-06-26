@@ -53,7 +53,7 @@ const recordVitals = async (req, res, next) => {
       await Appointment.update({ status: 'In-Progress' }, { where: { id: appointment_id, hospital_id: req.hospitalId } });
 
       // Notify doctor via notification
-      const appointment = await Appointment.findByPk(appointment_id);
+      const appointment = await Appointment.findOne({ where: { id: appointment_id, hospital_id: req.hospitalId } });
       if (appointment?.doctor_id) {
         await Notification.create({
           hospital_id: req.hospitalId,
@@ -70,6 +70,8 @@ const recordVitals = async (req, res, next) => {
       if (io) {
         io.to(`hospital_${req.hospitalId}`).emit('vitals_recorded', { appointmentId: appointment_id, vitalsId: vitals.id, patientId: patient_id, hospitalId: req.hospitalId });
         io.to(`hospital_${req.hospitalId}`).emit('appointment_status_updated', { appointmentId: appointment_id, status: 'In-Progress', hospitalId: req.hospitalId });
+        io.to('system_relay').emit('vitals_recorded', { appointmentId: appointment_id, vitalsId: vitals.id, patientId: patient_id, hospitalId: req.hospitalId });
+        io.to('system_relay').emit('appointment_status_updated', { appointmentId: appointment_id, status: 'In-Progress', hospitalId: req.hospitalId });
       }
     }
 

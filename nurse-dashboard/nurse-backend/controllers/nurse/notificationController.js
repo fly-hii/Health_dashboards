@@ -66,7 +66,7 @@ const markAsRead = async (req, res, next) => {
   try {
     const { Notification } = req.models;
     const notification = await Notification.findOne({
-      where: { id: req.params.id, hospital_id: req.hospitalId }
+      where: { id: req.params.id, hospital_id: req.hospitalId, user_id: req.user.id }
     });
     if (notification) {
       await notification.update({ status: 'read', read_at: new Date() });
@@ -100,7 +100,7 @@ const deleteNotification = async (req, res, next) => {
   try {
     const { Notification } = req.models;
     await Notification.destroy({
-      where: { id: req.params.id, hospital_id: req.hospitalId }
+      where: { id: req.params.id, hospital_id: req.hospitalId, user_id: req.user.id }
     });
     res.json({ success: true, message: 'Notification deleted' });
   } catch (error) {

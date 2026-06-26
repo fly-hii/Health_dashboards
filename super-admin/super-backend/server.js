@@ -28,7 +28,7 @@ const allowedOrigins = [
   'https://health-dashboards-super-admin-front.vercel.app',
 ].filter(Boolean);
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
       callback(null, true);
@@ -36,8 +36,12 @@ app.use(cors({
       callback(null, false);
     }
   },
-  credentials: true
-}));
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));

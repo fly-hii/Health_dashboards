@@ -163,6 +163,12 @@ a {
   margin: 0 auto;
 }
 
+@media (max-width: 768px) {
+  .content-body {
+    padding: 16px;
+  }
+}
+
 /* Card layout components */
 .card {
   background-color: var(--bg-card);

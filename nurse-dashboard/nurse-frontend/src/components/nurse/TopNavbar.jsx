@@ -27,14 +27,19 @@ const TopNavbar = ({ collapsed, onToggleSidebar, onMobileMenu }) => {
 
   return (
     <header 
-      className="fixed top-0 right-0 z-30 h-[70px] bg-white border-b border-[#E5E7EB] flex items-center justify-between px-8 gap-6 transition-all duration-300"
-      style={{
-        left: collapsed ? '72px' : '280px',
-      }}
+      className={`fixed top-0 right-0 z-30 h-[70px] bg-white border-b border-[#E5E7EB] flex items-center justify-between px-8 gap-6 transition-all duration-300 left-0 ${
+        collapsed ? 'lg:left-[72px]' : 'lg:left-[280px]'
+      }`}
     >
       {/* Toggle Sidebar Button */}
       <button
-        onClick={onToggleSidebar}
+        onClick={() => {
+          if (window.innerWidth < 1024) {
+            onMobileMenu();
+          } else {
+            onToggleSidebar();
+          }
+        }}
         className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
         title="Toggle sidebar"
       >

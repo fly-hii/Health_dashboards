@@ -7,7 +7,8 @@ export default function TopNavbar({
   onReadNotification, 
   onReadAll, 
   activeTab,
-  setActiveTab 
+  setActiveTab,
+  onToggleSidebar
 }) {
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -19,6 +20,16 @@ export default function TopNavbar({
 
   return (
     <header className="top-navbar flex justify-between items-center">
+      <button 
+        className="mobile-toggle-btn"
+        onClick={onToggleSidebar}
+        aria-label="Toggle sidebar menu"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
       {/* Search Bar */}
       <div className="search-bar">
         <svg className="w-5 h-5 search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

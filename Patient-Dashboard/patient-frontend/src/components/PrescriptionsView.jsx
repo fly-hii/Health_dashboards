@@ -45,7 +45,7 @@ export default function PrescriptionsView({ prescriptions }) {
                     <td className="font-semibold text-primary">{presc.id}</td>
                     <td>{presc.doctor?.name || presc.doctor}</td>
                     <td>{presc.date}</td>
-                    <td>{presc.medicineCount || presc.medicines.length} Medicines</td>
+                    <td>{presc.medicineCount || (presc.medicines?.length ?? 0)} Medicines</td>
                     <td className="flex gap-4">
                       <button 
                         onClick={(e) => { e.stopPropagation(); setSelectedPresc(presc); }} 
@@ -121,7 +121,10 @@ export default function PrescriptionsView({ prescriptions }) {
                   {selectedPresc.medicines.map((med, idx) => (
                     <div key={idx} className="med-item flex items-center gap-3">
                       <div className="bullet-dot"></div>
-                      <span className="med-text font-medium">{med}</span>
+                      {/* med is a PrescriptionMedicine object: render name + dosage */}
+                      <span className="med-text font-medium">
+                        {typeof med === 'string' ? med : `${med.name || med.generic_name || 'Medicine'}${med.dosage ? ` — ${med.dosage}` : ''}${med.frequency ? ` (${med.frequency})` : ''}`}
+                      </span>
                     </div>
                   ))}
                 </div>
