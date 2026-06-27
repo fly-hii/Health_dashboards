@@ -26,7 +26,6 @@ const connectDB = async () => {
     console.log('✅ MySQL (AWS RDS) connected - Pharma Backend');
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
-    process.exit(1);
   }
 };
 

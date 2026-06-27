@@ -76,10 +76,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ success: false, message: err.message || 'Server Error' });
 });
 
-const PORT = process.env.PORT;
-if (!PORT) {
-  throw new Error('PORT environment variable is required');
-}
+const PORT = process.env.PORT || 5001;
 
 (async () => {
   try {
@@ -97,7 +94,6 @@ if (!PORT) {
     });
   } catch (err) {
     console.error('❌ Startup failed:', err.message);
-    process.exit(1);
   }
 })();
 

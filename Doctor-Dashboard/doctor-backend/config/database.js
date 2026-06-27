@@ -27,7 +27,6 @@ const connectDB = async () => {
     // Don't sync here - admin backend manages schema
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
-    process.exit(1);
   }
 };
 
