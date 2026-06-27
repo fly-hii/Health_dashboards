@@ -38,7 +38,7 @@ const PatientQueue = () => {
   
   // Data States
   const [queue, setQueue]                 = useState([]);
-  const [pagination, setPagination]       = useState({ total: 0, page: 1, pages: 1 });
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
   const [loading, setLoading]             = useState(true);
   const [stats, setStats]                 = useState({
     totalPatientsToday: 0,
@@ -83,7 +83,7 @@ const PatientQueue = () => {
         inProgress: (s.activeAppointments != null && s.completedConsultations != null)
           ? Math.max(0, s.activeAppointments - s.completedConsultations)
           : 0,
-        completedConsultations: s.completedConsultations ?? 0,
+        completedConsultations: (s.completedConsultations ?? 0) + (s.vitalsCompleted ?? 0),
         missedAppointments: s.missedAppointments ?? 0
       });
     } catch {
@@ -123,9 +123,9 @@ const PatientQueue = () => {
         setLoading(false);
         return;
       } else {
-        // waiting tab — apply chip filter, default to waiting statuses
-        apiStatus = status !== 'All Status' ? getApiStatus(status) : 'waiting_for_vitals';
-        apiView   = 'today';
+        // waiting tab — only show waiting_for_vitals
+        apiStatus = 'waiting_for_vitals';
+        apiView = 'today';
       }
 
       const res = await nurseService.getPatientQueue({
@@ -224,7 +224,7 @@ const PatientQueue = () => {
       return { label: 'Waiting', bg: 'bg-amber-50 text-amber-700 border border-amber-200' };
     }
     if (statusVal === 'vitals_done' || statusVal === 'with_doctor' || statusVal === 'in_progress') {
-      return { label: 'In Progress', bg: 'bg-blue-50 text-blue-700 border border-blue-200' };
+      return { label: 'Sent to Doctor', bg: 'bg-emerald-50 text-emerald-700 border border-emerald-200' };
     }
     if (statusVal === 'consultation_done' || statusVal === 'completed') {
       return { label: 'Completed', bg: 'bg-emerald-50 text-emerald-700 border border-emerald-200' };
@@ -382,21 +382,7 @@ const PatientQueue = () => {
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
 
-                  {/* Status filter — only on waiting tab */}
-                  {view === 'waiting' && (
-                    <div className="relative">
-                      <select
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                        className="appearance-none pl-3 pr-8 py-2 bg-white border border-[#E5E7EB] rounded-lg text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:border-[#0EA5A4]"
-                      >
-                        {STATUSES.map(s => (
-                          <option key={s} value={s}>{s === 'All Status' ? 'All Statuses' : s}</option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    </div>
-                  )}
+
                 </div>
 
                 {/* Add Walk-in Button */}

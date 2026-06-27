@@ -86,7 +86,7 @@ export default function LoginPage() {
     setError('');
     setSuccessMsg('');
     try {
-      const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5051/api';
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
       const res = await fetch(`${API_BASE}/auth/login-otp/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

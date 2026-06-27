@@ -1,17 +1,11 @@
 let io;
 
+// Build allowed origins from env — no hardcoded URLs
 const allowedOrigins = [
   process.env.CLIENT_URL,
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-  'http://localhost:5176',
-  'http://localhost:5177',
-  'http://localhost:5180',
-  'https://health-dashboards-hospital-admin-fr.vercel.app',
-  'https://health-dashboardsptal-admin-backend.vercel.app'
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) : []),
 ].filter(Boolean);
+
 
 const initSocket = (server) => {
   const { Server } = require('socket.io');

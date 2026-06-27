@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       port: 5176,
       proxy: {
         '/api': {
-          target: env.VITE_SOCKET_URL || 'http://localhost:5051',
+          target: env.VITE_PROXY_TARGET || env.VITE_API_BASE_URL?.replace(/\/api$/, '') || env.VITE_API_URL?.replace(/\/api$/, '') || env.VITE_SOCKET_URL || 'http://localhost:5051',
           changeOrigin: true,
           secure: false,
         }

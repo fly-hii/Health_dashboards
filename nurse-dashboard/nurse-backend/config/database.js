@@ -24,6 +24,8 @@ const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log('✅ MySQL (AWS RDS) connected - Nurse Backend');
+    const { initConnections } = require('../services/databaseResolver');
+    await initConnections();
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
     process.exit(1);

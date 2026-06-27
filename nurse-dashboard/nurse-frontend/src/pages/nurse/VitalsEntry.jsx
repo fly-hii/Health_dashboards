@@ -19,10 +19,10 @@ const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown
 const STATUS_BADGE = {
   waiting_for_vitals: { label: 'Waiting',      cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
   checked_in:         { label: 'Checked In',   cls: 'bg-sky-50 text-sky-700 border border-sky-200' },
-  vitals_done:        { label: 'Vitals Done',  cls: 'bg-teal-50 text-teal-700 border border-teal-200' },
-  with_doctor:        { label: 'With Doctor',  cls: 'bg-indigo-50 text-indigo-700 border border-indigo-200' },
+  vitals_done:        { label: 'Sent to Doctor',  cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  with_doctor:        { label: 'Sent to Doctor',  cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
   waiting:            { label: 'Waiting',      cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
-  in_progress:        { label: 'In Progress',  cls: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  in_progress:        { label: 'Sent to Doctor',  cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
   completed:          { label: 'Completed',    cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
 };
 
@@ -55,9 +55,11 @@ const VitalsEntry = () => {
   const loadQueuePatients = async () => {
     setQueueLoading(true);
     try {
-      const res = await nurseService.getPatientQueue({ view: 'today', limit: 100 });
+      // Get all today's active patients (no status filter = all statuses)
+      const res = await nurseService.getPatientQueue({ limit: 100 });
+      // Backend now returns mapped statuses: waiting_for_vitals, in_progress, consultation_done, etc.
       const list = (res.data?.data || []).filter(a =>
-        a.patient && ['checked_in', 'waiting_for_vitals', 'waiting', 'in_progress', 'vitals_done', 'with_doctor'].includes(a.status)
+        a.patient && ['waiting_for_vitals', 'in_progress', 'vitals_done', 'with_doctor', 'checked_in', 'waiting'].includes(a.status)
       );
       setQueuePatients(list);
     } catch { toast.error('Failed to load queue'); }
@@ -68,30 +70,56 @@ const VitalsEntry = () => {
 
   /* load appointment when routed via /vitals/:id */
   useEffect(() => {
-    if (!appointmentId) return;
+    if (!appointmentId) {
+      setAppointment(null);
+      setSelectedPatient(null);
+      setExistingVitals(null);
+      setForm(initialForm);
+      setBmi('');
+      return;
+    }
     (async () => {
       try {
         setApptLoading(true);
         const [apptRes, vitalsRes] = await Promise.all([
           nurseService.getAppointmentDetails(appointmentId),
-          vitalsService.getVitalsByAppointment(appointmentId),
+          vitalsService.getVitalsByAppointment(appointmentId).catch(() => null),
         ]);
         const appt = apptRes.data.data;
         setAppointment(appt);
         if (appt?.patient) setSelectedPatient(appt.patient);
-        if (vitalsRes.data?.data) {
+        if (vitalsRes?.data?.data) {
           const v = vitalsRes.data.data;
           setExistingVitals(v);
+          let systolic = '';
+          let diastolic = '';
+          if (v.blood_pressure) {
+            const parts = v.blood_pressure.split('/');
+            systolic = parts[0] || '';
+            diastolic = parts[1] || '';
+          } else if (v.bloodPressure) {
+            systolic = v.bloodPressure.systolic ?? '';
+            diastolic = v.bloodPressure.diastolic ?? '';
+          }
+
           setForm({
-            bloodPressureSystolic:  v.bloodPressure?.systolic  ?? '',
-            bloodPressureDiastolic: v.bloodPressure?.diastolic ?? '',
-            temperature: v.temperature ?? '', pulseRate: v.pulseRate ?? '',
-            respiratoryRate: v.respiratoryRate ?? '', spo2: v.spo2 ?? '',
-            weight: v.weight ?? '', height: v.height ?? '',
-            bloodSugar: v.bloodSugar ?? '',
-            painScale: v.painScale !== undefined ? v.painScale : '',
-            symptoms: v.symptoms ?? '', notes: v.notes ?? '',
+            bloodPressureSystolic:  systolic,
+            bloodPressureDiastolic: diastolic,
+            temperature: v.temperature ?? '',
+            pulseRate: v.pulse ?? v.pulse_rate ?? v.pulseRate ?? '',
+            respiratoryRate: v.respiratory_rate ?? v.respiratoryRate ?? '',
+            spo2: v.spo2 ?? '',
+            weight: v.weight ?? '',
+            height: v.height ?? '',
+            bloodSugar: v.blood_sugar ?? v.bloodSugar ?? '',
+            painScale: v.pain_scale ?? v.painScale ?? '',
+            symptoms: v.symptoms ?? '',
+            notes: v.notes ?? '',
           });
+        } else {
+          setExistingVitals(null);
+          setForm(initialForm);
+          setBmi('');
         }
       } catch { toast.error('Failed to load appointment details'); }
       finally { setApptLoading(false); }
@@ -267,13 +295,16 @@ const VitalsEntry = () => {
             <select
               value={selectedPatient?._id || selectedPatient?.id || ''}
               onChange={e => {
-                const appt = queuePatients.find(a => (a.patient?._id || a.patient?.id) === e.target.value);
+                const val = parseInt(e.target.value, 10);
+                const appt = queuePatients.find(a => (a.patient?._id || a.patient?.id) === val);
                 if (appt) {
                   setSelectedPatient(appt.patient);
                   setAppointment(appt);
+                  navigate(`/vitals/${appt._id || appt.id}`);
                 } else {
                   setSelectedPatient(null);
                   setAppointment(null);
+                  navigate('/vitals');
                 }
               }}
               className="w-full px-3.5 py-2.5 border border-[#E5E7EB] rounded-xl text-sm text-slate-700 bg-white outline-none focus:border-[#0EA5A4] focus:ring-2 focus:ring-teal-500/10 cursor-pointer transition-all"

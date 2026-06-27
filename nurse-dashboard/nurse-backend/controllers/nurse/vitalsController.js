@@ -6,9 +6,13 @@ const mapIncomingBody = (body) => {
   if (body.appointmentId) mapped.appointment_id = body.appointmentId;
   if (body.bloodPressureSystolic) mapped.blood_pressure_systolic = body.bloodPressureSystolic;
   if (body.bloodPressureDiastolic) mapped.blood_pressure_diastolic = body.bloodPressureDiastolic;
-  if (body.pulseRate) mapped.pulse_rate = body.pulseRate;
+  if (body.pulseRate) {
+    mapped.pulse_rate = body.pulseRate;
+    mapped.pulse = body.pulseRate;
+  }
   if (body.respiratoryRate) mapped.respiratory_rate = body.respiratoryRate;
   if (body.bloodSugar) mapped.blood_sugar = body.bloodSugar;
+  if (body.painScale !== undefined) mapped.pain_scale = body.painScale;
   return mapped;
 };
 
@@ -21,7 +25,7 @@ const recordVitals = async (req, res, next) => {
       patient_id, appointment_id,
       blood_pressure_systolic, blood_pressure_diastolic,
       temperature, pulse, pulse_rate, respiratory_rate,
-      spo2, weight, height, blood_sugar, notes,
+      spo2, weight, height, blood_sugar, pain_scale, symptoms, notes,
     } = body;
 
     const bp = blood_pressure_systolic && blood_pressure_diastolic
@@ -44,6 +48,8 @@ const recordVitals = async (req, res, next) => {
       bmi,
       respiratory_rate,
       blood_sugar,
+      pain_scale,
+      symptoms,
       notes,
       recorded_at: new Date(),
     });

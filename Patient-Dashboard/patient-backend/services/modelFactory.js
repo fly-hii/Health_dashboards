@@ -178,6 +178,8 @@ function createModels(sequelize) {
     bmi:            DataTypes.DECIMAL(5, 2),
     respiratory_rate: DataTypes.INTEGER,
     blood_sugar:    DataTypes.DECIMAL(6, 2),
+    pain_scale:     DataTypes.INTEGER,
+    symptoms:       DataTypes.TEXT,
     notes:          DataTypes.TEXT,
     recorded_at:    { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   }, { tableName: 'vitals', timestamps: true, underscored: true });

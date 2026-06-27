@@ -331,11 +331,16 @@ const getPatients = async (req, res) => {
     });
     const patientIdsFromAppointments = [...new Set(appointments.map(a => a.patient_id).filter(Boolean))];
 
-    // Always scope by hospital_id — the appointment-based OR is removed to prevent
-    // cross-hospital leakage if patientIds ever contain foreign-hospital IDs.
-    const patientWhere = { hospital_id: req.hospitalId };
+    let patientWhere;
     if (patientIdsFromAppointments.length > 0) {
-      patientWhere.id = { [Op.in]: patientIdsFromAppointments };
+      patientWhere = {
+        [Op.or]: [
+          { hospital_id: req.hospitalId },
+          { id: { [Op.in]: patientIdsFromAppointments } }
+        ]
+      };
+    } else {
+      patientWhere = { hospital_id: req.hospitalId };
     }
 
     const patients = await Patient.findAll({
@@ -399,6 +404,7 @@ const getPatientQueue = async (req, res) => {
     const mapped = appointments.map(appt => {
       const json = appt.toJSON();
       json._id = json.id;
+      json.tokenNumber = json.token_number;
       if (json.patient) {
         json.patient._id = json.patient.id;
         json.patient.name = json.patient.full_name;
@@ -470,7 +476,14 @@ const getConsultationByAppointmentId = async (req, res) => {
         doctor_id: req.user.id,
         status: 'Pending',
       });
-      consultation.dataValues.appointment = appointment;
+      const appointmentJson = appointment.toJSON();
+      appointmentJson._id = appointmentJson.id;
+      appointmentJson.tokenNumber = appointmentJson.token_number;
+      if (appointmentJson.patient) {
+        appointmentJson.patient._id = appointmentJson.patient.id;
+        appointmentJson.patient.name = appointmentJson.patient.full_name;
+      }
+      consultation.dataValues.appointment = appointmentJson;
     }
 
     res.json({ success: true, data: consultation });
@@ -791,6 +804,7 @@ const getTodayAppointments = async (req, res) => {
     const mapped = appointments.map(appt => {
       const json = appt.toJSON();
       json._id = json.id;
+      json.tokenNumber = json.token_number;
       if (json.patient) {
         json.patient._id = json.patient.id;
         json.patient.name = json.patient.full_name;

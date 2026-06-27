@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, AlertCircle, CheckCircle2, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+const API = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
 const STEPS = { EMAIL: 1, OTP: 2, PASSWORD: 3, SUCCESS: 4 };
 
 const ForgotPasswordPage = () => {

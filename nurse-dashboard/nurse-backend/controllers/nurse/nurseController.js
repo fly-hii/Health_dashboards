@@ -25,11 +25,12 @@ const getDashboardStats = async (req, res, next) => {
       Appointment.count({ where: { ...whereToday, status: 'No-Show' } }),
     ]);
 
-    // Department wise
+    // Department wise (grouped by doctor's department)
     const departmentData = await Appointment.findAll({
       where: whereToday,
-      attributes: ['department', [fn('COUNT', col('id')), 'count']],
-      group: ['department'],
+      include: [{ model: User, as: 'doctor', attributes: [] }],
+      attributes: [[col('doctor.department'), 'department'], [fn('COUNT', col('Appointment.id')), 'count']],
+      group: [col('doctor.department')],
       order: [[literal('count'), 'DESC']],
     });
 
@@ -82,13 +83,12 @@ const getPatientQueue = async (req, res, next) => {
       : { [Op.between]: [today, todayEnd] };
 
     const where = { hospital_id: hospitalId, date_time: dateRange };
-    if (department && department !== 'all') where.department = department;
     
     if (status && status !== 'all') {
       if (status === 'waiting_for_vitals') {
         where.status = { [Op.in]: ['Pending', 'Confirmed'] };
       } else if (status === 'consultation_done') {
-        where.status = 'Completed';
+        where.status = { [Op.in]: ['In-Progress', 'Completed'] };
       } else if (status === 'in_progress') {
         where.status = 'In-Progress';
       } else {
@@ -98,7 +98,12 @@ const getPatientQueue = async (req, res, next) => {
 
     const include = [
       { model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id', 'phone', 'gender', 'dob', 'blood_group'] },
-      { model: User, as: 'doctor', attributes: ['id', 'name', 'department'] },
+      { 
+        model: User, 
+        as: 'doctor', 
+        attributes: ['id', 'name', 'department'],
+        ...(department && department !== 'all' && department !== 'All Departments' ? { where: { department } } : {})
+      },
       { model: Vitals, as: 'vitals', required: false },
     ];
 
@@ -120,17 +125,41 @@ const getPatientQueue = async (req, res, next) => {
       );
     }
 
+    const mapStatus = (s) => {
+      if (s === 'Pending' || s === 'Confirmed') return 'waiting_for_vitals';
+      if (s === 'In-Progress') return 'in_progress';
+      if (s === 'Completed') return 'consultation_done';
+      if (s === 'No-Show') return 'No-Show';
+      if (s === 'Cancelled') return 'Cancelled';
+      return s;
+    };
+
     const mappedRows = rows.map(appt => {
       const json = appt.toJSON();
       json._id = json.id;
+      json.status = mapStatus(json.status);
+      json.appointmentDate = json.date_time;
+      json.appointmentTime = json.date_time
+        ? new Date(json.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        : null;
+      json.tokenNumber = json.token_number;
+      json.department = json.doctor?.department || json.department || 'OPD';
       if (json.patient) {
         json.patient._id = json.patient.id;
         json.patient.name = json.patient.full_name;
+        json.patient.patientId = json.patient.patient_id;
+        json.patient.bloodGroup = json.patient.blood_group;
+        // Compute age from dob
+        if (json.patient.dob) {
+          const dob = new Date(json.patient.dob);
+          json.patient.age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+        }
       }
       return json;
     });
 
-    res.json({ success: true, data: mappedRows, pagination: { total: count, page: parseInt(page), limit: parseInt(limit) } });
+    const totalPages = Math.ceil(count / parseInt(limit)) || 1;
+    res.json({ success: true, data: mappedRows, pagination: { total: count, page: parseInt(page), limit: parseInt(limit), pages: totalPages } });
   } catch (error) {
     next(error);
   }
@@ -179,9 +208,22 @@ const getAppointmentDetails = async (req, res, next) => {
 
     const json = appointment.toJSON();
     json._id = json.id;
+    json.appointmentDate = json.date_time;
+    json.appointmentTime = json.date_time
+      ? new Date(json.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      : null;
+    json.tokenNumber = json.token_number;
+    json.department = json.doctor?.department || json.department || 'OPD';
+
     if (json.patient) {
       json.patient._id = json.patient.id;
       json.patient.name = json.patient.full_name;
+      json.patient.patientId = json.patient.patient_id;
+      json.patient.bloodGroup = json.patient.blood_group;
+      if (json.patient.dob) {
+        const dob = new Date(json.patient.dob);
+        json.patient.age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+      }
     }
 
     res.json({ success: true, data: json });
@@ -194,24 +236,124 @@ const getAppointmentDetails = async (req, res, next) => {
 const getPatientProfile = async (req, res, next) => {
   try {
     const { Patient, Appointment, User, Vitals } = req.models;
-    const patient = await Patient.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
+
+    // Try finding by numeric id (global PK — no hospital_id filter since patients can be cross-hospital)
+    const idParam = req.params.id;
+    let patient = await Patient.findOne({ where: { id: idParam } });
+
+    // Fallback: try by patient_id string scoped to this hospital
+    if (!patient) {
+      patient = await Patient.findOne({
+        where: { patient_id: idParam, hospital_id: req.hospitalId },
+      });
+    }
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
     const [appointments, vitals] = await Promise.all([
       Appointment.findAll({
         where: { patient_id: patient.id, hospital_id: req.hospitalId },
-        include: [{ model: User, as: 'doctor', attributes: ['id', 'name', 'department'] }, { model: Vitals, as: 'vitals', required: false }],
+        include: [{ model: User, as: 'doctor', attributes: ['id', 'name', 'department'] }],
         order: [['date_time', 'DESC']],
       }),
       Vitals.findAll({
         where: { patient_id: patient.id, hospital_id: req.hospitalId },
         include: [{ model: User, as: 'recordedBy', attributes: ['id', 'name'] }],
         order: [['recorded_at', 'DESC']],
-        limit: 10,
+        limit: 20,
       }),
     ]);
 
-    res.json({ success: true, data: { patient, appointments, vitals, stats: { totalVisits: appointments.length } } });
+    // Compute age from dob
+    const dob = patient.dob ? new Date(patient.dob) : null;
+    const age = dob
+      ? Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+      : null;
+
+
+
+    const patientData = {
+      _id: patient.id,
+      id: patient.id,
+      name: patient.full_name,
+      patientId: patient.patient_id,
+      phone: patient.phone,
+      email: patient.email,
+      gender: patient.gender,
+      dob: patient.dob,
+      age,
+      address: patient.address,
+      bloodGroup: patient.blood_group,
+      allergies: (() => {
+        // Try extracting allergies from medical_history JSON if present
+        const mh = patient.medical_history;
+        if (Array.isArray(mh)) return mh.filter(i => i.type === 'allergy').map(i => i.name || i);
+        return [];
+      })(),
+      chronicDiseases: (() => {
+        const mh = patient.medical_history;
+        if (Array.isArray(mh)) return mh.filter(i => i.type === 'chronic').map(i => i.name || i);
+        return [];
+      })(),
+      emergencyContact: patient.emergency_contact_name ? {
+        name: patient.emergency_contact_name,
+        phone: patient.emergency_contact_phone,
+        relation: patient.emergency_contact_relation,
+      } : null,
+      medicalNotes: patient.medical_notes,
+      department: patient.department,
+      isActive: (patient.status || '').toLowerCase() === 'active' || patient.status === 'Outpatient',
+      createdAt: patient.created_at || patient.createdAt,
+    };
+
+    const mappedAppointments = appointments.map(a => {
+      const j = a.toJSON();
+      return {
+        _id: j.id,
+        appointmentDate: j.date_time,
+        appointmentTime: j.date_time
+          ? new Date(j.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          : null,
+        department: j.department,
+        tokenNumber: j.token_number,
+        status: (() => {
+          if (j.status === 'Completed') return 'consultation_done';
+          if (j.status === 'Cancelled' || j.status === 'No-Show') return 'cancelled';
+          if (j.status === 'In-Progress') return 'vitals_done';
+          return 'waiting_for_vitals';
+        })(),
+        doctor: j.doctor ? { name: j.doctor.name, department: j.doctor.department } : null,
+        symptoms: j.reason,
+      };
+    });
+
+    const mappedVitals = vitals.map(v => {
+      const j = v.toJSON();
+      return {
+        _id: j.id,
+        bloodPressure: j.blood_pressure
+          ? (() => { const p = String(j.blood_pressure).split('/'); return { systolic: parseInt(p[0]), diastolic: parseInt(p[1]) }; })()
+          : null,
+        temperature: j.temperature,
+        pulseRate: j.pulse,
+        spo2: j.spo2,
+        weight: j.weight,
+        height: j.height,
+        bmi: j.bmi,
+        bloodSugar: j.blood_sugar,
+        recordedBy: j.recordedBy ? { name: j.recordedBy.name } : null,
+        createdAt: j.recorded_at || j.created_at,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        patient: patientData,
+        appointments: mappedAppointments,
+        vitals: mappedVitals,
+        stats: { totalVisits: appointments.length },
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -247,15 +389,54 @@ const searchPatients = async (req, res, next) => {
 const updatePatient = async (req, res, next) => {
   try {
     const { Patient } = req.models;
-    const patient = await Patient.findOne({ where: { id: req.params.id, hospital_id: req.hospitalId } });
+    // Find by global id (not hospital-scoped, same reason as getPatientProfile)
+    const patient = await Patient.findOne({ where: { id: req.params.id } });
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
-    const allowed = ['full_name', 'phone', 'gender', 'blood_group', 'medical_notes', 'address', 'status'];
+    const body = req.body;
     const updates = {};
-    allowed.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+
+    // Accept both camelCase (frontend) and snake_case (direct) field names
+    if (body.full_name   !== undefined) updates.full_name   = body.full_name;
+    if (body.name        !== undefined) updates.full_name   = body.name;
+    if (body.phone       !== undefined) updates.phone       = body.phone;
+    if (body.email       !== undefined) updates.email       = body.email;
+    if (body.gender      !== undefined) updates.gender      = body.gender;
+    if (body.address     !== undefined) updates.address     = body.address;
+    if (body.blood_group !== undefined) updates.blood_group = body.blood_group;
+    if (body.bloodGroup  !== undefined) updates.blood_group = body.bloodGroup;
+    if (body.medical_notes !== undefined) updates.medical_notes = body.medical_notes;
+    if (body.medicalNotes  !== undefined) updates.medical_notes = body.medicalNotes;
+    if (body.status      !== undefined) updates.status      = body.status;
+
+    // Emergency contact fields
+    if (body.emergencyContact) {
+      if (body.emergencyContact.name)     updates.emergency_contact_name     = body.emergencyContact.name;
+      if (body.emergencyContact.phone)    updates.emergency_contact_phone    = body.emergencyContact.phone;
+      if (body.emergencyContact.relation) updates.emergency_contact_relation = body.emergencyContact.relation;
+    }
 
     await patient.update(updates);
-    res.json({ success: true, message: 'Patient updated', data: patient });
+
+    // Return mapped patient data same as getPatientProfile
+    const dob = patient.dob ? new Date(patient.dob) : null;
+    const age = dob ? Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null;
+
+    const patientData = {
+      _id: patient.id, id: patient.id,
+      name: patient.full_name, patientId: patient.patient_id,
+      phone: patient.phone, email: patient.email,
+      gender: patient.gender, dob: patient.dob, age,
+      address: patient.address, bloodGroup: patient.blood_group,
+      medicalNotes: patient.medical_notes,
+      emergencyContact: patient.emergency_contact_name ? {
+        name: patient.emergency_contact_name,
+        phone: patient.emergency_contact_phone,
+        relation: patient.emergency_contact_relation,
+      } : null,
+    };
+
+    res.json({ success: true, message: 'Patient updated', data: patientData });
   } catch (error) {
     next(error);
   }
@@ -295,7 +476,7 @@ const addWalkInPatient = async (req, res, next) => {
   try {
     const hospitalId = req.hospitalId;
     const { name, age, gender, department, symptoms } = req.body;
-    const { Patient, Appointment, AuditLog } = req.models;
+    const { Patient, Appointment, AuditLog, User } = req.models;
 
     // Generate unique PAT+YYYYMMDD+3digit counter
     const today = new Date();
@@ -335,18 +516,24 @@ const addWalkInPatient = async (req, res, next) => {
     });
     const tokenNumber = tokenCount + 1;
 
-    // Find first available doctor in this hospital
-    const defaultDoctor = await User.findOne({
-      where: { hospital_id: hospitalId, role: 'DOCTOR' },
+    // Find first available doctor in this hospital matching department, fall back to any doctor
+    let defaultDoctor = await User.findOne({
+      where: { hospital_id: hospitalId, role: 'DOCTOR', department },
       order: [['id', 'ASC']],
     });
+    if (!defaultDoctor) {
+      defaultDoctor = await User.findOne({
+        where: { hospital_id: hospitalId, role: 'DOCTOR' },
+        order: [['id', 'ASC']],
+      });
+    }
 
     // Create walk-in appointment
     const appointment = await Appointment.create({
       hospital_id: hospitalId,
       patient_id: patient.id,
       doctor_id: defaultDoctor?.id ?? null,
-      department,
+      department: 'OPD',
       date_time: new Date(),
       token_number: tokenNumber,
       reason: symptoms || 'Walk-in Consultation',

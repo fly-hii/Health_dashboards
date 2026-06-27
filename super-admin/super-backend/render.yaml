@@ -1,0 +1,73 @@
+services:
+  - type: web
+    name: careplus-super-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # ── Set the following in the Render dashboard or via render.yaml secrets ──
+      # PORT is auto-injected by Render — do NOT set it here
+      - key: MASTER_DB_HOST
+        sync: false
+      - key: MASTER_DB_PORT
+        sync: false
+      - key: MASTER_DB_NAME
+        sync: false
+      - key: MASTER_DB_USER
+        sync: false
+      - key: MASTER_DB_PASSWORD
+        sync: false
+      - key: MASTER_DB_SSL
+        sync: false
+      - key: SAAS_DB_HOST
+        sync: false
+      - key: SAAS_DB_PORT
+        sync: false
+      - key: SAAS_DB_NAME
+        sync: false
+      - key: SAAS_DB_USER
+        sync: false
+      - key: SAAS_DB_PASSWORD
+        sync: false
+      - key: DB_SSL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRE
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
+      - key: SUPER_ADMIN_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false

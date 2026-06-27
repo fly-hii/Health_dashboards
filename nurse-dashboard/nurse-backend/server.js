@@ -19,24 +19,23 @@ const notificationRoutes = require('./routes/nurse/notificationRoutes');
 const app = express();
 const server = http.createServer(app);
 
+// Build allowed origins from env — no hardcoded URLs
 const allowedOrigins = [
   process.env.CLIENT_URL,
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-  'http://localhost:5176',
-  'http://localhost:5177',
-  'http://localhost:5180',
-  'https://health-dashboards-nurse-backend.vercel.app',
-  'https://health-dashboards-nurse-frontend.vercel.app',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) : []),
 ].filter(Boolean);
+
 
 // Socket.IO with tenant-aware rooms
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.onrender.com')
+      ) {
         callback(null, true);
       } else {
         callback(null, false);
@@ -95,7 +94,12 @@ app.set('io', io);
 // Middleware
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.onrender.com')
+    ) {
       callback(null, true);
     } else {
       callback(null, false);

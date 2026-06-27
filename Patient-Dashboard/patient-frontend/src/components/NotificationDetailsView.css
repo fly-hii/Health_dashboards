@@ -345,3 +345,76 @@
 .ndv-btn--block {
   width: 100%;
 }
+
+/* Custom Styled Buttons */
+.ndv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: 12px;
+  font-weight: 650;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  font-family: inherit;
+}
+
+.ndv-btn svg {
+  flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ndv-btn:hover {
+  transform: translateY(-2px);
+}
+
+.ndv-btn:hover svg {
+  transform: scale(1.15) rotate(5deg);
+}
+
+.ndv-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.ndv-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ndv-btn--primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover, #0d9488));
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
+}
+
+.ndv-btn--primary:hover {
+  box-shadow: 0 6px 20px rgba(13, 148, 136, 0.35);
+  background: linear-gradient(135deg, var(--primary-hover, #0d9488), var(--primary));
+}
+
+.ndv-btn--danger {
+  background: linear-gradient(135deg, var(--danger, #ef4444), #dc2626);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
+}
+
+.ndv-btn--danger:hover {
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35);
+  background: linear-gradient(135deg, #dc2626, var(--danger, #ef4444));
+}
+
+.ndv-btn--outline {
+  background-color: transparent;
+  border: 1.5px solid var(--border-color, #e2e8f0);
+  color: var(--text-main, #334155);
+}
+
+.ndv-btn--outline:hover {
+  background-color: var(--bg-app, #f8fafc);
+  border-color: var(--border-darker, #cbd5e1);
+}

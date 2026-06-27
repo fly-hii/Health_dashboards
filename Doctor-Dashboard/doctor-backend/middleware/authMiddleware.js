@@ -8,11 +8,18 @@ const { getHospitalConnection } = require('../services/databaseResolver');
 const { createModels }          = require('../services/modelFactory');
 
 const protect = async (req, res, next) => {
+  let token = null;
   const auth = req.headers.authorization;
-  if (!auth?.startsWith('Bearer '))
+  if (auth?.startsWith('Bearer ')) {
+    token = auth.split(' ')[1];
+  } else if (req.query?.token) {
+    token = req.query.token;
+  }
+
+  if (!token)
     return res.status(401).json({ success: false, message: 'Not authorized, no token' });
   try {
-    const decoded    = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET);
+    const decoded    = jwt.verify(token, process.env.JWT_SECRET);
     if (!['DOCTOR', 'HOSPITAL_ADMIN'].includes(decoded.role))
       return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
 

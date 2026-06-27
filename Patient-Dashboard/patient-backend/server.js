@@ -26,23 +26,22 @@ const PORT = process.env.PORT || 5050;
 // ── HTTP Server & Socket.IO ─────────────────────────────────
 const server = http.createServer(app);
 
+// Build allowed origins from env — no hardcoded URLs
 const allowedOrigins = [
   process.env.CLIENT_URL,
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-  'http://localhost:5176',
-  'http://localhost:5177',
-  'http://localhost:5180',
-  'https://health-dashboards-patient-backend.vercel.app',
-  'https://health-dashboards-patient-frontend.vercel.app',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()) : []),
 ].filter(Boolean);
+
 
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.onrender.com')
+      ) {
         callback(null, true);
       } else {
         callback(null, false);
@@ -103,7 +102,10 @@ io.on('connection', (socket) => {
 app.set('io', io);
 
 const NURSE_SOCKET_URL = process.env.NURSE_SOCKET_URL;
-const nurseSocketDisabled = !NURSE_SOCKET_URL || NURSE_SOCKET_URL.includes('vercel.app');
+// Disable nurse relay only when the URL is missing or still pointing at a Vercel serverless URL
+// (Vercel doesn't support persistent sockets; Render does)
+const nurseSocketDisabled = !NURSE_SOCKET_URL || 
+  (NURSE_SOCKET_URL.includes('vercel.app') && !NURSE_SOCKET_URL.includes('onrender.com'));
 if (nurseSocketDisabled) {
   console.warn('⚠️  NURSE_SOCKET_URL not set or is a Vercel URL — real-time nurse relay disabled.');
 }
@@ -168,7 +170,12 @@ if (!fs.existsSync(uploadsDir)) {
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    if (
+      !origin ||
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app') ||
+      origin.endsWith('.onrender.com')
+    ) {
       callback(null, true);
     } else {
       callback(null, false);
@@ -1235,6 +1242,25 @@ app.get('/api/reports/:id/download', protect, async (req, res) => {
 // VITALS HISTORY
 // ────────────────────────────────────────────────────────────
 // GET /api/vitals/latest — most recent vitals record
+const formatVitalsRecord = (vitalsInstance) => {
+  if (!vitalsInstance) return null;
+  const json = vitalsInstance.toJSON ? vitalsInstance.toJSON() : vitalsInstance;
+  const bpParts = (json.blood_pressure || '').split('/');
+  const systolic = bpParts[0] ? parseInt(bpParts[0], 10) : null;
+  const diastolic = bpParts[1] ? parseInt(bpParts[1], 10) : null;
+
+  return {
+    ...json,
+    recordedAt: json.recorded_at,
+    pulseRate: json.pulse,
+    bloodSugar: json.blood_sugar,
+    bloodPressure: {
+      systolic,
+      diastolic,
+    },
+  };
+};
+
 app.get('/api/vitals/latest', protect, async (req, res) => {
   try {
     const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
@@ -1251,7 +1277,7 @@ app.get('/api/vitals/latest', protect, async (req, res) => {
         }
       }
     }
-    res.json({ success: true, data: latestVitals || null });
+    res.json({ success: true, data: formatVitalsRecord(latestVitals) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1274,7 +1300,9 @@ app.get('/api/vitals', protect, async (req, res) => {
     // Sort and limit to 20 overall
     allVitals.sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
 
-    res.json({ success: true, data: allVitals.slice(0, 20) });
+    const formattedList = allVitals.slice(0, 20).map(v => formatVitalsRecord(v));
+
+    res.json({ success: true, data: formattedList });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1471,12 +1499,16 @@ app.get('/api/patient/notifications/:id', protect, async (req, res) => {
   try {
     const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
     let notif = null;
+    let targetConn = null;
 
     for (const conn of patientConns) {
       notif = await conn.models.Notification.findOne({
         where: { id: req.params.id, user_id: conn.patientId, hospital_id: conn.hospitalId },
       });
-      if (notif) break;
+      if (notif) {
+        targetConn = conn;
+        break;
+      }
     }
 
     if (!notif) return res.status(404).json({ success: false, message: 'Notification not found' });
@@ -1486,7 +1518,94 @@ app.get('/api/patient/notifications/:id', protect, async (req, res) => {
       await notif.update({ status: 'read', read_at: new Date() });
     }
 
-    res.json({ success: true, data: notif });
+    // Resolve relatedData if available
+    let relatedData = null;
+    if (notif.related_entity_id && notif.related_entity_type && targetConn) {
+      const type = notif.related_entity_type.toLowerCase();
+      const conn = targetConn;
+      if (type === 'appointment' || type === 'appointments') {
+        const appt = await conn.models.Appointment.findOne({
+          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId },
+          include: [{ model: conn.models.User, as: 'doctor', attributes: ['name', 'specialization'] }]
+        });
+        if (appt) {
+          const plainAppt = appt.get({ plain: true });
+          relatedData = {
+            _id: plainAppt.id,
+            id: plainAppt.id,
+            appointmentDate: plainAppt.date_time,
+            appointmentTime: plainAppt.date_time ? new Date(plainAppt.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+            department: plainAppt.department,
+            status: plainAppt.status,
+            reason: plainAppt.reason,
+            notes: plainAppt.notes,
+            visitType: plainAppt.visit_type,
+            tokenNumber: plainAppt.token_number,
+            doctor: plainAppt.doctor ? {
+              name: plainAppt.doctor.name,
+              specialization: plainAppt.doctor.specialization
+            } : null
+          };
+        }
+      } else if (type === 'prescription' || type === 'prescriptions') {
+        const pres = await conn.models.Prescription.findOne({
+          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId },
+          include: [
+            { model: conn.models.User, as: 'doctor', attributes: ['name', 'specialization'] },
+            { model: conn.models.PrescriptionMedicine, as: 'medicines' }
+          ]
+        });
+        if (pres) {
+          const plainPres = pres.get({ plain: true });
+          relatedData = {
+            _id: plainPres.id,
+            id: plainPres.id,
+            diagnosis: plainPres.diagnosis,
+            instructions: plainPres.instructions,
+            status: plainPres.status,
+            validUntil: plainPres.valid_until,
+            doctor: plainPres.doctor ? {
+              name: plainPres.doctor.name,
+              specialization: plainPres.doctor.specialization
+            } : null,
+            medicines: plainPres.medicines || []
+          };
+        }
+      } else if (type === 'token' || type === 'tokens' || type === 'alerts') {
+        const tokenRec = await conn.models.Token.findOne({
+          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId }
+        });
+        if (tokenRec) {
+          const plainToken = tokenRec.get({ plain: true });
+          
+          // Count people ahead
+          const peopleAhead = await conn.models.Token.count({
+            where: {
+              hospital_id: conn.hospitalId,
+              token_date: plainToken.token_date,
+              status: 'Waiting',
+              token_number: { [Op.lt]: plainToken.token_number }
+            }
+          });
+
+          relatedData = {
+            _id: plainToken.id,
+            id: plainToken.id,
+            tokenNumber: plainToken.token_number,
+            tokenDate: plainToken.token_date,
+            status: plainToken.status,
+            estimatedWaitMinutes: plainToken.estimated_wait_mins,
+            peopleAhead: peopleAhead
+          };
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      notification: notif,
+      relatedData: relatedData
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

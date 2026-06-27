@@ -235,6 +235,23 @@ async function initConnections() {
     createModels(sharedSaasDb);
     await sharedSaasDb.sync({ force: false, alter: false });
     console.log('✅ [DB Resolver] hospitals_db schema synced');
+
+    // Check and add missing columns to vitals table
+    try {
+      const [columns] = await sharedSaasDb.query("SHOW COLUMNS FROM vitals");
+      const hasPainScale = columns.some(c => c.Field === 'pain_scale');
+      const hasSymptoms = columns.some(c => c.Field === 'symptoms');
+      if (!hasPainScale) {
+        await sharedSaasDb.query("ALTER TABLE vitals ADD COLUMN pain_scale INT NULL AFTER blood_sugar");
+        console.log('✅ [DB Resolver] Added pain_scale column to vitals table');
+      }
+      if (!hasSymptoms) {
+        await sharedSaasDb.query("ALTER TABLE vitals ADD COLUMN symptoms TEXT NULL AFTER notes");
+        console.log('✅ [DB Resolver] Added symptoms column to vitals table');
+      }
+    } catch (colErr) {
+      console.warn('⚠️ [DB Resolver] Failed to check/add columns to vitals table:', colErr.message);
+    }
   } catch (err) {
     console.error('❌ [DB Resolver] DB init failed:', err.message);
     throw err;

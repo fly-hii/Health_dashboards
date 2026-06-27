@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, AlertCircle, CheckCircle2, Lock, Eye, EyeOff, ShieldCheck, FileText, Pill, Search } from 'lucide-react';
 
-const BASE_API = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5003';
+const BASE_API = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
 const API = `${BASE_API}/api/pharmacy`;
 const STEPS = { EMAIL: 1, OTP: 2, PASSWORD: 3, SUCCESS: 4 };
 

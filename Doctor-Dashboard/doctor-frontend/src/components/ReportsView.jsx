@@ -69,7 +69,15 @@ function ReportPreviewModal({ report, onClose }) {
     };
   }, [onClose]);
 
-  const isPDF = report.fileUrl?.toLowerCase().endsWith('.pdf');
+  const reportId = report.id || report._id;
+  const token = localStorage.getItem('doctor_token');
+  const fileDownloadUrl = `/api/reports/download/${reportId}?token=${token}`;
+  
+  const isPDF = report.fileUrl?.toLowerCase().endsWith('.pdf') || 
+                report.fileName?.toLowerCase().endsWith('.pdf') || 
+                report.file_name?.toLowerCase().endsWith('.pdf') ||
+                report.reportName?.toLowerCase().endsWith('.pdf') ||
+                report.name?.toLowerCase().endsWith('.pdf');
 
   return createPortal(
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
@@ -114,7 +122,7 @@ function ReportPreviewModal({ report, onClose }) {
           <div className="flex-1 bg-white border border-slate-200 rounded-2xl overflow-hidden min-h-[450px] flex items-center justify-center relative">
             {isPDF ? (
               <object
-                data={report.fileUrl}
+                data={fileDownloadUrl}
                 type="application/pdf"
                 className="w-full h-full min-h-[450px]"
               >
@@ -122,7 +130,7 @@ function ReportPreviewModal({ report, onClose }) {
                   <FileText className="w-12 h-12 mx-auto text-slate-300 mb-2" />
                   <p className="text-sm font-semibold">PDF Viewer is not supported in this browser.</p>
                   <a 
-                    href={report.fileUrl} 
+                    href={fileDownloadUrl} 
                     target="_blank" 
                     rel="noreferrer" 
                     className="text-[#0F9D8A] hover:underline mt-2 inline-block text-xs font-bold"
@@ -133,7 +141,7 @@ function ReportPreviewModal({ report, onClose }) {
               </object>
             ) : (
               <img 
-                src={report.fileUrl} 
+                src={fileDownloadUrl} 
                 alt={report.reportName || report.name}
                 className="max-w-full max-h-[60vh] object-contain rounded-lg p-2"
               />
@@ -150,7 +158,7 @@ function ReportPreviewModal({ report, onClose }) {
             Close
           </button>
           <a 
-            href={`/api/reports/download/${report._id}`}
+            href={fileDownloadUrl}
             download
             className="px-5 py-2.5 text-sm font-bold text-white bg-[#0F9D8A] hover:bg-[#0c8776] rounded-xl transition-all shadow-sm shadow-[#0F9D8A]/10 cursor-pointer flex items-center gap-1.5"
           >
@@ -314,7 +322,9 @@ export default function ReportsView() {
 
   // Trigger file download
   const handleDownload = (rep) => {
-    window.open(`/api/reports/download/${rep._id}`);
+    const reportId = rep.id || rep._id;
+    const token = localStorage.getItem('doctor_token');
+    window.open(`/api/reports/download/${reportId}?token=${token}`);
   };
 
   // Upload file execution
@@ -390,7 +400,7 @@ export default function ReportsView() {
   // Filtering reports
   const filteredReports = Array.isArray(reports) ? reports.filter(rep => {
     // 1. Patient matching
-    const repPatientId = rep.patientId || rep.patient?._id || rep.patient;
+    const repPatientId = rep.patientId || rep.patient_id || rep.patient?.id || rep.patient?._id || rep.patient;
     if (selectedPatientId && repPatientId?.toString() !== selectedPatientId) return false;
 
     // 2. Tab Category matching

@@ -41,6 +41,7 @@ const mapAppointmentToToken = (appt) => {
   const statusMap = {
     'checked_in':          { currentStage: 1, status: 'Active' },
     'waiting_for_vitals':  { currentStage: 2, status: 'Active' },
+    'in_progress':         { currentStage: 3, status: 'Active' },
     'vitals_done':         { currentStage: 3, status: 'Active' },
     'with_doctor':         { currentStage: 3, status: 'Active' },
     'consultation_done':   { currentStage: 5, status: 'Completed' },
@@ -331,7 +332,7 @@ const MyTokens = () => {
   const filteredPastTokens = tokens.filter(t => {
     // Show completed / missed / active depending on filter
     const matchesStatus = statusFilter === 'All' || t.status === statusFilter;
-    const matchesSearch = t.id.toLowerCase().includes(searchToken.toLowerCase()) || 
+    const matchesSearch = String(t.id).toLowerCase().includes(searchToken.toLowerCase()) || 
                           t.patientName.toLowerCase().includes(searchToken.toLowerCase());
     return matchesSearch && matchesStatus;
   });
@@ -537,7 +538,7 @@ const MyTokens = () => {
                         Mark Missed
                       </Button>
                     </div>
-                  ) : activePatient.status === 'Completed' ? (
+                  ) : (activePatient.status === 'Completed' || activePatient.currentStage >= 3) ? (
                     <div className="flex items-center gap-4 p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/30 border border-emerald-100/80 rounded-2xl text-emerald-800 text-xs font-bold shadow-sm">
                       <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm shrink-0">
                         <Check size={18} strokeWidth={3} />
