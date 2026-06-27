@@ -75,3 +75,7 @@ coverage/
 .parcel-cache/
 tmp/
 temp/
+
+.tmp_health/
+test_report.png
+*.tmp
