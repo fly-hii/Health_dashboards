@@ -99,10 +99,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
-// Ensure uploads directory exists
+// Ensure uploads directory exists (silently skip if read-only FS like Vercel)
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  // Vercel/serverless has read-only filesystem — uploads will use S3
 }
 app.use('/uploads', express.static(uploadsDir));
 
@@ -124,7 +128,21 @@ app.use('/api/pharmacy', pharmacyRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'healthy', service: 'CarePlus Pharmacy API v2.0', database: 'MySQL (AWS RDS)', timestamp: new Date() });
+  const envCheck = {
+    DB_HOST: !!process.env.DB_HOST,
+    DB_USER: !!process.env.DB_USER,
+    DB_NAME: !!process.env.DB_NAME,
+    JWT_SECRET: !!process.env.JWT_SECRET,
+    SMTP_HOST: !!process.env.SMTP_HOST,
+  };
+  const allEnvSet = Object.values(envCheck).every(Boolean);
+  res.status(allEnvSet ? 200 : 503).json({
+    status: allEnvSet ? 'healthy' : 'degraded',
+    service: 'CarePlus Pharmacy API v2.0',
+    database: 'MySQL (AWS RDS)',
+    envCheck,
+    timestamp: new Date(),
+  });
 });
 
 app.use('*', (req, res) => res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found` }));
