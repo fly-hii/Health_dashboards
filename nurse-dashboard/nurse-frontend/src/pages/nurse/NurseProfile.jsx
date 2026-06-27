@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getImageUrl } from '../../utils/imageUrl';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
 import { toast } from 'react-toastify';
@@ -117,7 +118,8 @@ const NurseProfile = () => {
         department: user.department || 'General Medicine'
       }));
 
-      setAvatar(user.avatar || DEFAULT_AVATAR);
+      setAvatar(getImageUrl(user.avatar) || DEFAULT_AVATAR);
+
     }
 
     // Load extra local details from localStorage

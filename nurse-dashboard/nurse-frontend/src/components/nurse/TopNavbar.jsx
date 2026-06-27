@@ -6,6 +6,8 @@ import config from '../../config';
 import { Menu, Search, Bell, ChevronDown, User as UserIcon, LogOut } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../ui/dropdown-menu';
+import { getImageUrl } from '../../utils/imageUrl';
+
 
 const TopNavbar = ({ collapsed, onToggleSidebar, onMobileMenu }) => {
   const { user, logout }          = useAuth();
@@ -23,7 +25,8 @@ const TopNavbar = ({ collapsed, onToggleSidebar, onMobileMenu }) => {
 
   const displayName = user?.name || 'Nurse';
   const displayStaffId = user?.employeeId || '';
-  const avatarUrl = user?.avatar || config.defaultAvatar;
+  const avatarUrl = getImageUrl(user?.avatar) || config.defaultAvatar;
+
 
   return (
     <header 

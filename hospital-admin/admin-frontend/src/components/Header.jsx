@@ -163,7 +163,7 @@ export default function Header({ searchTerm, setSearchTerm, isSidebarMinimized, 
             </div>
             <div className="relative">
               <img
-                src={user.profileImage || "https://api.dicebear.com/7.x/adventurer/svg?seed=James"}
+                src={(!user.profileImage || user.profileImage.includes("localhost") ? null : user.profileImage) || "https://api.dicebear.com/7.x/adventurer/svg?seed=James"}
                 alt="Profile"
                 className="w-10 h-10 border border-slate-200 rounded-xl"
               />

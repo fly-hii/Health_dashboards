@@ -1006,10 +1006,17 @@ const saveFileLocally = async (req, fileName) => {
   const filePath = path.join(uploadsDir, fileName);
   await fs.promises.writeFile(filePath, req.file.buffer);
   
-  // Return the full local URL
-  const protocol = req.protocol;
-  const host = req.get('host');
-  return `${protocol}://${host}/uploads/${fileName}`;
+  // Use BACKEND_URL env var so stored URLs are always https:// pointing at the
+  // real backend, never http://localhost (which causes Mixed Content on HTTPS pages).
+  const backendUrl =
+    process.env.BACKEND_URL ||
+    process.env.RENDER_URL ||
+    (() => {
+      const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+      const host  = req.get('x-forwarded-host')  || req.get('host');
+      return `${proto}://${host}`;
+    })();
+  return `${backendUrl}/uploads/${fileName}`;
 };
 
 // PUT /api/doctors/change-password

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Bell, Search, Menu, Check, ChevronDown, User, LogOut, Settings } from 'lucide-react';
-import api from '../services/api';
+import api, { getImageUrl } from '../services/api';
 import { socket } from '../sockets/socket';
+
 import { formatDistanceToNow } from 'date-fns';
 
 export default function Header({ searchTerm = '', setSearchTerm, setIsSidebarOpen, isMinimized, setIsMinimized }) {
@@ -276,7 +277,7 @@ export default function Header({ searchTerm = '', setSearchTerm, setIsSidebarOpe
           >
             <img
               className="h-10 w-10 rounded-full bg-gray-100 border border-[#E5E7EB] object-cover"
-              src={profile.profilePhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.fullName || 'Pharmacist')}`}
+              src={getImageUrl(profile.profilePhoto) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile.fullName || 'Pharmacist')}`}
               alt="Profile Avatar"
             />
             <div className="hidden sm:block text-left">

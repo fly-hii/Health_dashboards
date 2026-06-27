@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../utils/api';
+import { api, getImageUrl } from '../utils/api';
+
 import { 
   User, 
   Mail, 
@@ -38,7 +39,8 @@ export default function ProfileView({ activeTab, setActiveTab }) {
   // Loading and edit states
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(() => getImageUrl(null)); // starts null; set from user below
+
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Profile Form state (using React Hook Form)
@@ -248,7 +250,7 @@ export default function ProfileView({ activeTab, setActiveTab }) {
   const qualification = user.qualification || 'MBBS, MD (Cardiology)';
   const registrationNumber = user.registrationNumber || 'Reg. No. RJ/MC/2012/4587';
   const department = user.department || 'Cardiology';
-  const avatarUrl = avatarPreview || user.avatar || user.profileImage || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300';
+  const avatarUrl = avatarPreview || getImageUrl(user?.avatar || user?.profileImage) || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300';
   const address = user.address || '123, Green Avenue, Jaipur, Rajasthan - 302001';
 
   return (

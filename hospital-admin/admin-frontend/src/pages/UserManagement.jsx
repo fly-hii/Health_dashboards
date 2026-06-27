@@ -367,7 +367,7 @@ export default function UserManagement() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <img
-                      src={u.profileImage || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u.name}`}
+                      src={(!u.profileImage || u.profileImage.includes("localhost") ? null : u.profileImage) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u.name}`}
                       alt="User profile"
                       className="w-12 h-12 rounded-xl border border-slate-100"
                     />

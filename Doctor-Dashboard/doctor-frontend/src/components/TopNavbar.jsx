@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Search, Bell, MessageSquare, ChevronDown, Menu } from 'lucide-react';
+import { getImageUrl } from '../utils/api';
+
 
 export default function TopNavbar({ searchQuery, setSearchQuery, queue, onDiagnosePatient, activeTab, setActiveTab, onToggleSidebar }) {
   const { user } = useAuth();
@@ -22,7 +24,8 @@ export default function TopNavbar({ searchQuery, setSearchQuery, queue, onDiagno
   const rawName = user?.fullName || user?.name || 'Arjun Mehta';
   const displayName = rawName.startsWith('Dr.') ? rawName : `Dr. ${rawName}`;
   const specialization = user?.specialization || 'Cardiologist';
-  const avatarUrl = user?.avatar || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300';
+  const avatarUrl = getImageUrl(user?.avatar) || 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300';
+
 
   return (
     <header className="w-full h-[90px] bg-white border-b border-[#E5E7EB] flex items-center justify-between px-4 md:px-8 shrink-0 font-sans">

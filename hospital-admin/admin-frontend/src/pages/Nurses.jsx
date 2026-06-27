@@ -228,7 +228,7 @@ export default function Nurses() {
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <img
-                      src={nurse.profileImage || `https://api.dicebear.com/7.x/adventurer/svg?seed=${nurse.name}`}
+                      src={(!nurse.profileImage || nurse.profileImage.includes("localhost") ? null : nurse.profileImage) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${nurse.name}`}
                       alt="Nurse Avatar"
                       className="w-12 h-12 rounded-xl border border-slate-100"
                     />

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { Camera, ShieldAlert, CheckCircle, Info, Lock, Settings, Bell, User, Eye, EyeOff } from 'lucide-react';
-import api from '../../services/api';
+import api, { getImageUrl } from '../../services/api';
+
 import { toast } from 'react-toastify';
 import { socket } from '../../sockets/socket';
 
@@ -30,8 +31,9 @@ export default function Profile() {
       const res = await api.get('/api/pharmacy/profile');
       const user = res.data;
       
-      if (user.profilePhoto) {
+      if (user.profilePhoto && !user.profilePhoto.includes('localhost')) {
         setProfilePhoto(user.profilePhoto);
+
       } else {
         // Use actual name as dicebear seed so the avatar is persona-consistent
         setProfilePhoto(`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.fullName || 'Pharmacist')}`);
