@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { api, getImageUrl } from '../utils/api';
+
 import { toast } from '../utils/toast';
 import AppointmentDetailsView from './AppointmentDetailsView';
 import './AppointmentsView.css';
@@ -385,7 +386,8 @@ export default function AppointmentsView({ initialSelectedId, onClearDeepLink })
                     <td className="appt-td appt-id-cell">{appt.appointmentId}</td>
                     <td className="appt-td">
                       <div className="appt-doctor-cell">
-                        <DoctorAvatar avatar={appt.doctorAvatar} name={appt.doctorName} />
+                        <DoctorAvatar avatar={getImageUrl(appt.doctorAvatar)} name={appt.doctorName} />
+
                         <span className="appt-doctor-name">{appt.doctorName}</span>
                       </div>
                     </td>

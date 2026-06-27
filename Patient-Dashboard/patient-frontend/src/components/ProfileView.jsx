@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { api, getImageUrl } from '../utils/api';
+
 import { toast } from '../utils/toast';
 import './ProfileView.css';
 
@@ -63,7 +64,8 @@ export default function ProfileView({ profile, onUpdateProfile }) {
       setEmail(profile.email || '');
       setAddress(profile.address || '');
       setBloodGroup(profile.bloodGroup || 'O+');
-      setProfileImage(profile.profileImage || '');
+      setProfileImage(getImageUrl(profile.profileImage) || '');
+
     }
   }, [profile]);
 

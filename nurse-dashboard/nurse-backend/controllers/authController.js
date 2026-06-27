@@ -308,9 +308,17 @@ const saveBase64Locally = async (req, base64Data, fileName) => {
   const filePath = path.join(uploadsDir, fileName);
   await fs.promises.writeFile(filePath, buffer);
   
-  const protocol = req.protocol;
-  const host = req.get('host');
-  return `${protocol}://${host}/uploads/${fileName}`;
+  // Use BACKEND_URL env var so uploaded file URLs are always https:// and
+  // point to the real deployed backend — never http://localhost.
+  const backendUrl =
+    process.env.BACKEND_URL ||
+    process.env.RENDER_URL ||
+    (() => {
+      const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+      const host  = req.get('x-forwarded-host')  || req.get('host');
+      return `${proto}://${host}`;
+    })();
+  return `${backendUrl}/uploads/${fileName}`;
 };
 
 // PUT /api/auth/change-password

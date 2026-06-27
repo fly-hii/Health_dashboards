@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { api, getImageUrl } from '../utils/api';
+
 import './AppointmentDetailsView.css';
 
 export default function AppointmentDetailsView({
@@ -338,7 +339,8 @@ ${line}
             <div className="dv-card-body">
               {/* Doctor profile header */}
               <div className="dv-doctor-profile">
-                <DoctorAvatar avatar={doctor.avatar} name={doctor.name} size={68} />
+                <DoctorAvatar avatar={getImageUrl(doctor.avatar)} name={doctor.name} size={68} />
+
                 <div className="dv-doctor-info">
                   <h4 className="dv-doctor-name">{doctor.name}</h4>
                   <p className="dv-doctor-spec">{doctor.specialization || doctor.department}</p>

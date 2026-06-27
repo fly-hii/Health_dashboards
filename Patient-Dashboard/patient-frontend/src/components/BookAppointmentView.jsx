@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../utils/api';
+import { api, getImageUrl } from '../utils/api';
+
 import { toast } from 'react-toastify';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -569,7 +570,8 @@ export default function BookAppointmentView() {
               {doctors.map(doc => (
                 <div key={doc.id} className="bav-doctor-card">
                   <img
-                    src={doc.avatar}
+                    src={getImageUrl(doc.avatar)}
+
                     alt={doc.name}
                     className="bav-doctor-avatar"
                     onError={e => { e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(doc.name)}`; }}
@@ -696,7 +698,8 @@ export default function BookAppointmentView() {
             {/* Doctor summary */}
             <div className="bav-confirm-doctor">
               <img
-                src={selectedDoc?.avatar}
+                src={getImageUrl(selectedDoc?.avatar)}
+
                 alt={selectedDoc?.name}
                 className="bav-confirm-doc-avatar"
                 onError={e => { e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(selectedDoc?.name || '')}`; }}

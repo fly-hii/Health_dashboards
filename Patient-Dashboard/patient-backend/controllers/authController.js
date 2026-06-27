@@ -374,9 +374,18 @@ const saveBase64Locally = async (req, base64Data, fileName) => {
   const filePath = path.join(uploadsDir, fileName);
   await fs.promises.writeFile(filePath, buffer);
   
-  const protocol = req.protocol;
-  const host = req.get('host');
-  return `${protocol}://${host}/uploads/${fileName}`;
+  // Build the absolute URL for the saved file.
+  // Prefer BACKEND_URL env var (set in Vercel/Render dashboard) so the URL is
+  // always https:// pointing at the real backend — never http://localhost.
+  const backendUrl =
+    process.env.BACKEND_URL ||
+    process.env.RENDER_URL ||
+    (() => {
+      const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+      const host  = req.get('x-forwarded-host')  || req.get('host');
+      return `${proto}://${host}`;
+    })();
+  return `${backendUrl}/uploads/${fileName}`;
 };
 
 // GET /api/profile

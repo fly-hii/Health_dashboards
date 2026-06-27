@@ -101,7 +101,7 @@ export default function Header({
             </div>
             <div className="profile-avatar">
               <img 
-                src={profile.profileImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"} 
+                src={(profile.profileImage && !profile.profileImage.includes('localhost') ? profile.profileImage : null) || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"} 
                 alt="User Profile" 
                 className="avatar-img"
               />

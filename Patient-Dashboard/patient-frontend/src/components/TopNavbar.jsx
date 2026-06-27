@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getImageUrl } from '../utils/api';
 import './TopNavbar.css';
+
 
 export default function TopNavbar({ 
   notifications, 
@@ -16,7 +18,8 @@ export default function TopNavbar({
   const unreadNotifications = notifications.filter(n => !n.read);
 
   const displayName = user?.fullName || 'User';
-  const avatarUrl = user?.profileImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150";
+  const avatarUrl = getImageUrl(user?.profileImage) || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150";
+
 
   return (
     <header className="top-navbar flex justify-between items-center">

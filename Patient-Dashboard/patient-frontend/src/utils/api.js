@@ -2,6 +2,36 @@
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '/api';
 
+/**
+ * Sanitize an image/avatar URL coming from the database.
+ *
+ * Profiles uploaded in a local dev environment are stored with
+ * "http://localhost:PORT/uploads/..." URLs. When these are rendered on an
+ * HTTPS Vercel page the browser blocks them as Mixed Content.
+ *
+ * Rules:
+ *  - null / empty → return null  (let caller use its placeholder)
+ *  - contains "localhost" or "127.0.0.1" → return null
+ *  - starts with "/" (relative) → prepend the configured API base origin
+ *  - http:// external URL → upgrade to https://
+ *  - https:// → return as-is
+ */
+export const getImageUrl = (url) => {
+  if (!url) return null;
+  // Reject local dev URLs stored in DB
+  if (/localhost|127\.0\.0\.1/.test(url)) return null;
+  // Relative path → make absolute using the configured API origin
+  if (url.startsWith('/')) {
+    const origin = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '')
+      .replace(/\/api$/, '');
+    return origin ? `${origin}${url}` : url;
+  }
+  // Upgrade insecure external URLs to https
+  if (url.startsWith('http://')) return url.replace(/^http:\/\//, 'https://');
+  return url;
+};
+
+
 const handleResponse = async (response) => {
   if (!response.ok) {
     const errorText = await response.text();
