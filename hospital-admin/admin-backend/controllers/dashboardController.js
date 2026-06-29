@@ -111,8 +111,27 @@ const getDashboardStats = async (req, res) => {
     );
 
     // ── Revenue Trends ────────────────────────────────────────────
+    let revDaily = dailyLabels.map(label => ({ label, revenue: 0 }));
     let revMonthly = monthLabels.map(label => ({ label, revenue: 0 }));
+    const currentYear = new Date().getFullYear();
+    const yearlyLabels = [currentYear - 2, currentYear - 1, currentYear];
+    let revYearly = yearlyLabels.map(year => ({ label: String(year), revenue: 0 }));
+
     try {
+      // Daily (7 days)
+      revDaily = await Promise.all(
+        Array.from({ length: 7 }, async (_, i) => {
+          const start = new Date(); start.setDate(start.getDate() - (6 - i)); start.setHours(0,0,0,0);
+          const end = new Date(start); end.setHours(23,59,59,999);
+          const r = await Payment.findOne({
+            where: { hospital_id: hospitalId, status: 'Paid', paid_at: { [Op.between]: [start, end] } },
+            attributes: [[db.fn('SUM', db.col('amount')), 'total']],
+          });
+          return { label: dailyLabels[i], revenue: parseFloat(r?.dataValues?.total || 0) };
+        })
+      );
+
+      // Monthly (6 months)
       revMonthly = await Promise.all(
         Array.from({ length: 6 }, async (_, i) => {
           const d = new Date(); const m = d.getMonth() - (5 - i);
@@ -123,6 +142,19 @@ const getDashboardStats = async (req, res) => {
             attributes: [[db.fn('SUM', db.col('amount')), 'total']],
           });
           return { label: monthLabels[i], revenue: parseFloat(r?.dataValues?.total || 0) };
+        })
+      );
+
+      // Yearly (3 years)
+      revYearly = await Promise.all(
+        yearlyLabels.map(async (year) => {
+          const start = new Date(year, 0, 1);
+          const end = new Date(year, 11, 31, 23, 59, 59, 999);
+          const r = await Payment.findOne({
+            where: { hospital_id: hospitalId, status: 'Paid', paid_at: { [Op.between]: [start, end] } },
+            attributes: [[db.fn('SUM', db.col('amount')), 'total']],
+          });
+          return { label: String(year), revenue: parseFloat(r?.dataValues?.total || 0) };
         })
       );
     } catch (_) { /* Payment table may not exist */ }
@@ -194,7 +226,7 @@ const getDashboardStats = async (req, res) => {
         },
         departmentWise,
         appointmentTrends: { daily: apptDaily, monthly: apptMonthly },
-        revenueTrends: { monthly: revMonthly },
+        revenueTrends: { daily: revDaily, monthly: revMonthly, yearly: revYearly },
         portalData,
         recentAppointments,
         recentActivities,

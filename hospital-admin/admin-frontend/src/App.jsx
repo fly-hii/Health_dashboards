@@ -16,6 +16,7 @@ import AuditLogs from './pages/AuditLogs';
 import UserManagement from './pages/UserManagement';
 import Notifications from './pages/Notifications';
 import HospitalProfile from './pages/HospitalProfile';
+import Subscription from './pages/Subscription';
 import DepartmentManagement from './pages/DepartmentManagement';
 import StaffManagement from './pages/StaffManagement';
 import HospitalSettings from './pages/HospitalSettings';
@@ -54,6 +55,7 @@ function App() {
           <Route path="audit-logs" element={<AuditLogs />} />
           <Route path="user-management" element={<UserManagement />} />
           <Route path="hospital-profile" element={<HospitalProfile />} />
+          <Route path="subscription" element={<Subscription />} />
           <Route path="departments" element={<DepartmentManagement />} />
           <Route path="staff" element={<StaffManagement />} />
           <Route path="hospital-settings" element={<HospitalSettings />} />

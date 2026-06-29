@@ -156,9 +156,24 @@ const login = async (req, res) => {
       models = createModels(db);
     }
 
-    // Step 3: Find user in tenant DB
+    // Step 3: Find user in tenant DB.
+    // In the shared SaaS DB the same email can exist under multiple hospitals,
+    // so scope the lookup to the resolved hospital when a code was supplied.
+    // Without a code, reject ambiguous emails that span multiple tenants.
     const { User, AuditLog } = models;
-    const user = await User.findOne({ where: { email } });
+    let user;
+    if (hospitalId) {
+      user = await User.findOne({ where: { email, hospital_id: hospitalId } });
+    } else {
+      const matches = await User.findAll({ where: { email } });
+      if (matches.length > 1) {
+        return res.status(409).json({
+          success: false,
+          message: 'This email is registered with multiple hospitals. Please provide your hospital code to sign in.',
+        });
+      }
+      user = matches[0] || null;
+    }
 
     if (!user) {
       const existsElsewhere = await checkUserInOtherPortals(email, password, otp);

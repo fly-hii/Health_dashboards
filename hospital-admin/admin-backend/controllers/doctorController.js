@@ -117,7 +117,7 @@ const createDoctor = async (req, res) => {
     const { User, AuditLog } = req.models;
     const { name, email, phone, department = 'OPD', specialization, qualification, experience, password, status = 'Active', profilePhoto, bio, availableDays, workingHours } = req.body;
 
-    const existing = await User.findOne({ where: { email } });
+    const existing = await User.findOne({ where: { email, hospital_id: hospitalId } });
     if (existing) return res.status(409).json({ success: false, message: 'Doctor with this email already exists' });
 
     const employeeId = req.body.employeeId || await generateEmployeeId('DOC', hospitalId, User);

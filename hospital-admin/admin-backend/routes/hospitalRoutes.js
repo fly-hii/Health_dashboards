@@ -6,7 +6,9 @@ const {
   getHospitalProfile,
   updateHospitalProfile,
   getHospitalSettings,
-  updateHospitalSettings
+  updateHospitalSettings,
+  getHospitalSubscription,
+  upgradeHospitalSubscription
 } = require('../controllers/hospitalController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -19,5 +21,9 @@ router.route('/profile')
 router.route('/settings')
   .get(getHospitalSettings)
   .put(authorize('HOSPITAL_ADMIN', 'ADMIN'), updateHospitalSettings);
+
+router.route('/subscription')
+  .get(getHospitalSubscription)
+  .post(authorize('HOSPITAL_ADMIN', 'ADMIN'), upgradeHospitalSubscription);
 
 module.exports = router;

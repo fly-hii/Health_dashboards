@@ -80,10 +80,22 @@ const createUser = async (req, res) => {
   } = req.body;
 
   try {
-    const { User, AuditLog } = req.models;
+    const { User, AuditLog, Hospital } = req.models;
     const { Op } = require('sequelize');
     
-    const userExists = await User.findOne({ where: { email } });
+    // Enforce max users plan restriction
+    const hospital = await Hospital.findByPk(req.hospitalId);
+    const maxUsers = hospital?.max_users || 10;
+    const currentUserCount = await User.count();
+    
+    if (currentUserCount >= maxUsers) {
+      return res.status(403).json({
+        success: false,
+        message: `Plan limit reached. Your active plan allows up to ${maxUsers} staff accounts. Please upgrade your subscription plan to add more staff.`
+      });
+    }
+    
+    const userExists = await User.findOne({ where: { email, hospital_id: req.hospitalId } });
     if (userExists) {
       return res.status(400).json({ success: false, message: 'User already exists' });
     }

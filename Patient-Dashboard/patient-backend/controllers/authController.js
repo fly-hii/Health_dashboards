@@ -145,16 +145,16 @@ const register = async (req, res) => {
     db = await getHospitalConnection(resolvedHospitalId);
     models = createModels(db);
 
-    const existing = await models.Patient.findOne({ where: { email } });
+    const existing = await models.Patient.findOne({ where: { email, hospital_id: resolvedHospitalId } });
     if (existing) {
       return res.status(409).json({ success: false, message: 'An account with this email already exists' });
     }
 
-    // Generate patient ID
+    // Generate patient ID (scoped to this hospital in the shared SaaS DB)
     const today = new Date();
     const prefix = `PAT${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
     const last = await models.Patient.findOne({
-      where: { patient_id: { [Op.like]: `${prefix}%` } },
+      where: { hospital_id: resolvedHospitalId, patient_id: { [Op.like]: `${prefix}%` } },
       order: [['patient_id', 'DESC']],
     });
     const seq = last?.patient_id ? parseInt(last.patient_id.replace(prefix, '')) + 1 : 1;
@@ -228,13 +228,23 @@ const login = async (req, res) => {
       }
       resolvedHospitalId = hospital.id;
 
-      // Step 2: Resolve tenant DB
+      // Step 2: Resolve tenant DB. Scope the lookup to this hospital — in the
+      // shared SaaS DB an unscoped email/phone match could belong to another tenant.
       db = await getHospitalConnection(resolvedHospitalId);
       models = createModels(db);
-      patient = await models.Patient.findOne({ where: lookup });
+      patient = await models.Patient.findOne({ where: { ...lookup, hospital_id: resolvedHospitalId } });
     } else {
-      // Fallback: look up in shared database
-      patient = await Patient.findOne({ where: lookup });
+      // Fallback: look up in shared database. The same email/phone can exist
+      // under multiple hospitals; resolving an arbitrary one would cross tenant
+      // boundaries, so require a hospital code to disambiguate.
+      const matches = await Patient.findAll({ where: lookup });
+      if (matches.length > 1) {
+        return res.status(409).json({
+          success: false,
+          message: 'This account is registered with multiple hospitals. Please provide your hospital code to sign in.',
+        });
+      }
+      patient = matches[0] || null;
       if (patient) {
         resolvedHospitalId = patient.hospital_id;
         // Verify hospital status in master registry

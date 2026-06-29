@@ -138,13 +138,24 @@ const login = async (req, res) => {
       }
       resolvedHospitalId = hospital.id;
 
-      // Step 2: Resolve tenant DB
+      // Step 2: Resolve tenant DB. Scope the lookup to this hospital — in the
+      // shared SaaS DB an unscoped email match could belong to another tenant.
       db = await getHospitalConnection(resolvedHospitalId);
       models = createModels(db);
-      user = await models.User.findOne({ where: { email } });
+      user = await models.User.findOne({ where: { email, hospital_id: resolvedHospitalId } });
     } else {
-      // Fallback: look up in shared database
-      user = await StaticUser.findOne({ where: { email } });
+      // Fallback: look up in shared database. Because the shared SaaS DB holds
+      // users from every hospital, the same email can exist under multiple
+      // tenants — resolving an arbitrary one would cross tenant boundaries.
+      // Require an explicit hospital code to disambiguate in that case.
+      const matches = await StaticUser.findAll({ where: { email } });
+      if (matches.length > 1) {
+        return res.status(409).json({
+          success: false,
+          message: 'This email is registered with multiple hospitals. Please provide your hospital code to sign in.',
+        });
+      }
+      user = matches[0] || null;
       if (user) {
         resolvedHospitalId = user.hospital_id;
         // Verify hospital status in master registry

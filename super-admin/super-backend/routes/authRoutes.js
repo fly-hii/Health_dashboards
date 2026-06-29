@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { login, logout, getMe, changePassword, updateProfile } = require('../controllers/authController');
+const { login, logout, getMe, changePassword, updateProfile, registerHospitalPublic, testDbConnectionPublic } = require('../controllers/authController');
 const { sendForgotPasswordOtp, verifyForgotPasswordOtp, resetForgotPassword, loginOtpStore } = require('../controllers/forgotPasswordController');
 const { sendOtpEmail } = require('../services/emailService');
 const { masterDb } = require('../config/masterDatabase');
@@ -48,5 +48,9 @@ router.post('/login-otp/send', async (req, res) => {
 router.post('/forgot-password/send-otp',   sendForgotPasswordOtp);
 router.post('/forgot-password/verify-otp', verifyForgotPasswordOtp);
 router.post('/forgot-password/reset',      resetForgotPassword);
+
+// Public hospital self-registration / subscription
+router.post('/register-hospital', registerHospitalPublic);
+router.post('/test-db-connection', testDbConnectionPublic);
 
 module.exports = router;

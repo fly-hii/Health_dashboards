@@ -237,11 +237,14 @@ const getPatientProfile = async (req, res, next) => {
   try {
     const { Patient, Appointment, User, Vitals } = req.models;
 
-    // Try finding by numeric id (global PK — no hospital_id filter since patients can be cross-hospital)
+    // Look up by numeric PK, scoped to the caller's hospital to prevent
+    // cross-tenant access in the shared SaaS database.
     const idParam = req.params.id;
-    let patient = await Patient.findOne({ where: { id: idParam } });
+    let patient = await Patient.findOne({
+      where: { id: idParam, hospital_id: req.hospitalId },
+    });
 
-    // Fallback: try by patient_id string scoped to this hospital
+    // Fallback: try by patient_id string (also scoped to this hospital)
     if (!patient) {
       patient = await Patient.findOne({
         where: { patient_id: idParam, hospital_id: req.hospitalId },
@@ -389,8 +392,10 @@ const searchPatients = async (req, res, next) => {
 const updatePatient = async (req, res, next) => {
   try {
     const { Patient } = req.models;
-    // Find by global id (not hospital-scoped, same reason as getPatientProfile)
-    const patient = await Patient.findOne({ where: { id: req.params.id } });
+    // Scope to the caller's hospital to prevent cross-tenant writes in the shared SaaS database.
+    const patient = await Patient.findOne({
+      where: { id: req.params.id, hospital_id: req.hospitalId },
+    });
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
     const body = req.body;

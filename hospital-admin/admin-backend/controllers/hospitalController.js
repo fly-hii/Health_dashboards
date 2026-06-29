@@ -146,9 +146,163 @@ const updateHospitalSettings = async (req, res) => {
   }
 };
 
+const getHospitalSubscription = async (req, res) => {
+  try {
+    const { Hospital, User } = req.models;
+    const hospital = await Hospital.findByPk(req.hospitalId, {
+      attributes: ['id', 'name', 'code', 'plan', 'status', 'plan_expires_at', 'max_users']
+    });
+
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: 'Hospital profile not found' });
+    }
+
+    const userCount = await User.count();
+
+    // Query subscription records from careplus_master
+    const [subscriptions] = await masterDb.query(
+      'SELECT * FROM subscriptions WHERE hospital_id = ? ORDER BY created_at DESC',
+      { replacements: [req.hospitalId] }
+    );
+
+    // Query payment history from careplus_master
+    const [payments] = await masterDb.query(
+      'SELECT * FROM payments WHERE hospital_id = ? ORDER BY created_at DESC',
+      { replacements: [req.hospitalId] }
+    );
+
+    res.json({
+      success: true,
+      data: {
+        hospital,
+        subscriptions,
+        payments,
+        userCount
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching hospital subscription:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const upgradeHospitalSubscription = async (req, res) => {
+  const { plan, billingCycle, amount, paymentMethod } = req.body;
+
+  if (!plan || !billingCycle || !amount || !paymentMethod) {
+    return res.status(400).json({ success: false, message: 'plan, billingCycle, amount, and paymentMethod are required' });
+  }
+
+  const validPlans = ['basic', 'standard', 'premium', 'enterprise'];
+  if (!validPlans.includes(plan)) {
+    return res.status(400).json({ success: false, message: 'Invalid plan' });
+  }
+
+  try {
+    const { Hospital, AuditLog } = req.models;
+    const hospital = await Hospital.findByPk(req.hospitalId);
+
+    if (!hospital) {
+      return res.status(404).json({ success: false, message: 'Hospital profile not found' });
+    }
+
+    // Calculate expiry date
+    const planExpiresAt = new Date();
+    if (billingCycle === 'monthly') {
+      planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+    } else if (billingCycle === 'quarterly') {
+      planExpiresAt.setMonth(planExpiresAt.getMonth() + 3);
+    } else if (billingCycle === 'yearly') {
+      planExpiresAt.setFullYear(planExpiresAt.getFullYear() + 1);
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid billing cycle' });
+    }
+
+    // Determine max users based on plan
+    let maxUsers = 10;
+    if (plan === 'standard') maxUsers = 50;
+    else if (plan === 'premium') maxUsers = 200;
+    else if (plan === 'enterprise') maxUsers = 1000;
+
+    // 1. Update in the Tenant DB
+    hospital.plan = plan;
+    hospital.status = 'active';
+    hospital.plan_expires_at = planExpiresAt;
+    hospital.max_users = maxUsers;
+    await hospital.save();
+
+    // 2. Synchronize to the careplus_master DB
+    try {
+      await masterDb.query(
+        'UPDATE hospitals SET plan = ?, status = ?, plan_expires_at = ?, max_users = ? WHERE id = ?',
+        {
+          replacements: [plan, 'active', planExpiresAt, maxUsers, req.hospitalId]
+        }
+      );
+    } catch (masterError) {
+      console.warn('⚠️ Warning: Failed to sync hospital plan to master DB:', masterError.message);
+    }
+
+    // 3. Insert Subscription record in careplus_master
+    let subscriptionId = null;
+    try {
+      const [subResult] = await masterDb.query(
+        `INSERT INTO subscriptions (hospital_id, plan, status, amount, billing_cycle, starts_at, expires_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW(), NOW())`,
+        {
+          replacements: [req.hospitalId, plan, 'active', amount, billingCycle, planExpiresAt]
+        }
+      );
+      subscriptionId = subResult;
+    } catch (subError) {
+      console.error('Failed to create subscription record in master DB:', subError.message);
+    }
+
+    // 4. Insert Payment record in careplus_master
+    const transactionId = 'TXN_' + Math.random().toString(36).substr(2, 9).toUpperCase();
+    try {
+      await masterDb.query(
+        `INSERT INTO payments (hospital_id, subscription_id, amount, currency, status, payment_method, transaction_id, paid_at, created_at, updated_at)
+         VALUES (?, ?, ?, 'INR', 'success', ?, ?, NOW(), NOW(), NOW())`,
+        {
+          replacements: [req.hospitalId, subscriptionId || null, amount, paymentMethod, transactionId]
+        }
+      );
+    } catch (payError) {
+      console.error('Failed to create payment record in master DB:', payError.message);
+    }
+
+    // 5. Create Audit Log
+    await AuditLog.create({
+      hospital_id: req.hospitalId,
+      user_id: req.user.id,
+      action: 'UPDATE',
+      module: 'Subscription',
+      description: `Upgraded subscription to ${plan} (${billingCycle})`,
+      ip_address: req.ip
+    });
+
+    res.json({
+      success: true,
+      message: `Subscription successfully upgraded to ${plan}`,
+      data: {
+        plan,
+        status: 'active',
+        plan_expires_at: planExpiresAt,
+        max_users: maxUsers
+      }
+    });
+  } catch (error) {
+    console.error('Error upgrading hospital subscription:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getHospitalProfile,
   updateHospitalProfile,
   getHospitalSettings,
-  updateHospitalSettings
+  updateHospitalSettings,
+  getHospitalSubscription,
+  upgradeHospitalSubscription
 };
