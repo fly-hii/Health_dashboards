@@ -86,7 +86,7 @@ const createUser = async (req, res) => {
     // Enforce max users plan restriction
     const hospital = await Hospital.findByPk(req.hospitalId);
     const maxUsers = hospital?.max_users || 10;
-    const currentUserCount = await User.count();
+    const currentUserCount = await User.count({ where: { hospital_id: req.hospitalId } });
     
     if (currentUserCount >= maxUsers) {
       return res.status(403).json({
@@ -161,6 +161,19 @@ const createUser = async (req, res) => {
       description: `Created user ${name} (${employeeIdToUse}) with role ${role} in department ${department}`,
       ip_address: req.ip
     });
+
+    // Send welcome email with credentials (non-blocking)
+    const { sendStaffWelcomeEmail } = require('../services/emailService');
+    sendStaffWelcomeEmail({
+      to: email,
+      name,
+      role,
+      department,
+      employeeId: employeeIdToUse,
+      password: passwordToUse,
+      hospitalName: hospital?.name || 'CarePlus Hospital',
+      hospitalCode: hospital?.code || ''
+    }).catch(err => console.error('⚠️ Staff welcome email failed:', err.message));
 
     res.status(201).json({
       success: true,

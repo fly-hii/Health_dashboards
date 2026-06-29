@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { KeyRound, Mail, ArrowRight, ShieldAlert, Eye, EyeOff } from 'lucide-react';
+import { KeyRound, Mail, ArrowRight, ShieldAlert, Eye, EyeOff, Building2 } from 'lucide-react';
 import API from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [hospitalCode, setHospitalCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -102,7 +103,7 @@ export default function Login() {
       }
       setLoading(true);
       try {
-        const res = await API.post('/auth/login', { email, otp: combinedOtp });
+        const res = await API.post('/auth/login', { email, otp: combinedOtp, ...(hospitalCode ? { hospitalCode: hospitalCode.toUpperCase() } : {}) });
         if (res.data.success) {
           localStorage.setItem('admin_token', res.data.token);
           localStorage.setItem('admin_user', JSON.stringify(res.data.user));
@@ -123,7 +124,7 @@ export default function Login() {
 
       setLoading(true);
       try {
-        const res = await API.post('/auth/login', { email, password });
+        const res = await API.post('/auth/login', { email, password, ...(hospitalCode ? { hospitalCode: hospitalCode.toUpperCase() } : {}) });
         if (res.data.success) {
           localStorage.setItem('admin_token', res.data.token);
           localStorage.setItem('admin_user', JSON.stringify(res.data.user));
@@ -193,6 +194,23 @@ export default function Login() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Hospital Code (optional — required for BYOD/external DB hospitals) */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Hospital Code <span className="normal-case font-normal text-slate-400">(required for BYOD hospitals)</span>
+              </label>
+              <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all">
+                <Building2 className="w-5 h-5 text-slate-400" />
+                <input
+                  type="text"
+                  value={hospitalCode}
+                  onChange={(e) => setHospitalCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. JJII002  (leave blank for shared DB)"
+                  className="w-full bg-transparent text-sm text-slate-700 placeholder-slate-400 focus:outline-none tracking-widest"
+                />
+              </div>
+            </div>
+
             {/* Email */}
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>

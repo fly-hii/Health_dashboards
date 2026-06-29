@@ -114,7 +114,7 @@ const getDoctorById = async (req, res) => {
 const createDoctor = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
-    const { User, AuditLog } = req.models;
+    const { User, AuditLog, Hospital } = req.models;
     const { name, email, phone, department = 'OPD', specialization, qualification, experience, password, status = 'Active', profilePhoto, bio, availableDays, workingHours } = req.body;
 
     const existing = await User.findOne({ where: { email, hospital_id: hospitalId } });
@@ -160,6 +160,20 @@ const createDoctor = async (req, res) => {
       description: `Created doctor: ${name} (${employeeId})`,
       ip_address: req.ip,
     });
+
+    // Send welcome email with credentials (non-blocking)
+    const hospital = await Hospital.findByPk(hospitalId);
+    const { sendStaffWelcomeEmail } = require('../services/emailService');
+    sendStaffWelcomeEmail({
+      to: email,
+      name,
+      role: 'DOCTOR',
+      department,
+      employeeId,
+      password: password || 'Doctor@123',
+      hospitalName: hospital?.name || 'CarePlus Hospital',
+      hospitalCode: hospital?.code || ''
+    }).catch(err => console.error('⚠️ Doctor welcome email failed:', err.message));
 
     const io = req.app.get('io');
     if (io) io.to(`hospital_${hospitalId}`).emit('doctor_created', { id: doctor.id, name, department });

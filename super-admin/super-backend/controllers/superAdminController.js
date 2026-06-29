@@ -182,6 +182,22 @@ const createHospital = async (req, res) => {
 
     await t.commit();
 
+    // Send welcome email with credentials and details (non-blocking)
+    const { sendWelcomeEmail } = require('../services/emailService');
+    sendWelcomeEmail({
+      to: email,
+      hospitalName: name,
+      hospitalCode: hospital.code,
+      adminEmail: email,
+      adminPassword,          // plain-text password sent to the administrator
+      plan,
+      billingCycle: 'monthly',
+      amount: 0,
+      transactionId: `SA-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+      planExpiresAt,
+      loginUrl: 'http://localhost:5173/login'
+    }).catch(err => console.error('⚠️ Super Admin Welcome email failed (non-critical):', err.message));
+
     res.status(201).json({
       success: true,
       message: `Hospital "${name}" created (${useExternalDb ? 'External DB' : 'Shared SaaS DB'})`,

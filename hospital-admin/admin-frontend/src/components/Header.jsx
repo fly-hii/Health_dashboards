@@ -77,8 +77,9 @@ export default function Header({ searchTerm, setSearchTerm, isSidebarMinimized, 
   };
 
   return (
-    <header className={`fixed top-0 right-0 z-30 flex items-center justify-between h-header px-4 sm:px-8 bg-white border-b border-slate-200 shadow-sm transition-all duration-300 w-full lg:${isSidebarMinimized ? 'w-[calc(100vw-72px)]' : 'w-[calc(100vw-260px)]'
-      }`}>
+    <header className={`fixed top-0 right-0 z-30 flex items-center justify-between h-header px-4 sm:px-8 bg-white border-b border-slate-200 shadow-sm transition-all duration-300 w-full ${
+      isSidebarMinimized ? 'lg:w-[calc(100vw-72px)]' : 'lg:w-[calc(100vw-260px)]'
+    }`}>
       {/* Left side: Menu toggle & Search */}
       <div className="flex items-center gap-2 sm:gap-4 flex-1 mr-4">
         <button

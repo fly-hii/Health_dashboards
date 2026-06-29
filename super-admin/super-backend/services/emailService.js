@@ -154,7 +154,7 @@ const sendWelcomeEmail = async ({
         <div class="cred-val">${adminEmail}</div>
       </div>
       <div class="cred-row">
-        <div class="cred-field">Temporary Password</div>
+        <div class="cred-field">Password</div>
         <div class="cred-val">${adminPassword}</div>
       </div>
       <div class="cred-row">
@@ -164,7 +164,7 @@ const sendWelcomeEmail = async ({
     </div>
 
     <div class="alert-box">
-      <p>🔒 <strong>Security Notice:</strong> Please log in immediately and change your temporary password. Do not share these credentials. This password was generated during registration and should be updated upon first login.</p>
+      <p>🔒 <strong>Security Notice:</strong> Please log in to access your dashboard. Keep your credentials safe and do not share them with anyone.</p>
     </div>
 
     <div class="section-title">🏥 Registration Details</div>

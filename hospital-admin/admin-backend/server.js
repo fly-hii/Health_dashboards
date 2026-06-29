@@ -48,20 +48,24 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
 // Routes
+const tenantMiddleware = require('./middleware/tenantMiddleware');
+
 app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/doctors', require('./routes/doctorRoutes'));
-app.use('/api/patients', require('./routes/patientRoutes'));
-app.use('/api/appointments', require('./routes/appointmentRoutes'));
-app.use('/api/pharmacy', require('./routes/pharmacyRoutes'));
-app.use('/api/laboratory', require('./routes/labRoutes'));
-app.use('/api/billing', require('./routes/billingRoutes'));
-app.use('/api/reports', require('./routes/reportRoutes'));
-app.use('/api/audit-logs', require('./routes/auditRoutes'));
-app.use('/api/dashboard', require('./routes/dashboardRoutes'));
-app.use('/api/notifications', require('./routes/notificationRoutes'));
-app.use('/api/departments', require('./routes/departmentRoutes'));
-app.use('/api/hospitals', require('./routes/hospitalRoutes'));
+
+// All non-auth routes run tenantMiddleware (after protect() sets req.hospitalId via JWT)
+app.use('/api/users',         tenantMiddleware, require('./routes/userRoutes'));
+app.use('/api/doctors',       tenantMiddleware, require('./routes/doctorRoutes'));
+app.use('/api/patients',      tenantMiddleware, require('./routes/patientRoutes'));
+app.use('/api/appointments',  tenantMiddleware, require('./routes/appointmentRoutes'));
+app.use('/api/pharmacy',      tenantMiddleware, require('./routes/pharmacyRoutes'));
+app.use('/api/laboratory',    tenantMiddleware, require('./routes/labRoutes'));
+app.use('/api/billing',       tenantMiddleware, require('./routes/billingRoutes'));
+app.use('/api/reports',       tenantMiddleware, require('./routes/reportRoutes'));
+app.use('/api/audit-logs',    tenantMiddleware, require('./routes/auditRoutes'));
+app.use('/api/dashboard',     tenantMiddleware, require('./routes/dashboardRoutes'));
+app.use('/api/notifications', tenantMiddleware, require('./routes/notificationRoutes'));
+app.use('/api/departments',   tenantMiddleware, require('./routes/departmentRoutes'));
+app.use('/api/hospitals',     tenantMiddleware, require('./routes/hospitalRoutes'));
 
 app.get('/health', (req, res) => res.json({
   status: 'healthy', service: 'CarePlus Hospital Admin API v3.0',

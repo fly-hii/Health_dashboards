@@ -258,6 +258,16 @@ const registerHospitalPublic = async (req, res) => {
     return res.status(400).json({ success: false, message: 'name, code, email, and adminPassword are required' });
   }
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!EMAIL_RE.test(String(email))) {
+    return res.status(400).json({ success: false, message: 'Invalid email format' });
+  }
+
+  const adminPwdError = getPasswordComplexityError(adminPassword);
+  if (adminPwdError) {
+    return res.status(400).json({ success: false, message: adminPwdError });
+  }
+
   // Pre-test external connection if external database is chosen
   let externalDb = null;
   if (database_type === 'external') {

@@ -2,6 +2,67 @@
 const { Op } = require('sequelize');
 const { uploadToS3, deleteFromS3, generateReportKey } = require('../services/s3Service');
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const GENDERS = ['Male', 'Female', 'Other'];
+
+/**
+ * Map an incoming request body to an allow-listed set of patient fields.
+ * Server-controlled fields (id, hospital_id, patient_id, password,
+ * is_portal_user, last_login) are intentionally excluded to prevent a client
+ * from mass-assigning sensitive columns. Accepts both camelCase (frontend) and
+ * snake_case (direct) key names.
+ */
+const buildPatientFields = (body = {}) => {
+  const fields = {};
+  const set = (key, ...candidates) => {
+    for (const c of candidates) {
+      if (c !== undefined) { fields[key] = c; return; }
+    }
+  };
+
+  set('full_name', body.full_name, body.fullName, body.name);
+  set('email', body.email);
+  set('phone', body.phone);
+  set('dob', body.dob, body.dateOfBirth);
+  set('gender', body.gender);
+  set('blood_group', body.blood_group, body.bloodGroup);
+  set('address', body.address);
+  set('insurance_number', body.insurance_number, body.insuranceNumber);
+  set('medical_notes', body.medical_notes, body.medicalNotes);
+  set('medical_history', body.medical_history, body.medicalHistory);
+  set('room_number', body.room_number, body.roomNumber);
+  set('status', body.status);
+  set('admit_date', body.admit_date, body.admitDate);
+  set('discharge_date', body.discharge_date, body.dischargeDate);
+  set('profile_image', body.profile_image, body.profileImage);
+
+  const ec = body.emergencyContact || {};
+  set('emergency_contact_name', body.emergency_contact_name, ec.name);
+  set('emergency_contact_phone', body.emergency_contact_phone, ec.phone);
+  set('emergency_contact_relation', body.emergency_contact_relation, ec.relation);
+
+  return fields;
+};
+
+/**
+ * Validate mapped patient fields. When `requireCore` is true (create), the
+ * core identity fields must be present. Returns an error string or null.
+ */
+const validatePatientFields = (fields, { requireCore = false } = {}) => {
+  if (requireCore) {
+    const missing = [];
+    if (!fields.full_name || !String(fields.full_name).trim()) missing.push('full name');
+    if (!fields.phone || !String(fields.phone).trim()) missing.push('phone');
+    if (!fields.dob) missing.push('date of birth');
+    if (!fields.gender) missing.push('gender');
+    if (missing.length) return `Missing required field(s): ${missing.join(', ')}`;
+  }
+  if (fields.email && !EMAIL_RE.test(String(fields.email))) return 'Invalid email format';
+  if (fields.gender && !GENDERS.includes(fields.gender)) return 'Invalid gender (expected Male, Female, or Other)';
+  if (fields.dob && isNaN(new Date(fields.dob).getTime())) return 'Invalid date of birth';
+  return null;
+};
+
 // Generate unique PAT+YYYYMMDD+4digit counter scoped to hospital
 const generatePatientId = async (hospitalId, PatientModel) => {
   const today = new Date();
@@ -196,13 +257,29 @@ const createPatient = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
     const { Patient, AuditLog } = req.models;
+
+    const fields = buildPatientFields(req.body);
+    const validationError = validatePatientFields(fields, { requireCore: true });
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
+
     const patientId = req.body.patient_id || req.body.patientId || await generatePatientId(hospitalId, Patient);
 
+    let passwordToUse = req.body.password || req.body.tempPassword;
+    if (!passwordToUse) {
+      passwordToUse = 'Patient@' + Math.floor(1000 + Math.random() * 9000) + 'x!';
+    }
+    const bcrypt = require('bcryptjs');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(passwordToUse, salt);
+
     const patient = await Patient.create({
-      ...req.body,
+      ...fields,
       hospital_id: hospitalId,
       patient_id: patientId,
-      full_name: req.body.full_name || req.body.fullName || req.body.name,
+      password: hashedPassword,
+      is_portal_user: true
     });
 
     await AuditLog.create({
@@ -216,6 +293,21 @@ const createPatient = async (req, res) => {
       description: `Registered new patient: ${patient.full_name} (${patient.patient_id})`,
       ip_address: req.ip,
     });
+
+    // Send patient welcome email with credentials (non-blocking)
+    if (patient.email) {
+      const { Hospital } = req.models;
+      const hospital = await Hospital.findByPk(hospitalId);
+      const { sendPatientWelcomeEmail } = require('../services/emailService');
+      sendPatientWelcomeEmail({
+        to: patient.email,
+        name: patient.full_name,
+        patientId: patient.patient_id,
+        password: passwordToUse,
+        hospitalName: hospital?.name || 'CarePlus Hospital',
+        hospitalCode: hospital?.code || ''
+      }).catch(err => console.error('⚠️ Patient welcome email failed:', err.message));
+    }
 
     // Socket: tenant-aware event
     const io = req.app.get('io');
@@ -235,10 +327,16 @@ const updatePatient = async (req, res) => {
     if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
     const oldData = patient.toJSON();
-    await patient.update({
-      ...req.body,
-      full_name: req.body.full_name || req.body.fullName || patient.full_name,
-    });
+
+    const fields = buildPatientFields(req.body);
+    // Don't overwrite an existing name with a blank value.
+    if ('full_name' in fields && !String(fields.full_name).trim()) delete fields.full_name;
+    const validationError = validatePatientFields(fields);
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
+
+    await patient.update(fields);
 
     await AuditLog.create({
       hospital_id: req.hospitalId,
@@ -431,7 +529,8 @@ const uploadPatientReport = async (req, res) => {
       ip_address: req.ip,
     });
 
-    const fullReport = await Report.findByPk(report.id, {
+    const fullReport = await Report.findOne({
+      where: { id: report.id, hospital_id: req.hospitalId },
       include: [{ model: User, as: 'uploadedBy', attributes: ['id', 'name'] }]
     });
 

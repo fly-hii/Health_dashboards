@@ -157,7 +157,7 @@ const getHospitalSubscription = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Hospital profile not found' });
     }
 
-    const userCount = await User.count();
+    const userCount = await User.count({ where: { hospital_id: req.hospitalId } });
 
     // Query subscription records from careplus_master
     const [subscriptions] = await masterDb.query(
