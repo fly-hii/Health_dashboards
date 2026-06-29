@@ -73,6 +73,13 @@ io.on('connection', (socket) => {
     console.log(`🔌 System relay socket joined system_relay room: ${socket.id}`);
   }
 
+  socket.on('join_nurse_room', (nurseId) => {
+    if (parseInt(nurseId) === socket.userId || ['SYSTEM', 'HOSPITAL_ADMIN'].includes(socket.role)) {
+      socket.join(`nurse_${nurseId}`);
+      console.log(`Nurse ${nurseId} joined their room`);
+    }
+  });
+
   socket.on('join_hospital', (hospitalId) => {
     // Only allow joining the hospital that matches the authenticated token
     if (parseInt(hospitalId) === socket.hospitalId || socket.role === 'SYSTEM') {
@@ -81,6 +88,17 @@ io.on('connection', (socket) => {
     } else {
       console.warn(`⚠️  Socket ${socket.id} tried to join hospital_${hospitalId} but token is for hospital_${socket.hospitalId}`);
       socket.emit('error', { message: 'Not authorized to join this hospital room' });
+    }
+  });
+
+  // Relay queue_update events emitted by other services (e.g. patient backend)
+  socket.on('queue_update', (data) => {
+    if (socket.role === 'SYSTEM') {
+      const hospitalId = data.hospitalId || data.hospital_id;
+      if (hospitalId) {
+        io.to(`hospital_${hospitalId}`).emit('queue_update', data);
+        console.log(`🔄 Relayed queue update for hospital_${hospitalId}`);
+      }
     }
   });
 

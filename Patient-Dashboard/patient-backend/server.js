@@ -138,7 +138,21 @@ const connectNurseSocket = () => {
     // Service-to-service token so the nurse backend's JWT middleware accepts the relay connection
     auth: { token: getServiceToken() },
   });
-  nurseSocket.on('connect', () => console.log('✅ Patient relay → Nurse socket connected'));
+  nurseSocket.on('connect', async () => {
+    console.log('✅ Patient relay → Nurse socket connected');
+    try {
+      const { masterDb } = require('./services/databaseResolver');
+      const [hospitals] = await masterDb.query(
+        "SELECT id FROM hospitals WHERE status IN ('active', 'trial')"
+      );
+      hospitals.forEach(h => {
+        nurseSocket.emit('join_hospital', h.id);
+      });
+      console.log(`🏥 Nurse socket client joined rooms for ${hospitals.length} hospitals`);
+    } catch (err) {
+      console.error('Error joining hospitals on nurse socket:', err.message);
+    }
+  });
   nurseSocket.on('connect_error', () => { /* silent */ });
 
   // Forward vitals updates to patient's room
@@ -1169,11 +1183,21 @@ app.get('/api/prescriptions', protect, async (req, res) => {
         ],
         order: [['created_at', 'DESC']],
       });
-      allPrescriptions.push(...prescriptions);
+
+      const mapped = prescriptions.map(p => ({
+        id: `PR${String(p.id).padStart(4, '0')}`,
+        doctor: p.doctor,
+        date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        medicines: p.medicines ? p.medicines.map(m => `${m.name} - ${m.dosage} (${m.frequency}, ${m.duration})`) : [],
+        medicineCount: p.medicines ? p.medicines.length : 0,
+        instructions: p.instructions || '',
+        status: p.status || 'Active',
+      }));
+      allPrescriptions.push(...mapped);
     }
 
-    // Sort by created_at descending
-    allPrescriptions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    // Sort by date descending
+    allPrescriptions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json({ success: true, data: allPrescriptions });
   } catch (error) {
@@ -1673,6 +1697,7 @@ app.get('/api/history', protect, async (req, res) => {
         date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         time: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
         diagnosis: a.reason || 'Routine Consultation',
+        notes: a.notes || '',
         status: 'Completed',
         tokenNumber: a.token_number,
       }));

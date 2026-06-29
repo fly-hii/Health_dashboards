@@ -297,8 +297,21 @@ const updatePlan = async (req, res) => {
     else exp.setFullYear(exp.getFullYear() + 1);
 
     await h.update({ plan, plan_expires_at: exp, status: 'active' }, { transaction: t });
-    await Subscription.create({ hospital_id: h.id, plan, status: 'active', amount,
+    const sub = await Subscription.create({ hospital_id: h.id, plan, status: 'active', amount,
       billing_cycle: billingCycle, starts_at: new Date(), expires_at: exp }, { transaction: t });
+
+    // Simulated Payment Gateway Success Integration
+    await Payment.create({
+      hospital_id: h.id,
+      subscription_id: sub.id,
+      amount,
+      currency: 'INR',
+      status: 'success',
+      payment_method: 'Stripe Gateway',
+      transaction_id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
+      notes: `Subscription upgrade to ${plan} (${billingCycle})`,
+      paid_at: new Date(),
+    }, { transaction: t });
 
     await t.commit();
     res.json({ success: true, message: `Plan updated to ${plan} for ${h.name}` });
@@ -396,8 +409,50 @@ const getAuditLogs = async (req, res) => {
   }
 };
 
+// ── GET /api/super/system-status ──────────────────────────────
+const getSystemStatus = async (req, res) => {
+  try {
+    const os = require('os');
+    let masterDbOk = false;
+    try {
+      await masterDb.authenticate();
+      masterDbOk = true;
+    } catch (e) {}
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+
+    const activeConns = await DbConnection.count({ where: { is_active: true } });
+    const failedConns = await DbConnection.count({ where: { test_status: 'failed' } });
+
+    res.json({
+      success: true,
+      data: {
+        cpuLoad: os.loadavg(),
+        memory: {
+          total: totalMem,
+          free: freeMem,
+          used: usedMem,
+          percentage: Math.round((usedMem / totalMem) * 100),
+        },
+        uptime: process.uptime(),
+        platform: process.platform,
+        nodeVersion: process.version,
+        databases: {
+          masterDb: masterDbOk ? 'online' : 'offline',
+          externalActive: activeConns,
+          externalFailed: failedConns,
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   createHospital, listHospitals, getHospital,
   suspendHospital, activateHospital, updatePlan, deleteHospital,
-  getAnalytics, getAuditLogs,
+  getAnalytics, getAuditLogs, getSystemStatus,
 };

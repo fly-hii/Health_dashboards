@@ -11,6 +11,11 @@ const initSocket = (io) => {
       console.log(`Nurse ${nurseId} joined their room`);
     });
 
+    socket.on('join_hospital', (hospitalId) => {
+      socket.join(`hospital_${hospitalId}`);
+      console.log(`🏥 Nurse socket joined hospital_${hospitalId}`);
+    });
+
     // Relay queue_update events emitted by other services (e.g. patient backend)
     // so all connected nurse frontends get the live push
     socket.on('queue_update', (data) => {

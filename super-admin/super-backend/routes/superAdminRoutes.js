@@ -7,7 +7,7 @@ const { protect, isSuperAdmin } = require('../middleware/authMiddleware');
 const {
   createHospital, listHospitals, getHospital,
   suspendHospital, activateHospital, updatePlan, deleteHospital,
-  getAnalytics, getAuditLogs,
+  getAnalytics, getAuditLogs, getSystemStatus,
 } = require('../controllers/superAdminController');
 
 const {
@@ -35,8 +35,9 @@ router.post  ('/hospitals/:id/test-db',        testDbConnection);
 router.patch ('/hospitals/:id/db-config/toggle', toggleDbConnection);
 router.delete('/hospitals/:id/db-config',       deleteDbConfig);
 
-// ── Analytics & Audit ─────────────────────────────────────────
+// ── Analytics, Audit & Monitoring ──────────────────────────────
 router.get   ('/analytics',                    getAnalytics);
 router.get   ('/audit-logs',                   getAuditLogs);
+router.get   ('/system-status',                getSystemStatus);
 
 module.exports = router;

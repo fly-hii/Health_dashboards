@@ -46,6 +46,7 @@ export const deleteDbConfig = (id) => API.delete(`/super/hospitals/${id}/db-conf
 
 // ── Analytics ───────────────────────────────────────────────
 export const getAnalytics = () => API.get('/super/analytics');
+export const getSystemStatus = () => API.get('/super/system-status');
 
 // ── Audit Logs ──────────────────────────────────────────────
 export const getAuditLogs = (params) => API.get('/super/audit-logs', { params });

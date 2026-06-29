@@ -64,6 +64,9 @@ export default function PrescriptionQueue() {
   useEffect(() => {
     fetchOrders();
 
+    // Fallback polling for cross-dashboard real-time updates
+    const interval = setInterval(fetchOrders, 15000);
+
     socket.connect();
     const handleStatusUpdate = () => {
       fetchOrders();
@@ -71,6 +74,7 @@ export default function PrescriptionQueue() {
     socket.on('orderStatusUpdated', handleStatusUpdate);
 
     return () => {
+      clearInterval(interval);
       socket.off('orderStatusUpdated', handleStatusUpdate);
     };
   }, []);

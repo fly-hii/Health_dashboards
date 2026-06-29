@@ -59,6 +59,12 @@ export default function Dashboard() {
     fetchStats();
     fetchTrend();
     
+    // Fallback polling for cross-dashboard real-time updates
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchTrend();
+    }, 15000);
+
     socket.connect();
     socket.on('orderStatusUpdated', () => {
       fetchStats();
@@ -66,6 +72,7 @@ export default function Dashboard() {
     });
 
     return () => {
+      clearInterval(interval);
       socket.off('orderStatusUpdated');
       socket.disconnect();
     };

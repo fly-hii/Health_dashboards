@@ -76,7 +76,7 @@ export default function App() {
 
   // Socket.IO Real-time Connection & Listener
   useEffect(() => {
-    if (isAuthenticated && profile?._id) {
+    if (isAuthenticated && (profile?._id || profile?.id)) {
       const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
       const derivedSocketUrl = apiUrl.startsWith('http') ? apiUrl.replace(/\/api$/, '') : 'http://localhost:5050';
       const socketUrl = import.meta.env.VITE_SOCKET_URL || derivedSocketUrl;
@@ -147,7 +147,7 @@ export default function App() {
         socket.disconnect();
       };
     }
-  }, [isAuthenticated, profile?._id]);
+  }, [isAuthenticated, profile?._id, profile?.id]);
 
   // Fetch all initial data
   const loadAppData = async () => {
