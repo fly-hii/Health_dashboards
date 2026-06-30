@@ -242,6 +242,7 @@ const login = async (req, res) => {
         return res.status(409).json({
           success: false,
           message: 'This account is registered with multiple hospitals. Please provide your hospital code to sign in.',
+          requireHospitalCode: true,
         });
       }
       patient = matches[0] || null;
@@ -298,7 +299,7 @@ const login = async (req, res) => {
 // POST /api/auth/send-otp
 const sendOtp = async (req, res) => {
   try {
-    const { mobileNumber, email } = req.body;
+    const { mobileNumber, email, hospitalCode } = req.body;
     const target = email || mobileNumber;
     if (!target) {
       return res.status(400).json({ success: false, message: 'Mobile number or Email is required' });
@@ -312,23 +313,47 @@ const sendOtp = async (req, res) => {
     let patient;
     let resolvedHospitalId;
 
-    // Check shared SaaS DB first
-    const sharedModels = createModels(sharedSaasDb);
-    // SECURITY: use findAll so we can detect multi-hospital ambiguity.
-    // Resolving findOne arbitrarily when multiple tenant records match would
-    // issue a token for the wrong hospital_id.
-    const allMatches = await sharedModels.Patient.findAll({ where: lookup });
+    if (hospitalCode) {
+      // Resolve hospital by code from master registry
+      const [hospRows] = await masterDb.query(
+        'SELECT id, status FROM hospitals WHERE code = ? LIMIT 1',
+        { replacements: [hospitalCode.toUpperCase()] }
+      );
+      const hospital = hospRows?.[0];
+      if (!hospital?.id) {
+        return res.status(404).json({ success: false, message: `Hospital code "${hospitalCode}" not found` });
+      }
+      if (hospital.status === 'suspended') {
+        return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
+      }
+      resolvedHospitalId = hospital.id;
 
-    if (allMatches.length > 1) {
-      // Patient registered at multiple hospitals — require a hospital code
-      return res.status(409).json({
-        success: false,
-        message: 'This account is registered with multiple hospitals. Please provide your hospital code to sign in.',
-        requireHospitalCode: true,
-      });
+      // Look up patient in tenant DB
+      const sharedModels = createModels(sharedSaasDb);
+      patient = await sharedModels.Patient.findOne({ where: { ...lookup, hospital_id: resolvedHospitalId } });
+      if (!patient) {
+        try {
+          const db = await getHospitalConnection(resolvedHospitalId);
+          const tenantModels = createModels(db);
+          patient = await tenantModels.Patient.findOne({ where: lookup });
+        } catch (_) {}
+      }
+    } else {
+      // Check shared SaaS DB first
+      const sharedModels = createModels(sharedSaasDb);
+      const allMatches = await sharedModels.Patient.findAll({ where: lookup });
+
+      if (allMatches.length > 1) {
+        // Patient registered at multiple hospitals — require a hospital code
+        return res.status(409).json({
+          success: false,
+          message: 'This account is registered with multiple hospitals. Please provide your hospital code to sign in.',
+          requireHospitalCode: true,
+        });
+      }
+
+      patient = allMatches[0] || null;
     }
-
-    patient = allMatches[0] || null;
 
     if (!patient) {
       // Search across tenant DBs
