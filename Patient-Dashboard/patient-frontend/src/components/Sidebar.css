@@ -115,12 +115,50 @@
   color: var(--danger);
 }
 
+/* ── Collapsed (desktop icon-only) mode ──────────────────── */
+.sidebar {
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 220px;
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 68px;
+  padding: 24px 8px;
+}
+
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .logo-subtext,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .logout-button .nav-label {
+  display: none;
+}
+
+.sidebar.collapsed .logo-area {
+  justify-content: center;
+  padding: 8px 4px;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 12px;
+  gap: 0;
+}
+
+.sidebar.collapsed .unread-badge {
+  right: 4px;
+  top: 4px;
+  min-width: 14px;
+  height: 14px;
+  font-size: 9px;
+}
+
 @media (max-width: 768px) {
   .sidebar {
+    width: 280px !important; /* override collapsed on mobile */
     position: fixed;
     left: 0;
     top: 0;
-    width: 280px;
     z-index: 1000;
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);

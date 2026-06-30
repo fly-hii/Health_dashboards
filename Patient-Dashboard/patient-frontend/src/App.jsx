@@ -35,6 +35,7 @@ export default function App() {
   const [latestVitals, setLatestVitals] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [deepLinkedApptId, setDeepLinkedApptId] = useState(null);
   const [deepLinkedNotifId, setDeepLinkedNotifId] = useState(null);
 
@@ -350,6 +351,7 @@ export default function App() {
         unreadCount={unreadNotifCount} 
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
+        isCollapsed={isSidebarCollapsed}
       />
       
       <div className="main-content-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -359,7 +361,14 @@ export default function App() {
           onReadAll={handleReadAllNotifications}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          onToggleSidebar={() => setIsSidebarOpen(true)}
+          onToggleSidebar={() => {
+            // On mobile (≤768px) open the overlay drawer, on desktop collapse/expand
+            if (window.innerWidth <= 768) {
+              setIsSidebarOpen(true);
+            } else {
+              setIsSidebarCollapsed(prev => !prev);
+            }
+          }}
         />
         
         <main className="content-body" style={{ flexGrow: 1 }}>

@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import './Sidebar.css';
 
-export default function Sidebar({ activeTab, setActiveTab, unreadCount, isOpen, setIsOpen }) {
+export default function Sidebar({ activeTab, setActiveTab, unreadCount, isOpen, setIsOpen, isCollapsed }) {
   const { logout } = useAuth();
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: (
@@ -62,7 +62,7 @@ export default function Sidebar({ activeTab, setActiveTab, unreadCount, isOpen, 
       {isOpen && (
         <div className="sidebar-overlay" onClick={() => setIsOpen(false)} />
       )}
-      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+      <aside className={`sidebar ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
         <div className="logo-area" onClick={() => handleItemClick('dashboard')} style={{ cursor: 'pointer' }}>
           <div className="logo-icon">
             <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="3">
