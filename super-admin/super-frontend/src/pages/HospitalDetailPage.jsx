@@ -152,7 +152,14 @@ export default function HospitalDetailPage() {
     <div>
       <div className="topbar">
         <div className="topbar-left">
-          <h1>{h.name}</h1>
+          <h1 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {h.name}
+            {h.database_type === 'external' && (
+              <span className="badge badge-success" style={{ fontSize: 11, textTransform: 'uppercase', padding: '3px 8px' }}>
+                Private DB
+              </span>
+            )}
+          </h1>
           <p>Hospital Details & Management</p>
         </div>
         <div className="topbar-right">

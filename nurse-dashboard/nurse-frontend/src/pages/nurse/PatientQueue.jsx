@@ -199,7 +199,7 @@ const PatientQueue = () => {
     }
   };
 
-  const handleCallNextPatient = () => {
+  const handleCallNextPatient = async () => {
     const nextPatient = currentQueue.find(p =>
       p.status === 'checked_in' || p.status === 'waiting_for_vitals' || p.status === 'waiting'
     );
@@ -212,6 +212,13 @@ const PatientQueue = () => {
         );
         window.speechSynthesis.speak(utterance);
       } catch (e) { /* Speech synthesis not supported */ }
+
+      try {
+        await nurseService.callPatient(nextPatient._id || nextPatient.id);
+      } catch (err) {
+        console.error('Failed to notify called patient:', err);
+        toast.error('Failed to send call notification/email to patient');
+      }
     } else {
       toast.info('No patients waiting in the queue');
     }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAnalytics, getHospitals, getSystemStatus } from '../utils/api';
+import { Building2, ShieldCheck, Ban, Users, Coins, Hourglass } from 'lucide-react';
 
 const PLANS = { trial: 'cyan', basic: 'primary', professional: 'amber', enterprise: 'green' };
 const STATUS = { active: 'success', suspended: 'danger', trial: 'cyan', expired: 'warning' };
@@ -43,12 +44,12 @@ export default function DashboardPage() {
   const ov = analytics?.overview || {};
 
   const stats = [
-    { label: 'Total Hospitals',   value: ov.totalHospitals   || 0, icon: '🏥', color: 'indigo', change: 'All registered tenants' },
-    { label: 'Active Hospitals',  value: ov.activeHospitals  || 0, icon: '✅', color: 'green',  change: 'Currently operational' },
-    { label: 'Suspended',         value: ov.suspendedHospitals||0, icon: '🚫', color: 'red',    change: 'Needs attention' },
-    { label: 'Total Staff Users', value: ov.totalUsers       || 0, icon: '👥', color: 'cyan',   change: 'Across all hospitals' },
-    { label: 'Total Revenue',     value: `₹${(ov.totalRevenue||0).toLocaleString()}`, icon: '💰', color: 'amber', change: 'Lifetime subscriptions' },
-    { label: 'Trial Hospitals',   value: ov.trialHospitals   || 0, icon: '⏳', color: 'indigo', change: 'Convert to paid' },
+    { label: 'Total Hospitals',   value: ov.totalHospitals   || 0, icon: <Building2 size={22} color="#6366f1" />, color: 'indigo', change: 'All registered tenants' },
+    { label: 'Active Hospitals',  value: ov.activeHospitals  || 0, icon: <ShieldCheck size={22} color="#10b981" />, color: 'green',  change: 'Currently operational' },
+    { label: 'Suspended',         value: ov.suspendedHospitals||0, icon: <Ban size={22} color="#ef4444" />, color: 'red',    change: 'Needs attention' },
+    { label: 'Total Staff Users', value: ov.totalUsers       || 0, icon: <Users size={22} color="#06b6d4" />, color: 'cyan',   change: 'Across all hospitals' },
+    { label: 'Total Revenue',     value: `₹${(ov.totalRevenue||0).toLocaleString()}`, icon: <Coins size={22} color="#f59e0b" />, color: 'amber', change: 'Lifetime subscriptions' },
+    { label: 'Trial Hospitals',   value: ov.trialHospitals   || 0, icon: <Hourglass size={22} color="#6366f1" />, color: 'indigo', change: 'Convert to paid' },
   ];
 
   return (
@@ -166,7 +167,14 @@ export default function DashboardPage() {
                   ) : hospitals.map((h) => (
                     <tr key={h.id}>
                       <td>
-                        <div style={{ fontWeight: 600 }}>{h.name}</div>
+                        <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {h.name}
+                          {h.database_type === 'external' && (
+                            <span className="badge badge-success" style={{ fontSize: 10, textTransform: 'uppercase', padding: '2px 6px' }}>
+                              Private DB
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{h.code || h.city}</div>
                       </td>
                       <td><span className={`badge badge-${PLANS[h.plan] || 'primary'}`}>{h.plan}</span></td>

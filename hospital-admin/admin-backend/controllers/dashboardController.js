@@ -160,7 +160,7 @@ const getDashboardStats = async (req, res) => {
     } catch (_) { /* Payment table may not exist */ }
 
     // ── Recent Appointments ───────────────────────────────────────
-    const recentAppointments = await Appointment.findAll({
+    const recentApptsRaw = await Appointment.findAll({
       where: { hospital_id: hospitalId },
       include: [
         { model: Patient, as: 'patient', attributes: ['id', 'full_name', 'patient_id'] },
@@ -168,6 +168,15 @@ const getDashboardStats = async (req, res) => {
       ],
       order: [['created_at', 'DESC']],
       limit: 5,
+    });
+
+    const recentAppointments = recentApptsRaw.map(appt => {
+      const json = appt.toJSON();
+      if (json.patient) {
+        json.patient.name = json.patient.full_name;
+      }
+      json.dateTime = json.date_time;
+      return json;
     });
 
     // ── Portal Data ───────────────────────────────────────────────

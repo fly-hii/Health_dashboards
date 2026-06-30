@@ -59,19 +59,17 @@ const sendForgotPasswordOtp = async (req, res) => {
       if (user) resolvedHospitalId = user.hospital_id;
     }
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'No account found with this email address. Please contact your super admin.' });
-    }
-    if (!['HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
-      return res.status(403).json({ success: false, message: 'This email is not registered as an Admin in this portal.' });
-    }
-    if (user.status === 'Inactive') {
-      return res.status(403).json({ success: false, message: 'Account is deactivated. Contact your super admin.' });
+    // SECURITY: Always respond with same message regardless of whether email exists
+    // This prevents user enumeration via the forgot-password endpoint.
+    const GENERIC_MSG = 'If this email is registered as an admin, an OTP has been sent.';
+
+    if (!user || !['HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) || user.status === 'Inactive') {
+      return res.json({ success: true, message: GENERIC_MSG });
     }
 
     const otp = generateOtp();
     const expiresAt = Date.now() + 10 * 60 * 1000;
-    otpStore.set(email.toLowerCase(), { otp, expiresAt, verified: false, userId: user.id, hospitalId: resolvedHospitalId, hospitalCode });
+    otpStore.set(email.toLowerCase(), { otp, expiresAt, verified: false, userId: user.id, hospitalId: resolvedHospitalId, hospitalCode, attempts: 0 });
 
     try {
       await sendOtpEmail(user.email, user.name || 'Admin', otp, 'Hospital Admin Portal');
@@ -98,17 +96,36 @@ const verifyForgotPasswordOtp = async (req, res) => {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ success: false, message: 'Email and OTP are required' });
 
-    const record = otpStore.get(email.toLowerCase());
+    const key = email.toLowerCase();
+    const record = otpStore.get(key);
     if (!record) return res.status(400).json({ success: false, message: 'No OTP requested for this email. Please request a new one.' });
     if (Date.now() > record.expiresAt) {
-      otpStore.delete(email.toLowerCase());
+      otpStore.delete(key);
       return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
     }
-    if (record.otp !== otp.toString()) return res.status(400).json({ success: false, message: 'Invalid OTP code. Please try again.' });
+
+    // SECURITY: Brute-force protection — max 5 attempts
+    const MAX_ATTEMPTS = 5;
+    if ((record.attempts || 0) >= MAX_ATTEMPTS) {
+      otpStore.delete(key);
+      return res.status(429).json({ success: false, message: 'Too many incorrect attempts. Please request a new OTP.' });
+    }
+
+    if (record.otp !== otp.toString()) {
+      record.attempts = (record.attempts || 0) + 1;
+      otpStore.set(key, record);
+      const remaining = MAX_ATTEMPTS - record.attempts;
+      return res.status(400).json({
+        success: false,
+        message: remaining > 0
+          ? `Invalid OTP code. ${remaining} attempt(s) remaining.`
+          : 'Too many incorrect attempts. Please request a new OTP.',
+      });
+    }
 
     record.verified = true;
     record.verifiedAt = Date.now();
-    otpStore.set(email.toLowerCase(), record);
+    otpStore.set(key, record);
 
     res.json({ success: true, message: 'OTP verified successfully' });
   } catch (error) {
@@ -131,7 +148,7 @@ const resetForgotPassword = async (req, res) => {
     }
     if (record.otp !== otp.toString()) return res.status(400).json({ success: false, message: 'Invalid OTP. Please start over.' });
 
-    if (!newPassword || newPassword.length < 6) return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long' });
+    if (!newPassword || newPassword.length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
 
     const { sharedSaasDb, getHospitalConnection } = require('../services/databaseResolver');
     const { createModels } = require('../services/modelFactory');

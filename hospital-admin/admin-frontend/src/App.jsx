@@ -16,7 +16,6 @@ import AuditLogs from './pages/AuditLogs';
 import UserManagement from './pages/UserManagement';
 import Notifications from './pages/Notifications';
 import HospitalProfile from './pages/HospitalProfile';
-import Subscription from './pages/Subscription';
 import DepartmentManagement from './pages/DepartmentManagement';
 import StaffManagement from './pages/StaffManagement';
 import HospitalSettings from './pages/HospitalSettings';
@@ -24,7 +23,7 @@ import HospitalSettings from './pages/HospitalSettings';
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('admin_token');
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
   return children;
 };
@@ -33,15 +32,15 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/admin/login" element={<Login />} />
+        <Route path="/admin/forgot-password" element={<ForgotPassword />} />
         
         <Route path="/admin" element={
           <ProtectedRoute>
             <DashboardLayout />
           </ProtectedRoute>
         }>
-          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="appointments" element={<Appointments />} />
           <Route path="patients" element={<Patients />} />
@@ -55,7 +54,6 @@ function App() {
           <Route path="audit-logs" element={<AuditLogs />} />
           <Route path="user-management" element={<UserManagement />} />
           <Route path="hospital-profile" element={<HospitalProfile />} />
-          <Route path="subscription" element={<Subscription />} />
           <Route path="departments" element={<DepartmentManagement />} />
           <Route path="staff" element={<StaffManagement />} />
           <Route path="hospital-settings" element={<HospitalSettings />} />

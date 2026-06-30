@@ -185,7 +185,7 @@ const createUser = async (req, res) => {
         role: user.role,
         department: user.department,
         employeeId: user.employee_id,
-        password: passwordToUse
+        // NOTE: password NOT included — sent via welcome email only
       }
     });
 

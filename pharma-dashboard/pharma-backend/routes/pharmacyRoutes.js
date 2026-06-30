@@ -557,17 +557,7 @@ const saveBase64Locally = async (req, base64Data, fileName) => {
   }
   const filePath = path.join(uploadsDir, fileName);
   await fs.promises.writeFile(filePath, buffer);
-  
-  // Use BACKEND_URL env var so stored URLs are always https://, never http://localhost.
-  const backendUrl =
-    process.env.BACKEND_URL ||
-    process.env.RENDER_URL ||
-    (() => {
-      const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
-      const host  = req.get('x-forwarded-host')  || req.get('host');
-      return `${proto}://${host}`;
-    })();
-  return `${backendUrl}/uploads/${fileName}`;
+  return `/uploads/${fileName}`;
 };
 
 router.post('/profile/photo', protect, async (req, res) => {
@@ -583,45 +573,9 @@ router.post('/profile/photo', protect, async (req, res) => {
         const extension = contentType.split('/')[1] || 'jpg';
         const fileName = `avatar-${req.user.id}-${Date.now()}.${extension}`;
         
-        const s3Bucket = process.env.AWS_S3_BUCKET;
-        const s3AccessKey = process.env.AWS_ACCESS_KEY_ID;
-        const s3SecretKey = process.env.AWS_SECRET_ACCESS_KEY;
-        const s3Region = process.env.AWS_REGION || 'ap-south-1';
-
-        const hasS3Config = s3Bucket && s3AccessKey && s3SecretKey && 
-                            s3AccessKey !== 'your_access_key' && 
-                            s3SecretKey !== 'your_secret_key';
-
-        if (hasS3Config) {
-          try {
-            const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-            const s3Client = new S3Client({
-              region: s3Region,
-              credentials: {
-                accessKeyId: s3AccessKey,
-                secretAccessKey: s3SecretKey,
-              },
-            });
-
-            const s3Key = `hospitals/${req.hospitalId || req.user.hospital_id}/pharmacists/${req.user.id}/${fileName}`;
-
-            await s3Client.send(new PutObjectCommand({
-              Bucket: s3Bucket,
-              Key: s3Key,
-              Body: buffer,
-              ContentType: contentType,
-            }));
-
-            imageUrl = `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${s3Key}`;
-            console.log(`Uploaded pharmacy avatar to S3: ${imageUrl}`);
-          } catch (s3Err) {
-            console.error('Failed to upload pharmacy avatar to S3, falling back to local storage:', s3Err);
-            imageUrl = await saveBase64Locally(req, photoUrl, fileName);
-          }
-        } else {
-          console.log('AWS S3 not configured, storing pharmacy avatar locally.');
-          imageUrl = await saveBase64Locally(req, photoUrl, fileName);
-        }
+        // Always store profile avatars locally in /uploads directory
+        console.log('Storing pharmacy avatar locally in /uploads directory.');
+        imageUrl = await saveBase64Locally(req, photoUrl, fileName);
       } else {
         imageUrl = photoUrl;
       }

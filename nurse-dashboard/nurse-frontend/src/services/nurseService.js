@@ -10,4 +10,5 @@ export const nurseService = {
   addWalkInPatient:        (data)     => api.post('/nurse/walk-in', data),
   searchPatients:          (q)        => api.get('/nurse/patients/search', { params: { q } }),
   updatePatient:           (id, data) => api.put(`/nurse/patient/${id}`, data),
+  callPatient:             (id)       => api.post(`/nurse/appointment/${id}/call`),
 };

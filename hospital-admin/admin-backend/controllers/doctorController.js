@@ -330,14 +330,15 @@ const getDoctorPatients = async (req, res) => {
 const getDoctorStats = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
-    const { User, Appointment } = req.models;
+    const { User, Appointment, Department } = req.models;
     const todayStart = new Date(); todayStart.setHours(0,0,0,0);
     const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
 
-    const [total, active, onLeave] = await Promise.all([
+    const [total, active, onLeave, deptsCount] = await Promise.all([
       User.count({ where: { hospital_id: hospitalId, role: 'DOCTOR' } }),
       User.count({ where: { hospital_id: hospitalId, role: 'DOCTOR', status: 'Active' } }),
       User.count({ where: { hospital_id: hospitalId, role: 'DOCTOR', availability_status: 'On Leave' } }),
+      Department.count({ where: { hospital_id: hospitalId } }),
     ]);
 
     const todayConsultations = await Appointment.count({
@@ -346,7 +347,13 @@ const getDoctorStats = async (req, res) => {
 
     res.json({
       success: true,
-      data: { totalDoctors: { count: total }, activeDoctors: { count: active }, onLeave: { count: onLeave }, todayConsultations: { count: todayConsultations } },
+      data: { 
+        totalDoctors: { count: total }, 
+        activeDoctors: { count: active }, 
+        onLeave: { count: onLeave }, 
+        departments: { count: deptsCount }, 
+        todayConsultations: { count: todayConsultations } 
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

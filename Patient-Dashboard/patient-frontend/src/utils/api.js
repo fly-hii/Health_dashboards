@@ -19,7 +19,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_U
 export const getImageUrl = (url) => {
   if (!url) return null;
   // Reject local dev URLs stored in DB
-  if (/localhost|127\.0\.0\.1/.test(url)) return null;
+  if (/localhost|127\.0\.0\.1/.test(url) && !/localhost|127\.0\.0\.1/.test(window.location.hostname)) return null;
   // Relative path → make absolute using the configured API origin
   if (url.startsWith('/')) {
     const origin = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '')
@@ -27,7 +27,7 @@ export const getImageUrl = (url) => {
     return origin ? `${origin}${url}` : url;
   }
   // Upgrade insecure external URLs to https
-  if (url.startsWith('http://')) return url.replace(/^http:\/\//, 'https://');
+  if (url.startsWith('http://') && !/localhost|127\.0\.0\.1/.test(url)) return url.replace(/^http:\/\//, 'https://');
   return url;
 };
 

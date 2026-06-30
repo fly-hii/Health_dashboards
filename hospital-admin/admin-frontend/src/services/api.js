@@ -7,12 +7,12 @@ import axios from 'axios';
  */
 export const getImageUrl = (url) => {
   if (!url) return null;
-  if (/localhost|127\.0\.0\.1/.test(url)) return null;
+  if (/localhost|127\.0\.0\.1/.test(url) && !/localhost|127\.0\.0\.1/.test(window.location.hostname)) return null;
   if (url.startsWith('/')) {
     const origin = (import.meta.env.VITE_API_URL || '').replace(/\/api$/, '');
     return origin ? `${origin}${url}` : url;
   }
-  if (url.startsWith('http://')) return url.replace(/^http:\/\//, 'https://');
+  if (url.startsWith('http://') && !/localhost|127\.0\.0\.1/.test(url)) return url.replace(/^http:\/\//, 'https://');
   return url;
 };
 

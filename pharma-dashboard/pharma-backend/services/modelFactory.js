@@ -79,6 +79,7 @@ function createModels(sequelize) {
     status:               { type: DataTypes.ENUM('Active','Inactive'), defaultValue: 'Active' },
     phone:                DataTypes.STRING(20),
     profile_image:        DataTypes.TEXT,
+    address:              DataTypes.TEXT,
     avatar: {
       type: DataTypes.VIRTUAL,
       get() {

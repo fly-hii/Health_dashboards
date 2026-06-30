@@ -59,7 +59,10 @@ body {
 
 /* ── SIDEBAR ─────────────────────────────────── */
 .sidebar-logo {
-  padding: 24px 20px 16px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
   border-bottom: 1px solid var(--border);
 }
 .logo-badge {
@@ -75,8 +78,13 @@ body {
   font-size: 18px;
   box-shadow: 0 4px 15px rgba(2, 132, 199, 0.25);
 }
-.logo-text h2 { font-size: 15px; font-weight: 700; color: var(--text); }
-.logo-text span { font-size: 11px; color: var(--primary-light); font-weight: 500; }
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.logo-text h2 { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.logo-text span { font-size: 11px; color: var(--primary-light); font-weight: 500; line-height: 1.2; margin-top: 2px; }
 
 .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
 .nav-section-title {
@@ -112,7 +120,8 @@ body {
 /* ── TOPBAR ──────────────────────────────────── */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 28px;
+  height: 70px;
+  padding: 0 28px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 50;
@@ -305,6 +314,11 @@ select option { background: var(--surface2); }
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
   animation: slideUp 0.2s ease;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.modal::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
 }
 .modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
 .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }

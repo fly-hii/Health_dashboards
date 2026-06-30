@@ -24,6 +24,7 @@ const User = sequelize.define('User', {
   status: { type: DataTypes.ENUM('Active', 'Inactive'), defaultValue: 'Active' },
   phone: { type: DataTypes.STRING(20) },
   profile_image: { type: DataTypes.TEXT },
+  address: { type: DataTypes.TEXT },
   employee_id: { type: DataTypes.STRING(50) },
   specialization: { type: DataTypes.STRING(200) },
   experience: { type: DataTypes.INTEGER },

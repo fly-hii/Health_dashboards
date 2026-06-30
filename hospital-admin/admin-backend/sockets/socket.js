@@ -14,9 +14,10 @@ const initSocket = (server) => {
   io = new Server(server, {
     cors: {
       origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        if (!origin || allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {
+          // No wildcard subdomain matching — only explicit allowlist
           callback(null, false);
         }
       },
@@ -54,9 +55,15 @@ const initSocket = (server) => {
       console.log(`🏥 Socket ${socket.id} joined hospital_${hospitalId}`);
     });
 
-    // Legacy support: join by userId
+    // Legacy support: join by userId — only allowed for own userId
     socket.on('join_room', (userId) => {
-      socket.join(userId);
+      // SECURITY: Only allow joining your own userId room
+      if (String(userId) !== String(socket.user?.id)) {
+        console.warn(`⚠️  Socket ${socket.id} tried to join room "${userId}" but authenticated as user ${socket.user?.id}`);
+        socket.emit('error', { message: 'Not authorized to join this room.' });
+        return;
+      }
+      socket.join(String(userId));
       console.log(`👤 Socket ${socket.id} joined room: ${userId}`);
     });
 

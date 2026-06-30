@@ -18,7 +18,7 @@ const navItems = [
   { to: '/patient-queue', icon: Users,           label: 'Patient Queue' },
   { to: '/vitals',        icon: Activity,        label: 'Vitals Entry' },
   { to: '/medical-history', icon: FileText,        label: 'Medical History' },
-  { to: '/tokens',        icon: Ticket,          label: 'Patient Tokens' },
+  // { to: '/tokens',        icon: Ticket,          label: 'Patient Tokens' },
   { to: '/notifications', icon: Bell,            label: 'Notifications' },
   { to: '/profile',       icon: User,            label: 'Profile' },
 ];

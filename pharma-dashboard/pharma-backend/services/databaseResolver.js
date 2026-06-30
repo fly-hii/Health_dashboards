@@ -33,7 +33,7 @@ const masterDb = new Sequelize(
     dialect: 'mysql',
     dialectModule: require('mysql2'),
     logging: false,
-    pool: { max: 5, min: 0, acquire: 30000, idle: 10000, evict: 10000 },
+    pool: { max: 2, min: 0, acquire: 30000, idle: 5000, evict: 5000 },
     dialectOptions: {
       connectTimeout: 60000,
       ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
@@ -53,7 +53,7 @@ const sharedSaasDb = new Sequelize(
     dialect: 'mysql',
     dialectModule: require('mysql2'),
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
-    pool: { max: 15, min: 2, acquire: 30000, idle: 10000, evict: 10000 },
+    pool: { max: 3, min: 0, acquire: 30000, idle: 5000, evict: 5000 },
     dialectOptions: {
       connectTimeout: 60000,
       ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
@@ -156,7 +156,7 @@ async function getHospitalConnection(hospitalId) {
       dialect: 'mysql',
       dialectModule: require('mysql2'),
       logging: false,
-      pool: { max: 5, min: 0, acquire: 30000, idle: 10000, evict: 10000 },
+      pool: { max: 2, min: 0, acquire: 30000, idle: 5000, evict: 5000 },
       dialectOptions: {
         connectTimeout: 60000,
         ...(conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {})

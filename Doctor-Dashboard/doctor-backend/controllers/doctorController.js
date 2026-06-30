@@ -956,48 +956,9 @@ const uploadDoctorAvatar = async (req, res) => {
     const ext = path.extname(req.file.originalname).toLowerCase();
     const fileName = `avatar-${doctorId}-${Date.now()}${ext}`;
 
-    let imageUrl = '';
-
-    // Check S3 config
-    const s3Bucket = process.env.AWS_S3_BUCKET;
-    const s3AccessKey = process.env.AWS_ACCESS_KEY_ID;
-    const s3SecretKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const s3Region = process.env.AWS_REGION || 'ap-south-1';
-
-    const hasS3Config = s3Bucket && s3AccessKey && s3SecretKey && 
-                        s3AccessKey !== 'your_access_key' && 
-                        s3SecretKey !== 'your_secret_key';
-
-    if (hasS3Config) {
-      try {
-        const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-        const s3Client = new S3Client({
-          region: s3Region,
-          credentials: {
-            accessKeyId: s3AccessKey,
-            secretAccessKey: s3SecretKey,
-          },
-        });
-
-        const s3Key = `hospitals/${hospitalId}/doctors/${doctorId}/${fileName}`;
-
-        await s3Client.send(new PutObjectCommand({
-          Bucket: s3Bucket,
-          Key: s3Key,
-          Body: req.file.buffer,
-          ContentType: req.file.mimetype,
-        }));
-
-        imageUrl = `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${s3Key}`;
-        console.log(`Uploaded doctor avatar to S3: ${imageUrl}`);
-      } catch (s3Err) {
-        console.error('Failed to upload doctor avatar to S3, falling back to local storage:', s3Err);
-        imageUrl = await saveFileLocally(req, fileName);
-      }
-    } else {
-      console.log('AWS S3 not fully configured or contains placeholders, storing doctor avatar locally.');
-      imageUrl = await saveFileLocally(req, fileName);
-    }
+    // Always store profile avatars locally in /uploads directory
+    console.log('Storing doctor avatar locally in /uploads directory.');
+    const imageUrl = await saveFileLocally(req, fileName);
 
     // Update user in DB
     await User.update({ profile_image: imageUrl }, { where: { id: doctorId, hospital_id: hospitalId } });
@@ -1016,18 +977,7 @@ const saveFileLocally = async (req, fileName) => {
   }
   const filePath = path.join(uploadsDir, fileName);
   await fs.promises.writeFile(filePath, req.file.buffer);
-  
-  // Use BACKEND_URL env var so stored URLs are always https:// pointing at the
-  // real backend, never http://localhost (which causes Mixed Content on HTTPS pages).
-  const backendUrl =
-    process.env.BACKEND_URL ||
-    process.env.RENDER_URL ||
-    (() => {
-      const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
-      const host  = req.get('x-forwarded-host')  || req.get('host');
-      return `${proto}://${host}`;
-    })();
-  return `${backendUrl}/uploads/${fileName}`;
+  return `/uploads/${fileName}`;
 };
 
 // PUT /api/doctors/change-password

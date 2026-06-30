@@ -70,6 +70,7 @@ export default function AuditLogsPage() {
             <table>
               <thead>
                 <tr>
+                  <th>HOSPITAL ID</th>
                   <th>Time</th>
                   <th>Action</th>
                   <th>Module</th>
@@ -81,11 +82,11 @@ export default function AuditLogsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 60 }}>
+                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: 60 }}>
                     <div className="spinner" style={{ margin: '0 auto' }} />
                   </td></tr>
                 ) : logs.length === 0 ? (
-                  <tr><td colSpan={7}>
+                  <tr><td colSpan={8}>
                     <div className="empty-state">
                       <div className="icon">🔍</div>
                       <h3>No audit logs found</h3>
@@ -94,8 +95,11 @@ export default function AuditLogsPage() {
                   </td></tr>
                 ) : logs.map((log) => (
                   <tr key={log.id}>
+                    <td style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-muted)' }}>
+                      {log.hospital_id ? `#${log.hospital_id}` : '—'}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {new Date(log.created_at).toLocaleString()}
+                      {new Date(log.createdAt || log.created_at).toLocaleString()}
                     </td>
                     <td>
                       <span className={`badge badge-${ACTION_BADGE[log.action] || 'primary'}`}>
@@ -104,8 +108,12 @@ export default function AuditLogsPage() {
                     </td>
                     <td style={{ fontSize: 13 }}>{log.module || '—'}</td>
                     <td style={{ fontSize: 13 }}>
-                      <div style={{ fontWeight: 500 }}>{log.user?.name || '—'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{log.user?.role}</div>
+                      <div style={{ fontWeight: 500 }}>
+                        {log.admin?.name || log.user?.name || (log.module === 'Subscription' ? 'Public Visitor' : 'System')}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {log.admin ? 'Super Admin' : (log.user?.role || (log.module === 'Subscription' ? 'Self-Registered' : 'System'))}
+                      </div>
                     </td>
                     <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                       {log.hospital?.name || (log.hospital_id ? `#${log.hospital_id}` : 'Global')}

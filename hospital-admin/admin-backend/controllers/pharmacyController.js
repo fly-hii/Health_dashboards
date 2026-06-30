@@ -5,7 +5,7 @@ const { Op } = require('sequelize');
 const getOrders = async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
-    const { PharmacyOrder, Patient, User } = req.models;
+    const { PharmacyOrder, Patient, User, Prescription, PrescriptionMedicine } = req.models;
     
     const where = { hospital_id: req.hospitalId };
     if (status) where.status = status;
@@ -17,7 +17,14 @@ const getOrders = async (req, res) => {
       where,
       include: [
         { model: Patient, as: 'patient', attributes: ['id', 'full_name', 'phone'] },
-        { model: User, as: 'pharmacist', attributes: ['id', 'name'] }
+        { model: User, as: 'pharmacist', attributes: ['id', 'name'] },
+        {
+          model: Prescription,
+          as: 'prescription',
+          include: [
+            { model: PrescriptionMedicine, as: 'medicines', attributes: ['name', 'dosage', 'frequency', 'duration', 'quantity'] }
+          ]
+        }
       ],
       order: [['created_at', 'DESC']],
       limit: limitNum,
@@ -26,9 +33,16 @@ const getOrders = async (req, res) => {
 
     const formattedOrders = rows.map(order => {
       const data = order.toJSON();
+      data._id = data.id;
+      data.orderDate = data.createdAt || data.created_at;
+      data.totalAmount = data.total_amount;
+      data.paymentStatus = data.payment_status;
+
       if (data.patient) {
         data.patient.name = data.patient.full_name;
       }
+      // Populate items from the associated prescription's medicines list
+      data.items = data.prescription?.medicines || [];
       return data;
     });
 

@@ -574,6 +574,84 @@ const addWalkInPatient = async (req, res, next) => {
   }
 };
 
+const callPatient = async (req, res, next) => {
+  try {
+    const { Appointment, Patient, User, Notification } = req.models;
+    const appointment = await Appointment.findOne({
+      where: { id: req.params.id, hospital_id: req.hospitalId },
+      include: [
+        { model: Patient, as: 'patient' },
+        { model: User, as: 'doctor', attributes: ['name', 'department'] }
+      ]
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+
+    const patient = appointment.patient;
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    const doctorName = appointment.doctor?.name || 'Doctor';
+    const department = appointment.doctor?.department || appointment.department || 'OPD';
+
+    // 1. Create in-app Notification for the patient
+    const notification = await Notification.create({
+      hospital_id: req.hospitalId,
+      user_id: patient.id,
+      title: 'It is your turn!',
+      message: `You are being called for your appointment with Dr. ${doctorName}. Please proceed to the consultation room or vitals entry counter. Token #${appointment.token_number}.`,
+      type: 'appointment',
+      priority: 'high',
+      metadata: { appointmentId: appointment.id, doctorId: appointment.doctor_id },
+      status: 'unread',
+    });
+
+    // 2. Send email to patient if they have a valid email
+    if (patient.email) {
+      const { sendCallPatientEmail } = require('../../services/emailService');
+      try {
+        await sendCallPatientEmail(
+          patient.email,
+          patient.full_name || 'Patient',
+          appointment.token_number,
+          doctorName,
+          department
+        );
+      } catch (emailErr) {
+        console.error('[callPatient] Email sending failed:', emailErr.message);
+      }
+    }
+
+    // 3. Emit real-time notification socket event to the patient via system relay
+    const io = req.app.get('io');
+    if (io) {
+      // Emit patient_called event to the hospital room and system_relay room
+      const callData = {
+        appointmentId: appointment.id,
+        patientId: patient.id,
+        tokenNumber: appointment.token_number,
+        doctorName: doctorName,
+        department: department,
+        hospitalId: req.hospitalId,
+        notification: {
+          title: notification.title,
+          message: notification.message,
+          type: notification.type,
+        }
+      };
+      io.to(`hospital_${req.hospitalId}`).emit('patient_called', callData);
+      io.to('system_relay').emit('patient_called', callData);
+    }
+
+    res.json({ success: true, message: 'Patient called. Notification and email sent successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getPatientQueue,
@@ -584,4 +662,5 @@ module.exports = {
   updatePatient,
   getEmergencyQueue,
   addWalkInPatient,
+  callPatient,
 };

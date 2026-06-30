@@ -6,7 +6,8 @@ import { toast } from '../../utils/toast';
 import axios from 'axios';
 import { 
   Phone, Lock, Eye, EyeOff, Calendar, FileText, ClipboardList, 
-  User, Shield, LogIn, Heart, Mail, MapPin, Sparkles, UserCheck 
+  User, Shield, LogIn, Heart, Mail, MapPin, Sparkles, UserCheck,
+  AlertCircle
 } from 'lucide-react';
 
 export default function LoginPage({ defaultSignUp = false }) {

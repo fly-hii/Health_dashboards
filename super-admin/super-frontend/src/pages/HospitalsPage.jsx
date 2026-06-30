@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getHospitals, createHospital, suspendHospital, activateHospital, updateHospitalPlan, testDbConnection, deleteHospital } from '../utils/api';
-import { Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Trash2, Tag, Ban, Check, Database } from 'lucide-react';
 
 const STATUS_BADGE = { active: 'success', suspended: 'danger', trial: 'cyan', expired: 'warning' };
 const PLAN_BADGE   = { trial: 'cyan', basic: 'primary', professional: 'amber', enterprise: 'green' };
@@ -140,15 +140,57 @@ function CreateModal({ onClose, onCreated }) {
             </div>
           </div>
 
-          <div className="form-group" style={{ marginBottom: 20 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
-              <input 
-                type="checkbox" 
-                checked={form.useExternalDb} 
-                onChange={e => set('useExternalDb', e.target.checked)} 
+          <div 
+            onClick={() => set('useExternalDb', !form.useExternalDb)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              padding: '14px 18px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              userSelect: 'none',
+              marginBottom: 20,
+              transition: 'all 0.25s ease',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Database size={16} style={{ color: 'var(--text-muted)' }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                BYOD — Bring Your Own Database
+              </span>
+            </div>
+            
+            {/* Custom Switch Toggle */}
+            <div 
+              style={{
+                width: 38,
+                height: 20,
+                borderRadius: 10,
+                background: form.useExternalDb ? 'var(--primary)' : 'rgba(100, 116, 139, 0.25)',
+                position: 'relative',
+                transition: 'background-color 0.2s ease',
+                flexShrink: 0,
+              }}
+            >
+              <div 
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: 'white',
+                  position: 'absolute',
+                  top: 3,
+                  left: form.useExternalDb ? 21 : 3,
+                  transition: 'left 0.2s ease',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                }}
               />
-              Use Existing/External Database (BYOD)
-            </label>
+            </div>
           </div>
 
           {form.useExternalDb && (
@@ -493,7 +535,14 @@ export default function HospitalsPage() {
                 ) : hospitals.map((h) => (
                   <tr key={h.id}>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{h.name}</div>
+                      <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {h.name}
+                        {h.database_type === 'external' && (
+                          <span className="badge badge-success" style={{ fontSize: 10, textTransform: 'uppercase', padding: '2px 6px' }}>
+                            Private DB
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>#{h.code} · {h.email}</div>
                     </td>
                     <td>
@@ -513,18 +562,66 @@ export default function HospitalsPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-ghost btn-sm" title="View" onClick={() => navigate(`/hospitals/${h.id}`)}>
-                          👁
+                        <button
+                          title="View"
+                          onClick={() => navigate(`/hospitals/${h.id}`)}
+                          style={{
+                            background: 'rgba(2,132,199,0.08)',
+                            color: '#0284c7',
+                            border: '1px solid rgba(2,132,199,0.25)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 30, height: 30, padding: 0, borderRadius: 6,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Eye size={14} />
                         </button>
-                        <button className="btn btn-ghost btn-sm" title="Update Plan" onClick={() => setPlanModal(h)}>
-                          🏷
+                        <button
+                          title="Update Plan"
+                          onClick={() => setPlanModal(h)}
+                          style={{
+                            background: 'rgba(99,102,241,0.08)',
+                            color: '#6366f1',
+                            border: '1px solid rgba(99,102,241,0.25)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: 30, height: 30, padding: 0, borderRadius: 6,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Tag size={14} />
                         </button>
                         {actionLoading === h.id ? (
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>...</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', width: 30, justifyContent: 'center' }}>...</span>
                         ) : h.status === 'suspended' ? (
-                          <button className="btn btn-success-outline btn-sm" title="Activate" onClick={() => handleActivate(h)}>✅</button>
+                          <button
+                            title="Activate"
+                            onClick={() => handleActivate(h)}
+                            style={{
+                              background: 'rgba(16,185,129,0.08)',
+                              color: '#10b981',
+                              border: '1px solid rgba(16,185,129,0.25)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: 30, height: 30, padding: 0, borderRadius: 6,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Check size={14} />
+                          </button>
                         ) : (
-                          <button className="btn btn-danger-outline btn-sm" title="Suspend" onClick={() => handleSuspend(h)}>🚫</button>
+                          <button
+                            title="Suspend"
+                            onClick={() => handleSuspend(h)}
+                            style={{
+                              background: 'rgba(239,68,68,0.08)',
+                              color: '#ef4444',
+                              border: '1px solid rgba(239,68,68,0.25)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: 30, height: 30, padding: 0, borderRadius: 6,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Ban size={14} />
+                          </button>
                         )}
                         <button
                           className="btn btn-sm"

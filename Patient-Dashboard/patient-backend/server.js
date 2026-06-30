@@ -52,7 +52,7 @@ const io = new Server(server, {
   },
 });
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) {
     return next(new Error('Authentication error: no token provided'));
@@ -61,11 +61,34 @@ io.use((socket, next) => {
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.user = decoded; // { id, hospitalId, role }
+
+    // Enrich socket.user with email so join_hospital cross-hospital verification
+    // can look up the patient record by email in a foreign hospital's DB.
+    // NOTE: look up by id only — do NOT add hospital_id here, as the patient's
+    // hospital_id in the DB may differ from the one encoded in the JWT (e.g.
+    // after a hospital assignment correction) and would return no rows.
+    try {
+      const { getHospitalConnection } = require('./services/databaseResolver');
+      const { createModels }          = require('./services/modelFactory');
+      const homeDb     = await getHospitalConnection(decoded.hospitalId);
+      const homeModels = createModels(homeDb);
+      const homePatient = await homeModels.Patient.findOne({
+        where: { id: decoded.id },
+        attributes: ['id', 'email'],
+      });
+      if (homePatient?.email) {
+        socket.user.email = homePatient.email;
+      }
+    } catch (_) {
+      // Non-fatal: email enrichment failed, cross-hospital join_hospital will be denied gracefully
+    }
+
     next();
   } catch (err) {
     next(new Error('Authentication error: invalid token'));
   }
 });
+
 
 io.on('connection', (socket) => {
   console.log(`🔌 Patient socket: ${socket.id} (hospital ${socket.user?.hospitalId})`);
@@ -87,18 +110,49 @@ io.on('connection', (socket) => {
     socket.join(`patient_${patientId}`);
     console.log(`🔌 Patient socket: ${socket.id} joined patient_${patientId} via join_patient`);
   });
-  socket.on('join_hospital', (hospitalId) => {
-    if (parseInt(hospitalId) !== parseInt(socket.user?.hospitalId)) {
-      console.warn(`⚠️  Patient socket ${socket.id} attempted join hospital_${hospitalId} but token hospitalId=${socket.user?.hospitalId}`);
+
+  // join_hospital: allow home hospital OR any hospital where the patient has a
+  // verified cross-hospital record. This supports patients who book appointments
+  // at multiple hospitals and need to receive real-time queue/appointment events
+  // from each hospital's room. Hospital rooms carry non-sensitive queue events;
+  // sensitive personal events (VITALS_UPDATED, PATIENT_CALLED) go to patient_${id}.
+  socket.on('join_hospital', async (hospitalId) => {
+    const targetHospitalId = parseInt(hospitalId);
+    const homeHospitalId   = parseInt(socket.user?.hospitalId);
+
+    // Fast path — always allow joining home hospital
+    if (targetHospitalId === homeHospitalId) {
+      socket.join(`hospital_${targetHospitalId}`);
+      console.log(`🏥 Patient socket: ${socket.id} joined hospital_${targetHospitalId} (home)`);
       return;
     }
-    socket.join(`hospital_${hospitalId}`);
-    console.log(`🏥 Patient socket: ${socket.id} joined hospital_${hospitalId}`);
+
+    // Slow path — verify the patient has a record at the requested hospital
+    try {
+      const { getHospitalConnection } = require('./services/databaseResolver');
+      const { createModels }          = require('./services/modelFactory');
+      const db     = await getHospitalConnection(targetHospitalId);
+      const models = createModels(db);
+      const patient = await models.Patient.findOne({
+        where: { email: socket.user?.email, hospital_id: targetHospitalId },
+        attributes: ['id'],
+      });
+      if (patient) {
+        socket.join(`hospital_${targetHospitalId}`);
+        console.log(`🏥 Patient socket: ${socket.id} joined hospital_${targetHospitalId} (cross-hospital verified)`);
+      } else {
+        console.warn(`⚠️  Patient socket ${socket.id} denied join hospital_${targetHospitalId} — no patient record found`);
+      }
+    } catch (err) {
+      console.error(`[Socket join_hospital] Error verifying hospital ${targetHospitalId}:`, err.message);
+    }
   });
+
   socket.on('disconnect', () => {
     console.log(`🔌 Patient socket disconnected: ${socket.id}`);
   });
 });
+
 app.set('io', io);
 
 const NURSE_SOCKET_URL = process.env.NURSE_SOCKET_URL;
@@ -163,6 +217,12 @@ const connectNurseSocket = () => {
   });
   nurseSocket.on('appointment_status_updated', (data) => {
     io.to(`hospital_${data.hospitalId}`).emit('appointment_status_updated', data);
+  });
+  nurseSocket.on('patient_called', (data) => {
+    if (data.patientId) {
+      io.to(`patient_${data.patientId}`).emit('PATIENT_CALLED', data);
+      io.to(`hospital_${data.hospitalId}`).emit('patient_called', data);
+    }
   });
 };
 if (!nurseSocketDisabled) connectNurseSocket();
@@ -470,9 +530,9 @@ async function getPatientConnectionsAcrossHospitals(email) {
     try {
       const db = await getHospitalConnection(hosp.id);
       const models = createModels(db);
-      // Find patient by email in this hospital's DB
+      // Find patient by email in this hospital's DB, scoped to this hospital
       const patient = await models.Patient.findOne({
-        where: { email: email }
+        where: { email: email, hospital_id: hosp.id }
       });
       if (patient) {
         results.push({
@@ -540,16 +600,19 @@ app.get('/api/appointments', protect, async (req, res) => {
         order: [['date_time', 'DESC']],
       });
 
-      const mapped = appointments.map(a => ({
-        _id: a.id,
-        apptId: `APT${String(a.id).padStart(4, '0')}`,
-        doctor: a.doctor?.name ? `Dr. ${a.doctor.name}` : 'Doctor',
-        department: a.department,
-        dateTime: a.date_time ? new Date(a.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
-        tokenNumber: a.token_number,
-        status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
-        rawStatus: a.status,
-      }));
+      const mapped = appointments.map(a => {
+        const deptName = (a.department && a.department !== 'OPD') ? a.department : (a.doctor?.department || 'General');
+        return {
+          _id: a.id,
+          apptId: `APT${String(a.id).padStart(4, '0')}`,
+          doctor: a.doctor?.name ? `Dr. ${a.doctor.name}` : 'Doctor',
+          department: deptName,
+          dateTime: a.date_time ? new Date(a.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+          tokenNumber: a.token_number,
+          status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
+          rawStatus: a.status,
+        };
+      });
 
       allAppointments.push(...mapped);
     }
@@ -592,22 +655,25 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
         include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department', 'specialization', 'profile_image', 'qualification'] }],
       });
 
-      const mapped = rows.map(a => ({
-        _id: a.id,
-        appointmentId: `APT${String(a.id).padStart(4, '0')}`,
-        doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
-        doctorAvatar: a.doctor?.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${a.doctor?.name}`,
-        department: a.department,
-        appointmentDate: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-        appointmentTime: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-        tokenNumber: a.token_number,
-        reason: a.reason || 'Routine checkup',
-        status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
-        rawStatus: a.status,
-        createdAt: a.created_at,
-        hospitalId: conn.hospitalId,
-        hospitalName: conn.hospitalName
-      }));
+      const mapped = rows.map(a => {
+        const deptName = (a.department && a.department !== 'OPD') ? a.department : (a.doctor?.department || 'General');
+        return {
+          _id: a.id,
+          appointmentId: `APT${String(a.id).padStart(4, '0')}`,
+          doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
+          doctorAvatar: a.doctor?.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${a.doctor?.name}`,
+          department: deptName,
+          appointmentDate: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          appointmentTime: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+          tokenNumber: a.token_number,
+          reason: a.reason || 'Routine checkup',
+          status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
+          rawStatus: a.status,
+          createdAt: a.created_at,
+          hospitalId: conn.hospitalId,
+          hospitalName: conn.hospitalName
+        };
+      });
 
       allRows.push(...mapped);
     }
@@ -656,11 +722,13 @@ app.get('/api/patient/appointments/:id', protect, async (req, res) => {
 
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
+    const deptName = (appt.department && appt.department !== 'OPD') ? appt.department : (appt.doctor?.department || 'General');
+
     res.json({
       appointment: {
         _id: appt.id,
         appointmentId: `APT${String(appt.id).padStart(4, '0')}`,
-        department: appt.department,
+        department: deptName,
         appointmentDate: appt.date_time ? new Date(appt.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         appointmentTime: appt.date_time ? new Date(appt.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
         tokenNumber: appt.token_number,
@@ -673,8 +741,8 @@ app.get('/api/patient/appointments/:id', protect, async (req, res) => {
         name: appt.doctor ? `Dr. ${appt.doctor.name}` : 'Doctor',
         avatar: appt.doctor?.profile_image,
         qualification: appt.doctor?.qualification || 'MD',
-        specialization: appt.doctor?.specialization || appt.department,
-        department: appt.department,
+        specialization: appt.doctor?.specialization || deptName,
+        department: deptName,
       },
       patient: { name: req.user.full_name, phone: req.user.phone, gender: req.user.gender },
       visit: {
@@ -718,7 +786,7 @@ app.post('/api/appointments', protect, async (req, res) => {
     let targetPatientId = req.user.id;
     if (isCrossHospital) {
       let targetPatient = await models.Patient.findOne({
-        where: { email: req.user.email },
+        where: { email: req.user.email, hospital_id: targetHospitalId },
         transaction: t,
       });
 
@@ -727,19 +795,27 @@ app.post('/api/appointments', protect, async (req, res) => {
         const today = new Date();
         const prefix = `PAT${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
         const last = await models.Patient.findOne({
-          where: { patient_id: { [Op.like]: `${prefix}%` } },
+          where: { hospital_id: targetHospitalId, patient_id: { [Op.like]: `${prefix}%` } },
           order: [['patient_id', 'DESC']],
           transaction: t,
         });
         const seq = last?.patient_id ? parseInt(last.patient_id.replace(prefix, '')) + 1 : 1;
         const patient_id = `${prefix}${String(seq).padStart(3, '0')}`;
 
+        // SECURITY: req.user.password is excluded by authMiddleware; generate a
+        // cryptographically random locked password hash for the shadow record.
+        // The patient authenticates to their home hospital; this account cannot
+        // be directly logged into without going through the home hospital's flow.
+        const bcrypt = require('bcryptjs');
+        const crypto = require('crypto');
+        const lockedPasswordHash = await bcrypt.hash(crypto.randomUUID(), 10);
+
         targetPatient = await models.Patient.create({
           hospital_id: targetHospitalId,
           patient_id,
           full_name: req.user.full_name,
           email: req.user.email,
-          password: req.user.password, // Copied hashed password
+          password: lockedPasswordHash,
           phone: req.user.phone,
           dob: req.user.dob,
           gender: req.user.gender,
@@ -923,7 +999,8 @@ app.delete('/api/appointments/:id', protect, async (req, res) => {
     let activeConn = null;
 
     for (const conn of patientConns) {
-      appt = await conn.models.Appointment.findOne({ where: { id: req.params.id, patient_id: conn.patientId } });
+      // SECURITY: scope by both hospital_id AND patient_id to prevent cross-tenant deletes
+      appt = await conn.models.Appointment.findOne({ where: { id: req.params.id, patient_id: conn.patientId, hospital_id: conn.hospitalId } });
       if (appt) {
         activeConn = conn;
         break;
@@ -937,6 +1014,80 @@ app.delete('/api/appointments/:id', protect, async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// Helper to compute token status and timeline dynamically
+async function getAppointmentStatusAndTimeline(appt, connModels) {
+  const statusMap = {
+    'Pending': 'Registration',
+    'Confirmed': 'Registration',
+    'In-Progress': 'Consultation',
+    'Completed': 'Completed',
+    'Cancelled': 'Cancelled',
+  };
+
+  let mappedStatus = statusMap[appt.status] || 'Registration';
+  let isCompleted = appt.status === 'Completed';
+  let pharmacyOrder = null;
+  let hasPrescription = false;
+
+  if (appt.status === 'Completed') {
+    const prescription = await connModels.Prescription.findOne({
+      where: { appointment_id: appt.id }
+    });
+    if (prescription) {
+      hasPrescription = true;
+      pharmacyOrder = await connModels.PharmacyOrder.findOne({
+        where: { prescription_id: prescription.id }
+      });
+      if (pharmacyOrder && ['Pending', 'Processing', 'Ready'].includes(pharmacyOrder.status)) {
+        mappedStatus = 'Pharmacy';
+        isCompleted = false;
+      }
+    }
+  }
+
+  const formatTime = (date) => {
+    if (!date) return null;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const timeline = {
+    Registration: formatTime(appt.createdAt || appt.created_at),
+    Waiting: appt.vitals ? formatTime(appt.vitals.createdAt || appt.vitals.created_at || appt.vitals.recorded_at) : null,
+    Consultation: (appt.status === 'In-Progress' || appt.status === 'Completed') ? formatTime(appt.updatedAt || appt.updated_at) : null,
+    Pharmacy: null,
+    Completed: null,
+  };
+
+  if (appt.status === 'Completed') {
+    if (hasPrescription) {
+      if (pharmacyOrder) {
+        if (pharmacyOrder.status === 'Delivered') {
+          const deliverTime = formatTime(pharmacyOrder.delivered_at || pharmacyOrder.updatedAt || pharmacyOrder.updated_at);
+          timeline.Pharmacy = deliverTime;
+          timeline.Completed = deliverTime;
+        } else {
+          timeline.Pharmacy = null;
+          timeline.Completed = null;
+        }
+      } else {
+        timeline.Pharmacy = formatTime(appt.updatedAt || appt.updated_at);
+        timeline.Completed = formatTime(appt.updatedAt || appt.updated_at);
+      }
+    } else {
+      timeline.Pharmacy = formatTime(appt.updatedAt || appt.updated_at);
+      timeline.Completed = formatTime(appt.updatedAt || appt.updated_at);
+    }
+  }
+
+  return {
+    status: mappedStatus,
+    isCompleted,
+    timeline
+  };
+}
 
 // ────────────────────────────────────────────────────────────
 // TOKEN ROUTES
@@ -963,7 +1114,7 @@ app.get('/api/token/current', protect, async (req, res) => {
           status: { [Op.notIn]: ['Cancelled', 'No-Show'] }
         },
         include: [
-          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
+          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department'] },
           { model: conn.models.Vitals, as: 'vitals', required: false }
         ],
         order: [['updated_at', 'DESC']],
@@ -987,7 +1138,7 @@ app.get('/api/token/current', protect, async (req, res) => {
             date_time: { [Op.gt]: todayEnd },
             status: { [Op.notIn]: ['Cancelled', 'Completed', 'No-Show'] }
           },
-          include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+          include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department'] }],
           order: [['date_time', 'ASC']],
         });
         if (appt) {
@@ -1002,12 +1153,6 @@ app.get('/api/token/current', protect, async (req, res) => {
 
     if (!activeAppt) return res.json(null);
 
-    const statusMap = {
-      'Pending': 'Registration', 'Confirmed': 'Registration',
-      'In-Progress': 'Consultation', 'Completed': 'Completed',
-      'Cancelled': 'Cancelled',
-    };
-
     // Queue position
     const apptDay = new Date(activeAppt.date_time); apptDay.setHours(0, 0, 0, 0);
     const apptDayEnd = new Date(activeAppt.date_time); apptDayEnd.setHours(23, 59, 59, 999);
@@ -1021,16 +1166,21 @@ app.get('/api/token/current', protect, async (req, res) => {
       },
     });
 
+    const deptName = (activeAppt.department && activeAppt.department !== 'OPD') ? activeAppt.department : (activeAppt.doctor?.department || 'General');
+    const displayDept = deptName.toLowerCase() === 'opd' ? 'OPD' : `${deptName} - OPD`;
+
+    const { status: calculatedStatus, isCompleted: calculatedIsCompleted } = await getAppointmentStatusAndTimeline(activeAppt, activeModels);
+
     res.json({
       _id: activeAppt.id,
       number: activeAppt.token_number,
-      department: `${activeAppt.department} - OPD`,
+      department: displayDept,
       estimatedWaitMinutes: Math.max(5, countAhead * 15),
       peopleAhead: countAhead,
-      status: statusMap[activeAppt.status] || 'Registration',
+      status: calculatedStatus,
       appointmentTime: activeAppt.date_time ? new Date(activeAppt.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
       doctor: activeAppt.doctor ? `Dr. ${activeAppt.doctor.name}` : 'Doctor',
-      isCompleted: activeAppt.status === 'Completed',
+      isCompleted: calculatedIsCompleted,
       vitals: activeAppt.vitals || null,
     });
   } catch (error) {
@@ -1060,7 +1210,7 @@ app.post('/api/token/refresh', protect, async (req, res) => {
           status: { [Op.notIn]: ['Cancelled', 'No-Show'] }
         },
         include: [
-          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] },
+          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department'] },
           { model: conn.models.Vitals, as: 'vitals', required: false }
         ],
         order: [['updated_at', 'DESC']],
@@ -1083,7 +1233,7 @@ app.post('/api/token/refresh', protect, async (req, res) => {
             date_time: { [Op.gt]: todayEnd },
             status: { [Op.notIn]: ['Cancelled', 'Completed', 'No-Show'] }
           },
-          include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+          include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department'] }],
           order: [['date_time', 'ASC']],
         });
         if (appt) {
@@ -1098,11 +1248,6 @@ app.post('/api/token/refresh', protect, async (req, res) => {
 
     if (!activeAppt) return res.json({ success: true, data: null });
 
-    const statusMap = {
-      'Pending': 'Registration', 'Confirmed': 'Registration',
-      'In-Progress': 'Consultation', 'Completed': 'Completed', 'Cancelled': 'Cancelled',
-    };
-
     const apptDay = new Date(activeAppt.date_time); apptDay.setHours(0, 0, 0, 0);
     const apptDayEnd = new Date(activeAppt.date_time); apptDayEnd.setHours(23, 59, 59, 999);
     const countAhead = await activeModels.Appointment.count({
@@ -1115,18 +1260,23 @@ app.post('/api/token/refresh', protect, async (req, res) => {
       },
     });
 
+    const deptName = (activeAppt.department && activeAppt.department !== 'OPD') ? activeAppt.department : (activeAppt.doctor?.department || 'General');
+    const displayDept = deptName.toLowerCase() === 'opd' ? 'OPD' : `${deptName} - OPD`;
+
+    const { status: calculatedStatus, isCompleted: calculatedIsCompleted } = await getAppointmentStatusAndTimeline(activeAppt, activeModels);
+
     res.json({
       success: true,
       data: {
         _id: activeAppt.id,
         number: activeAppt.token_number,
-        department: `${activeAppt.department} - OPD`,
+        department: displayDept,
         estimatedWaitMinutes: Math.max(5, countAhead * 15),
         peopleAhead: countAhead,
-        status: statusMap[activeAppt.status] || 'Registration',
+        status: calculatedStatus,
         appointmentTime: activeAppt.date_time ? new Date(activeAppt.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
         doctor: activeAppt.doctor ? `Dr. ${activeAppt.doctor.name}` : 'Doctor',
-        isCompleted: activeAppt.status === 'Completed',
+        isCompleted: calculatedIsCompleted,
         vitals: activeAppt.vitals || null,
       },
     });
@@ -1144,20 +1294,117 @@ app.get('/api/token/past', protect, async (req, res) => {
     for (const conn of patientConns) {
       const appointments = await conn.models.Appointment.findAll({
         where: { hospital_id: conn.hospitalId, patient_id: conn.patientId, status: 'Completed' },
-        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name'] }],
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department'] }],
         order: [['date_time', 'DESC']],
       });
-      const pastTokens = appointments.map(a => ({
-        _id: a.id, number: a.token_number,
-        department: `${a.department} - OPD`,
-        date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-        doctor: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
-        status: 'Completed',
-      }));
+      const pastTokens = appointments.map(a => {
+        const dept = (a.department && a.department !== 'OPD') ? a.department : (a.doctor?.department || 'General');
+        const displayDept = dept.toLowerCase() === 'opd' ? 'OPD' : `${dept} - OPD`;
+        return {
+          _id: a.id,
+          number: a.token_number,
+          department: displayDept,
+          date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          doctor: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
+          status: 'Completed',
+        };
+      });
       allPastTokens.push(...pastTokens);
     }
 
     // Sort all past tokens by date descending
+    allPastTokens.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json(allPastTokens);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/patient/tokens/:id
+app.get('/api/patient/tokens/:id', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    
+    for (const conn of patientConns) {
+      const appt = await conn.models.Appointment.findOne({
+        where: { id: req.params.id, patient_id: conn.patientId, hospital_id: conn.hospitalId },
+        include: [
+          { model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department'] },
+          { model: conn.models.Vitals, as: 'vitals', required: false }
+        ]
+      });
+
+      if (appt) {
+        let countAhead = 0;
+        if (['Pending', 'Confirmed', 'In-Progress'].includes(appt.status)) {
+          const apptDay = new Date(appt.date_time); apptDay.setHours(0, 0, 0, 0);
+          const apptDayEnd = new Date(appt.date_time); apptDayEnd.setHours(23, 59, 59, 999);
+          countAhead = await conn.models.Appointment.count({
+            where: {
+              hospital_id: conn.hospitalId,
+              doctor_id: appt.doctor_id,
+              date_time: { [Op.between]: [apptDay, apptDayEnd] },
+              token_number: { [Op.lt]: appt.token_number },
+              status: { [Op.in]: ['Pending', 'Confirmed', 'In-Progress'] },
+            },
+          });
+        }
+
+        const { status: calculatedStatus, isCompleted: calculatedIsCompleted, timeline: calculatedTimeline } = await getAppointmentStatusAndTimeline(appt, conn.models);
+
+        const deptName = (appt.department && appt.department !== 'OPD') ? appt.department : (appt.doctor?.department || 'General');
+        const displayDept = deptName.toLowerCase() === 'opd' ? 'OPD' : `${deptName} - OPD`;
+
+        return res.json({
+          _id: appt.id,
+          number: appt.token_number,
+          department: displayDept,
+          estimatedWaitMinutes: Math.max(5, countAhead * 15),
+          peopleAhead: countAhead,
+          status: calculatedStatus,
+          appointmentTime: appt.date_time ? new Date(appt.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+          doctor: appt.doctor ? `Dr. ${appt.doctor.name}` : 'Doctor',
+          isCompleted: calculatedIsCompleted,
+          vitals: appt.vitals || null,
+          timeline: calculatedTimeline,
+        });
+      }
+    }
+
+    res.status(404).json({ success: false, message: 'Token not found' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/patient/tokens/history
+app.get('/api/patient/tokens/history', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const allPastTokens = [];
+
+    for (const conn of patientConns) {
+      const appointments = await conn.models.Appointment.findAll({
+        where: { hospital_id: conn.hospitalId, patient_id: conn.patientId, status: 'Completed' },
+        include: [{ model: conn.models.User, as: 'doctor', attributes: ['id', 'name', 'department'] }],
+        order: [['date_time', 'DESC']],
+      });
+      const pastTokens = appointments.map(a => {
+        const dept = (a.department && a.department !== 'OPD') ? a.department : (a.doctor?.department || 'General');
+        const displayDept = dept.toLowerCase() === 'opd' ? 'OPD' : `${dept} - OPD`;
+        return {
+          _id: a.id,
+          number: a.token_number,
+          department: displayDept,
+          date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          doctor: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
+          status: 'Completed',
+        };
+      });
+      allPastTokens.push(...pastTokens);
+    }
+
     allPastTokens.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json(allPastTokens);
@@ -1216,6 +1463,7 @@ app.get('/api/reports', protect, async (req, res) => {
     for (const conn of patientConns) {
       const reports = await conn.models.Report.findAll({
         where: { hospital_id: conn.hospitalId, patient_id: conn.patientId, is_deleted: false },
+        include: [{ model: conn.models.User, as: 'uploadedBy', attributes: ['id', 'name', 'role'], required: false }],
         order: [['created_at', 'DESC']],
       });
       allReports.push(...reports);
@@ -1257,6 +1505,124 @@ app.get('/api/reports/:id/download', protect, async (req, res) => {
     }
 
     res.status(404).json({ success: false, message: 'File not available' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+const multer = require('multer');
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'ap-south-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const BUCKET = process.env.AWS_S3_BUCKET || 'careplus-reports';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const ext = require('path').extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error('Only PDF, JPG, JPEG, PNG files allowed'));
+  },
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+// POST /api/patient/reports/upload
+app.post('/api/patient/reports/upload', protect, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    const activeHospitalId = req.user.hospital_id || req.hospitalId;
+    const conn = patientConns.find(c => c.hospitalId === activeHospitalId) || patientConns[0];
+
+    if (!conn) {
+      return res.status(404).json({ success: false, message: 'Patient hospital connection not resolved' });
+    }
+
+    const { Report } = conn.models;
+    const title = req.body.reportName || req.body.title || req.file.originalname;
+    const rawCategory = req.body.category || 'Lab Reports';
+
+    let report_type = 'Other';
+    const catLower = rawCategory.toLowerCase();
+    if (catLower.includes('lab')) report_type = 'Lab';
+    else if (catLower.includes('imag') || catLower.includes('radiology')) report_type = 'Radiology';
+    else if (catLower.includes('pathology')) report_type = 'Pathology';
+    else if (catLower.includes('prescription')) report_type = 'Prescription';
+    else if (catLower.includes('discharge')) report_type = 'Discharge';
+
+    const ext = require('path').extname(req.file.originalname).toLowerCase();
+    const s3Key = `hospitals/${conn.hospitalId}/patients/${conn.patientId}/reports/${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: s3Key,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+    }));
+
+    const file_url = `https://${BUCKET}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${s3Key}`;
+
+    const report = await Report.create({
+      hospital_id: conn.hospitalId,
+      patient_id: conn.patientId,
+      uploaded_by: null,
+      title: title,
+      report_type,
+      file_url,
+      s3_key: s3Key,
+      file_name: req.file.originalname,
+      file_size: req.file.size,
+      file_type: req.file.mimetype,
+    });
+
+    res.json({ success: true, message: 'Report uploaded successfully', data: report });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/patient/reports/:id
+app.delete('/api/patient/reports/:id', protect, async (req, res) => {
+  try {
+    const patientConns = await getPatientConnectionsAcrossHospitals(req.user.email);
+    let report = null;
+    let reportConn = null;
+
+    for (const conn of patientConns) {
+      report = await conn.models.Report.findOne({
+        where: { id: req.params.id, patient_id: conn.patientId, is_deleted: false },
+      });
+      if (report) {
+        reportConn = conn;
+        break;
+      }
+    }
+
+    if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+
+    await report.update({ is_deleted: true });
+
+    if (report.s3_key) {
+      try {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: BUCKET,
+          Key: report.s3_key,
+        }));
+      } catch (s3Err) {
+        console.error('[Delete Report] S3 deletion failed:', s3Err.message);
+      }
+    }
+
+    res.json({ success: true, message: 'Report deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1548,18 +1914,20 @@ app.get('/api/patient/notifications/:id', protect, async (req, res) => {
       const type = notif.related_entity_type.toLowerCase();
       const conn = targetConn;
       if (type === 'appointment' || type === 'appointments') {
+        // SECURITY: scope by patient_id to prevent leaking other patients' appointments
         const appt = await conn.models.Appointment.findOne({
-          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId },
-          include: [{ model: conn.models.User, as: 'doctor', attributes: ['name', 'specialization'] }]
+          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId, patient_id: conn.patientId },
+          include: [{ model: conn.models.User, as: 'doctor', attributes: ['name', 'specialization', 'department'] }]
         });
         if (appt) {
           const plainAppt = appt.get({ plain: true });
+          const deptName = (plainAppt.department && plainAppt.department !== 'OPD') ? plainAppt.department : (plainAppt.doctor?.department || 'General');
           relatedData = {
             _id: plainAppt.id,
             id: plainAppt.id,
             appointmentDate: plainAppt.date_time,
             appointmentTime: plainAppt.date_time ? new Date(plainAppt.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-            department: plainAppt.department,
+            department: deptName,
             status: plainAppt.status,
             reason: plainAppt.reason,
             notes: plainAppt.notes,
@@ -1567,13 +1935,14 @@ app.get('/api/patient/notifications/:id', protect, async (req, res) => {
             tokenNumber: plainAppt.token_number,
             doctor: plainAppt.doctor ? {
               name: plainAppt.doctor.name,
-              specialization: plainAppt.doctor.specialization
+              specialization: plainAppt.doctor.specialization || deptName
             } : null
           };
         }
       } else if (type === 'prescription' || type === 'prescriptions') {
+        // SECURITY: scope by patient_id to prevent leaking other patients' prescriptions
         const pres = await conn.models.Prescription.findOne({
-          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId },
+          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId, patient_id: conn.patientId },
           include: [
             { model: conn.models.User, as: 'doctor', attributes: ['name', 'specialization'] },
             { model: conn.models.PrescriptionMedicine, as: 'medicines' }
@@ -1596,8 +1965,9 @@ app.get('/api/patient/notifications/:id', protect, async (req, res) => {
           };
         }
       } else if (type === 'token' || type === 'tokens' || type === 'alerts') {
+        // SECURITY: scope by patient_id to prevent leaking other patients' tokens
         const tokenRec = await conn.models.Token.findOne({
-          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId }
+          where: { id: notif.related_entity_id, hospital_id: conn.hospitalId, patient_id: conn.patientId }
         });
         if (tokenRec) {
           const plainToken = tokenRec.get({ plain: true });
@@ -1687,20 +2057,23 @@ app.get('/api/history', protect, async (req, res) => {
         limit: 50,
       });
 
-      const history = appointments.map(a => ({
-        _id: a.id,
-        visitId: `VIS${String(a.id).padStart(4, '0')}`,
-        doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
-        doctorAvatar: a.doctor?.profile_image || null,
-        department: a.department,
-        specialization: a.doctor?.specialization || a.department,
-        date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-        time: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
-        diagnosis: a.reason || 'Routine Consultation',
-        notes: a.notes || '',
-        status: 'Completed',
-        tokenNumber: a.token_number,
-      }));
+      const history = appointments.map(a => {
+        const deptName = (a.department && a.department !== 'OPD') ? a.department : (a.doctor?.department || 'General');
+        return {
+          _id: a.id,
+          visitId: `VIS${String(a.id).padStart(4, '0')}`,
+          doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
+          doctorAvatar: a.doctor?.profile_image || null,
+          department: deptName,
+          specialization: a.doctor?.specialization || deptName,
+          date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+          time: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+          diagnosis: a.reason || 'Routine Consultation',
+          notes: a.notes || '',
+          status: 'Completed',
+          tokenNumber: a.token_number,
+        };
+      });
 
       allHistory.push(...history);
     }
@@ -1741,9 +2114,12 @@ app.get('/api/pharmacy/orders', protect, async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────
-// DIAGNOSTIC ENDPOINT
+// DIAGNOSTIC ENDPOINT (disabled in production)
 // ────────────────────────────────────────────────────────────
-app.get('/api/diagnose-db', async (req, res) => {
+app.get('/api/diagnose-db', protect, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ success: false, message: 'Not found' });
+  }
   const diagnostics = {};
   try {
     const { masterDb } = require('./services/databaseResolver');

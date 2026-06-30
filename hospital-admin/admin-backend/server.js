@@ -1,8 +1,9 @@
 'use strict';
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const morgan = require('morgan');
+const express    = require('express');
+const http       = require('http');
+const cors       = require('cors');
+const morgan     = require('morgan');
+const rateLimit  = require('express-rate-limit');
 require('dotenv').config();
 
 const { initConnections } = require('./services/databaseResolver');
@@ -26,20 +27,32 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (
-      !origin ||
-      allowedOrigins.includes(origin) ||
-      origin.endsWith('.vercel.app') ||
-      origin.endsWith('.onrender.com')
-    ) {
-      callback(null, true);
-    } else {
-      callback(null, false);
-    }
+    // Allow requests with no origin (curl, server-to-server, mobile)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Reject everything else — no wildcard subdomain matching
+    callback(new Error(`CORS: origin "${origin}" not allowed`));
   },
   credentials: true,
   optionsSuccessStatus: 200,
 };
+
+// Rate limiters
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { success: false, message: 'Too many requests. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  message: { success: false, message: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
@@ -47,25 +60,30 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
+// Apply general API rate limit
+app.use('/api/', apiLimiter);
+
 // Routes
+const { protect } = require('./middleware/authMiddleware');
 const tenantMiddleware = require('./middleware/tenantMiddleware');
 
-app.use('/api/auth', require('./routes/authRoutes'));
+// Stricter rate limit on auth (login / OTP / password reset)
+app.use('/api/auth', authLimiter, require('./routes/authRoutes'));
 
-// All non-auth routes run tenantMiddleware (after protect() sets req.hospitalId via JWT)
-app.use('/api/users',         tenantMiddleware, require('./routes/userRoutes'));
-app.use('/api/doctors',       tenantMiddleware, require('./routes/doctorRoutes'));
-app.use('/api/patients',      tenantMiddleware, require('./routes/patientRoutes'));
-app.use('/api/appointments',  tenantMiddleware, require('./routes/appointmentRoutes'));
-app.use('/api/pharmacy',      tenantMiddleware, require('./routes/pharmacyRoutes'));
-app.use('/api/laboratory',    tenantMiddleware, require('./routes/labRoutes'));
-app.use('/api/billing',       tenantMiddleware, require('./routes/billingRoutes'));
-app.use('/api/reports',       tenantMiddleware, require('./routes/reportRoutes'));
-app.use('/api/audit-logs',    tenantMiddleware, require('./routes/auditRoutes'));
-app.use('/api/dashboard',     tenantMiddleware, require('./routes/dashboardRoutes'));
-app.use('/api/notifications', tenantMiddleware, require('./routes/notificationRoutes'));
-app.use('/api/departments',   tenantMiddleware, require('./routes/departmentRoutes'));
-app.use('/api/hospitals',     tenantMiddleware, require('./routes/hospitalRoutes'));
+// All non-auth routes run protect (to decode JWT and set tenant DB) followed by tenantMiddleware (to enforce isolation)
+app.use('/api/users',         protect, tenantMiddleware, require('./routes/userRoutes'));
+app.use('/api/doctors',       protect, tenantMiddleware, require('./routes/doctorRoutes'));
+app.use('/api/patients',      protect, tenantMiddleware, require('./routes/patientRoutes'));
+app.use('/api/appointments',  protect, tenantMiddleware, require('./routes/appointmentRoutes'));
+app.use('/api/pharmacy',      protect, tenantMiddleware, require('./routes/pharmacyRoutes'));
+app.use('/api/laboratory',    protect, tenantMiddleware, require('./routes/labRoutes'));
+app.use('/api/billing',       protect, tenantMiddleware, require('./routes/billingRoutes'));
+app.use('/api/reports',       protect, tenantMiddleware, require('./routes/reportRoutes'));
+app.use('/api/audit-logs',    protect, tenantMiddleware, require('./routes/auditRoutes'));
+app.use('/api/dashboard',     protect, tenantMiddleware, require('./routes/dashboardRoutes'));
+app.use('/api/notifications', protect, tenantMiddleware, require('./routes/notificationRoutes'));
+app.use('/api/departments',   protect, tenantMiddleware, require('./routes/departmentRoutes'));
+app.use('/api/hospitals',     protect, tenantMiddleware, require('./routes/hospitalRoutes'));
 
 app.get('/health', (req, res) => res.json({
   status: 'healthy', service: 'CarePlus Hospital Admin API v3.0',
@@ -77,7 +95,11 @@ app.use('*', (req, res) =>
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(err.status || 500).json({ success: false, message: err.message || 'Server Error' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.status(err.status || 500).json({
+    success: false,
+    message: isProd ? 'An internal server error occurred.' : (err.message || 'Server Error'),
+  });
 });
 
 const PORT = process.env.PORT || 5001;

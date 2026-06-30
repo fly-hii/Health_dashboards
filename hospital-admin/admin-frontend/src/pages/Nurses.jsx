@@ -13,7 +13,9 @@ import {
   EyeOff,
   CheckCircle,
   Copy,
-  Check
+  Check,
+  UserCheck,
+  Calendar
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API from '../services/api';
@@ -144,6 +146,11 @@ export default function Nurses() {
     }
   };
 
+  const totalNurses = nurses.length;
+  const activeNurses = nurses.filter(n => n.status === 'Active').length;
+  const onLeaveNurses = nurses.filter(n => n.availabilityStatus === 'On Leave' || n.availability_status === 'On Leave').length;
+  const nightShiftNurses = nurses.filter(n => n.shift === 'Night').length;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -158,6 +165,65 @@ export default function Nurses() {
           <Plus className="w-5 h-5" />
           <span>Add Nurse</span>
         </button>
+      </div>
+
+      {/* ── TOP STATISTICS CARDS ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Card 1: Total Nurses */}
+        <div className="bg-white border border-slate-200 rounded-card p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 shrink-0">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Nurses</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-slate-800">{totalNurses}</span>
+            </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">registered staff</span>
+          </div>
+        </div>
+
+        {/* Card 2: Active Nurses */}
+        <div className="bg-white border border-slate-200 rounded-card p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="p-3 bg-blue-50 rounded-xl text-blue-600 shrink-0">
+            <UserCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Active duty</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-slate-800">{activeNurses}</span>
+            </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">nurses active</span>
+          </div>
+        </div>
+
+        {/* Card 3: On Leave */}
+        <div className="bg-white border border-slate-200 rounded-card p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="p-3 bg-amber-50 rounded-xl text-amber-600 shrink-0">
+            <Calendar className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">On Leave</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-slate-800">{onLeaveNurses}</span>
+            </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">currently inactive</span>
+          </div>
+        </div>
+
+        {/* Card 4: Night Shift */}
+        <div className="bg-white border border-slate-200 rounded-card p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
+          <div className="p-3 bg-purple-50 rounded-xl text-purple-600 shrink-0">
+            <Clock className="w-6 h-6" />
+          </div>
+          <div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Night Shift</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-slate-800">{nightShiftNurses}</span>
+            </div>
+            <span className="text-[10px] text-slate-400 block mt-0.5">on night duty</span>
+          </div>
+        </div>
       </div>
 
       {/* CREATED CREDENTIALS BANNER */}

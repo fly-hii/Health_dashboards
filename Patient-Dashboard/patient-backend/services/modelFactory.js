@@ -79,6 +79,7 @@ function createModels(sequelize) {
     status:               { type: DataTypes.ENUM('Active','Inactive'), defaultValue: 'Active' },
     phone:                DataTypes.STRING(20),
     profile_image:        DataTypes.TEXT,
+    address:              DataTypes.TEXT,
     employee_id:          DataTypes.STRING(50),
     specialization:       DataTypes.STRING(200),
     experience:           DataTypes.INTEGER,
@@ -419,6 +420,8 @@ function createModels(sequelize) {
   Prescription.belongsTo(Patient, { foreignKey: 'patient_id', as: 'patient' });
   User.hasMany(Prescription, { foreignKey: 'doctor_id', as: 'doctorPrescriptions' });
   Prescription.belongsTo(User, { foreignKey: 'doctor_id', as: 'doctor' });
+  Appointment.hasMany(Prescription, { foreignKey: 'appointment_id', as: 'prescriptions' });
+  Prescription.belongsTo(Appointment, { foreignKey: 'appointment_id', as: 'appointment' });
 
   // PrescriptionMedicine
   Prescription.hasMany(PrescriptionMedicine, { foreignKey: 'prescription_id', as: 'medicines' });

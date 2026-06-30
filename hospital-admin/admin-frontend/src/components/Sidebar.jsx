@@ -143,7 +143,6 @@ export default function Sidebar({ isMinimized, isMobileOpen, setIsMobileOpen }) 
                 <div className="pl-9 pr-2 mt-1 space-y-1">
                   {[
                     { name: 'Hospital Profile', path: '/admin/hospital-profile' },
-                    { name: 'Subscription & Plans', path: '/admin/subscription' },
                     { name: 'Department Management', path: '/admin/departments' },
                     { name: 'Staff Management', path: '/admin/staff' },
                     { name: 'Hospital Settings', path: '/admin/hospital-settings' },

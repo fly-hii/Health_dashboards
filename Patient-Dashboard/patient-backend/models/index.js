@@ -186,6 +186,8 @@ Patient.hasMany(Prescription, { foreignKey: 'patient_id', as: 'prescriptions' })
 Patient.hasMany(Report, { foreignKey: 'patient_id', as: 'reports' });
 Patient.belongsTo(Hospital, { foreignKey: 'hospital_id', as: 'hospital' });
 PharmacyOrder.belongsTo(Prescription, { foreignKey: 'prescription_id', as: 'prescription' });
+Appointment.hasMany(Prescription, { foreignKey: 'appointment_id', as: 'prescriptions' });
+Prescription.belongsTo(Appointment, { foreignKey: 'appointment_id', as: 'appointment' });
 
 module.exports = {
   Patient, User, Hospital, Appointment, Token, Vitals,

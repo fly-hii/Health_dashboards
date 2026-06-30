@@ -39,8 +39,8 @@ const getInvoices = async (req, res) => {
       }
     }
 
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20)); // cap at 100
 
     const { count, rows } = await Payment.findAndCountAll({
       where,
@@ -107,7 +107,8 @@ const getInvoices = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in getInvoices:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({ success: false, message: isProd ? 'Failed to retrieve invoices.' : error.message });
   }
 };
 
@@ -198,7 +199,8 @@ const createInvoice = async (req, res) => {
     res.status(201).json({ success: true, data: json });
   } catch (error) {
     console.error('Error in createInvoice:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({ success: false, message: isProd ? 'Failed to create invoice.' : error.message });
   }
 };
 
@@ -295,7 +297,8 @@ const updateInvoiceStatus = async (req, res) => {
     res.json({ success: true, data: json });
   } catch (error) {
     console.error('Error in updateInvoiceStatus:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({ success: false, message: isProd ? 'Failed to update invoice.' : error.message });
   }
 };
 

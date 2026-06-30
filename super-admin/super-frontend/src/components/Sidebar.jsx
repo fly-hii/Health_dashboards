@@ -1,12 +1,22 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { 
+  Activity, 
+  LayoutDashboard, 
+  Building2, 
+  CreditCard, 
+  TrendingUp, 
+  ScrollText, 
+  Settings, 
+  LogOut 
+} from 'lucide-react';
 
 const navItems = [
-  { to: '/',              icon: '📊', label: 'Dashboard' },
-  { to: '/hospitals',     icon: '🏥', label: 'Hospitals' },
-  { to: '/subscriptions', icon: '💳', label: 'Subscription Prices' },
-  { to: '/analytics',     icon: '📈', label: 'Analytics' },
-  { to: '/audit',         icon: '🔍', label: 'Audit Logs' },
+  { to: '/',              icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+  { to: '/hospitals',     icon: <Building2 size={18} />,       label: 'Hospitals' },
+  { to: '/subscriptions', icon: <CreditCard size={18} />,      label: 'Subscription Prices' },
+  { to: '/analytics',     icon: <TrendingUp size={18} />,      label: 'Analytics' },
+  { to: '/audit',         icon: <ScrollText size={18} />,      label: 'Audit Logs' },
 ];
 
 export default function Sidebar({ isOpen, setIsOpen }) {
@@ -30,7 +40,9 @@ export default function Sidebar({ isOpen, setIsOpen }) {
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="logo-badge">
-            <div className="logo-icon">⚕️</div>
+            <div className="logo-icon">
+              <Activity size={20} color="white" />
+            </div>
             <div className="logo-text">
               <h2>CarePlus</h2>
               <span>Super Admin Panel</span>
@@ -59,7 +71,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             onClick={handleClose}
           >
-            <span className="icon">⚙️</span> Settings
+            <span className="icon"><Settings size={18} /></span> Settings
           </NavLink>
         </nav>
 
@@ -78,8 +90,8 @@ export default function Sidebar({ isOpen, setIsOpen }) {
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Super Administrator</div>
             </div>
           </div>
-          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center' }} onClick={handleLogout}>
-            🚪 Logout
+          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleLogout}>
+            <LogOut size={16} /> Logout
           </button>
         </div>
       </aside>

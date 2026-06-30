@@ -4,13 +4,71 @@ const bcrypt  = require('bcryptjs');
 const { Op }  = require('sequelize');
 const { masterDb }  = require('../config/masterDatabase');
 const { Hospital, SuperAdmin, Subscription, Payment, AuditLog, DbConnection } = require('../models');
-const { encrypt }   = require('../services/encryptionService');
+const { encrypt, decrypt } = require('../services/encryptionService');
 const { testExternalConnection, invalidateCache } = require('../services/databaseResolver');
 
 // ── Helpers ────────────────────────────────────────────────────
 const audit = (adminId, action, data, transaction) => {
   console.log('AUDIT LOG TRANSACTION ID:', transaction ? transaction.id : 'undefined');
   return AuditLog.create({ admin_id: adminId, ...data, action }, { transaction }).catch(console.error);
+};
+
+const syncHospitalSubscriptionToTenantDb = async (hospital) => {
+  try {
+    const { sharedSaasDb } = require('../services/databaseResolver');
+    const { Sequelize } = require('sequelize');
+
+    if (hospital.database_type === 'external') {
+      const conn = await DbConnection.findOne({ where: { hospital_id: hospital.id } });
+      if (!conn) {
+        console.warn(`[Tenant DB Sync] No connection details found for hospital ID ${hospital.id}`);
+        return;
+      }
+      const decryptedPassword = decrypt(conn.password_encrypted);
+      const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+        host: conn.host,
+        port: parseInt(conn.port) || 3306,
+        dialect: 'mysql',
+        dialectModule: require('mysql2'),
+        logging: false,
+        dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+      });
+      try {
+        await externalDb.authenticate();
+        const { createModels } = require('../../../hospital-admin/admin-backend/services/modelFactory');
+        const models = createModels(externalDb);
+        const tenantHospital = await models.Hospital.findByPk(hospital.id);
+        if (tenantHospital) {
+          await tenantHospital.update({
+            plan: hospital.plan,
+            status: hospital.status,
+            plan_expires_at: hospital.plan_expires_at,
+          });
+          console.log(`[Tenant DB Sync] Successfully synchronized subscription for external hospital ID ${hospital.id}`);
+        }
+      } catch (err) {
+        console.error(`[Tenant DB Sync] Error updating external DB for hospital ID ${hospital.id}:`, err);
+      } finally {
+        await externalDb.close().catch(() => {});
+      }
+    } else {
+      // Shared SaaS DB
+      await sharedSaasDb.query(
+        'UPDATE hospitals SET plan = ?, status = ?, plan_expires_at = ?, updated_at = NOW() WHERE id = ?',
+        {
+          replacements: [
+            hospital.plan,
+            hospital.status,
+            hospital.plan_expires_at || null,
+            hospital.id,
+          ]
+        }
+      );
+      console.log(`[Tenant DB Sync] Successfully synchronized subscription for shared hospital ID ${hospital.id}`);
+    }
+  } catch (syncErr) {
+    console.error(`[Tenant DB Sync] Failed to synchronize subscription for hospital ID ${hospital.id}:`, syncErr);
+  }
 };
 
 // ── POST /api/super/hospitals ──────────────────────────────────
@@ -280,6 +338,8 @@ const suspendHospital = async (req, res) => {
     if (!h) return res.status(404).json({ success: false, message: 'Not found' });
     const old = h.status;
     await h.update({ status: 'suspended' });
+    await syncHospitalSubscriptionToTenantDb(h);
+    invalidateCache(h.id);
     await audit(req.user?.id, 'SUSPEND', { hospital_id: h.id, module: 'Hospital',
       description: `Suspended "${h.name}"`, old_data: { status: old }, new_data: { status: 'suspended' }, ip_address: req.ip });
     res.json({ success: true, message: `Hospital "${h.name}" suspended` });
@@ -293,6 +353,8 @@ const activateHospital = async (req, res) => {
     if (!h) return res.status(404).json({ success: false, message: 'Not found' });
     const old = h.status;
     await h.update({ status: 'active' });
+    await syncHospitalSubscriptionToTenantDb(h);
+    invalidateCache(h.id);
     await audit(req.user?.id, 'ACTIVATE', { hospital_id: h.id, module: 'Hospital',
       description: `Activated "${h.name}"`, old_data: { status: old }, new_data: { status: 'active' }, ip_address: req.ip });
     res.json({ success: true, message: `Hospital "${h.name}" activated` });
@@ -330,6 +392,8 @@ const updatePlan = async (req, res) => {
     }, { transaction: t });
 
     await t.commit();
+    await syncHospitalSubscriptionToTenantDb(h);
+    invalidateCache(h.id);
     res.json({ success: true, message: `Plan updated to ${plan} for ${h.name}` });
   } catch (error) {
     await t.rollback();
@@ -404,8 +468,31 @@ const getAuditLogs = async (req, res) => {
   try {
     const { page = 1, limit = 50, hospitalId, action } = req.query;
     const where = {};
-    if (hospitalId) where.hospital_id = hospitalId;
     if (action) where.action = action;
+
+    if (hospitalId) {
+      const term = hospitalId.trim();
+      const numericId = parseInt(term, 10);
+      
+      // Find matching hospitals by code or name
+      const matchingHospitals = await Hospital.findAll({
+        where: {
+          [Op.or]: [
+            { code: { [Op.like]: `%${term}%` } },
+            { name: { [Op.like]: `%${term}%` } }
+          ]
+        },
+        attributes: ['id'],
+        raw: true
+      });
+      
+      const matchedIds = matchingHospitals.map(h => h.id);
+      if (!isNaN(numericId)) {
+        matchedIds.push(numericId);
+      }
+
+      where.hospital_id = { [Op.in]: matchedIds };
+    }
 
     const { count, rows } = await AuditLog.findAndCountAll({
       where,

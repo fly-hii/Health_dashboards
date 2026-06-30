@@ -121,7 +121,7 @@ function ReportPreviewModal({ report, profile, onClose }) {
     };
   }, [onClose]);
 
-  const fileUrl = report.fileUrl || `/api/patient/reports/download/${report._id || report.id}`;
+  const fileUrl = report.fileUrl || report.file_url || `/api/patient/reports/download/${report._id || report.id}`;
   const isPDF = fileUrl.toLowerCase().includes('.pdf');
 
   return createPortal(
@@ -129,8 +129,8 @@ function ReportPreviewModal({ report, profile, onClose }) {
       <div className="preview-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="preview-modal-header">
           <div className="text-left">
-            <h3>{report.reportName || report.name}</h3>
-            <p>Uploaded on {report.reportDate || report.date} &bull; Size: {report.fileSize || report.size}</p>
+            <h3>{report.reportName || report.title || report.name || report.file_name || 'Report'}</h3>
+            <p>Uploaded on {report.reportDate || report.date || (report.created_at ? new Date(report.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')} &bull; Size: {report.fileSize || (report.file_size ? (report.file_size / 1024).toFixed(1) + ' KB' : '') || report.size || 'N/A'}</p>
           </div>
           <button onClick={onClose} className="preview-close-btn-circle" title="Close">
             <XIcon />
@@ -139,15 +139,15 @@ function ReportPreviewModal({ report, profile, onClose }) {
 
         <div className="preview-modal-body">
           {/* Uploader / Patient Details banner */}
-          {report.doctor ? (
+          {(report.doctor || report.uploadedBy) ? (
             <div className="preview-info-banner">
               <div className="preview-info-avatar">
                 <UserIcon />
               </div>
               <div className="preview-info-text text-left">
-                <span className="preview-info-title">Dr. {report.doctor}</span>
+                <span className="preview-info-title">{report.doctor ? `Dr. ${report.doctor}` : (report.uploadedBy?.name || 'Practitioner')}</span>
                 <p className="preview-info-subtitle">
-                  Department: {report.department || 'General Medicine'} &bull; Clinical Practitioner
+                  Department: {report.department || 'Clinical Department'} &bull; Clinical Practitioner
                 </p>
               </div>
             </div>
@@ -356,9 +356,9 @@ export default function ReportsView({ reports, profile, onUploadSuccess }) {
   // Dynamic filter logic checking both category text and reportType database fields
   const filteredReports = Array.isArray(reports) ? reports.filter(rep => {
     // 1. Tab category filter matching
-    const category = rep.category || rep.reportType || '';
+    const category = rep.category || rep.reportType || rep.report_type || '';
     const categoryLower = category.toLowerCase();
-    const typeLower = (rep.reportType || '').toLowerCase();
+    const typeLower = (rep.reportType || rep.report_type || '').toLowerCase();
 
     if (activeSubTab === 'Lab Reports') {
       if (!categoryLower.includes('lab') && typeLower !== 'lab') return false;
@@ -380,9 +380,9 @@ export default function ReportsView({ reports, profile, onUploadSuccess }) {
 
     // 3. Dropdown Category matching
     if (typeFilter !== 'all') {
-      if (typeFilter === 'lab' && !categoryLower.includes('lab') && typeLower !== 'lab') return false;
+      if (typeFilter === 'lab' && !categoryLower.includes('lab') && typeLower !== 'lab' && typeLower !== 'lab reports') return false;
       if (typeFilter === 'imaging' && !categoryLower.includes('imag') && typeLower !== 'imaging') return false;
-      if (typeFilter === 'others' && (categoryLower.includes('lab') || typeLower === 'lab' || categoryLower.includes('imag') || typeLower === 'imaging')) return false;
+      if (typeFilter === 'others' && (categoryLower.includes('lab') || typeLower === 'lab' || typeLower === 'lab reports' || categoryLower.includes('imag') || typeLower === 'imaging')) return false;
     }
 
     // 4. Date filter matching
@@ -458,8 +458,8 @@ export default function ReportsView({ reports, profile, onUploadSuccess }) {
       ) : (
         <div className="reports-grid">
           {filteredReports.map((rep) => {
-            const reportNameStr = rep.reportName || rep.name || 'Report';
-            const reportTypeStr = rep.reportType || rep.category || 'others';
+            const reportNameStr = rep.reportName || rep.title || rep.name || rep.file_name || 'Report';
+            const reportTypeStr = rep.reportType || rep.category || rep.report_type || 'others';
             const iconClass = getIconClassStyle(reportTypeStr, reportNameStr);
             
             return (
@@ -470,7 +470,7 @@ export default function ReportsView({ reports, profile, onUploadSuccess }) {
                   </div>
                   <div className="report-header-text">
                     <h4 className="report-title-txt" title={reportNameStr}>{reportNameStr}</h4>
-                    <p className="report-date-txt">{rep.reportDate || rep.date}</p>
+                    <p className="report-date-txt">{rep.reportDate || rep.date || (rep.created_at ? new Date(rep.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')}</p>
                   </div>
                   <button 
                     onClick={() => handleDownload(rep)}
