@@ -44,6 +44,7 @@ const getUsers = async (req, res) => {
       json.employeeId = json.employee_id;
       json.profileImage = json.profile_image;
       json.availabilityStatus = json.availability_status;
+      json.consultationFee = json.consultation_fee != null ? parseFloat(json.consultation_fee) : null;
       if (json.role === 'DOCTOR') {
         json.schedule = {
           days: json.schedule_days || [],
@@ -76,7 +77,8 @@ const getEmpIdPrefixForRole = (r) => {
 const createUser = async (req, res) => {
   const { 
     name, email, password, role, department, phone, profileImage, 
-    specialization, experience, qualification, shift, schedule, employeeId 
+    specialization, experience, qualification, shift, schedule, employeeId,
+    consultationFee, licenseNumber
   } = req.body;
 
   try {
@@ -150,7 +152,8 @@ const createUser = async (req, res) => {
       schedule_days: schedule?.days || null,
       schedule_start: schedule?.startTime || '09:00 AM',
       schedule_end: schedule?.endTime || '05:00 PM',
-      availability_status: 'Available'
+      availability_status: 'Available',
+      consultation_fee: consultationFee !== undefined && consultationFee !== '' ? parseFloat(consultationFee) : null,
     });
 
     await AuditLog.create({
@@ -204,7 +207,8 @@ const updateUser = async (req, res) => {
 
     const {
       name, phone, profileImage, department, role, status, employeeId,
-      specialization, experience, qualification, shift, schedule, availabilityStatus
+      specialization, experience, qualification, shift, schedule, availabilityStatus,
+      consultationFee, licenseNumber
     } = req.body;
 
     const oldStatus = user.status;
@@ -218,7 +222,8 @@ const updateUser = async (req, res) => {
       schedule_days: schedule?.days,
       schedule_start: schedule?.startTime,
       schedule_end: schedule?.endTime,
-      availability_status: availabilityStatus
+      availability_status: availabilityStatus,
+      consultation_fee: consultationFee !== undefined && consultationFee !== '' ? parseFloat(consultationFee) : undefined,
     };
 
     Object.keys(fields).forEach(key => {
