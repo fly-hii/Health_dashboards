@@ -1,6 +1,6 @@
 'use strict';
 
-const { broadcastEvent } = require('../sockets/socket');
+const { emitToHospital } = require('../sockets/socket');
 
 // DB → Frontend status map
 const DB_TO_FRONTEND_STATUS = { Pending: 'Unpaid', Paid: 'Paid', Failed: 'Failed', Refunded: 'Refunded' };
@@ -193,7 +193,7 @@ const createInvoice = async (req, res) => {
       ip_address: req.ip
     });
 
-    broadcastEvent('payment_update', json);
+    emitToHospital(req.hospitalId, 'payment_update', json);
 
     res.status(201).json({ success: true, data: json });
   } catch (error) {
@@ -290,7 +290,7 @@ const updateInvoiceStatus = async (req, res) => {
       ip_address: req.ip
     });
 
-    broadcastEvent('payment_update', json);
+    emitToHospital(req.hospitalId, 'payment_update', json);
 
     res.json({ success: true, data: json });
   } catch (error) {

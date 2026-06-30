@@ -23,7 +23,10 @@ const protect = async (req, res, next) => {
   try {
     const token   = auth.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!['SUPER_ADMIN', 'HOSPITAL_ADMIN', 'ADMIN'].includes(decoded.role))
+    // Hospital Admin portal: only hospital staff roles allowed
+    // SUPER_ADMIN must use the Super Admin portal (port 5000)
+    const HOSPITAL_ALLOWED_ROLES = ['HOSPITAL_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'PHARMACIST', 'LAB_TECHNICIAN', 'PATIENT'];
+    if (!HOSPITAL_ALLOWED_ROLES.includes(decoded.role))
       return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
 
     const hospitalId = decoded.hospitalId;

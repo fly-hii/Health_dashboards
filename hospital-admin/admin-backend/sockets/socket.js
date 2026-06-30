@@ -75,7 +75,8 @@ const emitToHospital = (hospitalId, event, data) => {
   }
 };
 
-// Broadcast to all connected clients (super admin use)
+// Broadcast to ALL connected clients — ONLY for super-admin system events
+// WARNING: Never use this for hospital-scoped data (patients, doctors, orders, etc.)
 const broadcastEvent = (event, data) => {
   if (io) {
     io.emit(event, data);

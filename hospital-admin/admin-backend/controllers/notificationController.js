@@ -1,7 +1,7 @@
 'use strict';
 
 const { Op } = require('sequelize');
-const { broadcastEvent } = require('../sockets/socket');
+const { emitToHospital } = require('../sockets/socket');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ const markAsRead = async (req, res) => {
       _id: item.id,
       isRead: true,
     };
-    broadcastEvent('NOTIFICATION_UPDATED', formatted);
+    emitToHospital(req.hospitalId, 'NOTIFICATION_UPDATED', formatted);
     res.json({ success: true, data: formatted });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -150,7 +150,7 @@ const markAsImportant = async (req, res) => {
       _id: item.id,
       isRead: item.status !== 'unread',
     };
-    broadcastEvent('NOTIFICATION_UPDATED', formatted);
+    emitToHospital(req.hospitalId, 'NOTIFICATION_UPDATED', formatted);
     res.json({ success: true, data: formatted });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -165,7 +165,7 @@ const markAllAsRead = async (req, res) => {
       { status: 'read', read_at: new Date() },
       { where: { hospital_id: req.hospitalId, status: 'unread' } }
     );
-    broadcastEvent('ALL_NOTIFICATIONS_READ', {});
+    emitToHospital(req.hospitalId, 'ALL_NOTIFICATIONS_READ', {});
     res.json({ success: true, message: 'All marked as read' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -180,7 +180,7 @@ const deleteNotification = async (req, res) => {
     if (!notif) return res.status(404).json({ success: false, message: 'Not found' });
 
     await notif.destroy();
-    broadcastEvent('NOTIFICATION_DELETED', { _id: req.params.id });
+    emitToHospital(req.hospitalId, 'NOTIFICATION_DELETED', { _id: req.params.id });
     res.json({ success: true, message: 'Notification deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -212,7 +212,7 @@ const createNotification = async ({ hospitalId, userId, title, message, type = '
     _id: item.id,
     isRead: false,
   };
-  broadcastEvent('NEW_NOTIFICATION', formatted);
+  emitToHospital(hospitalId, 'NEW_NOTIFICATION', formatted);
   return formatted;
 };
 

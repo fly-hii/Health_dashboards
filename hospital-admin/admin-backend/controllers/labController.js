@@ -1,6 +1,6 @@
 'use strict';
 
-const { broadcastEvent } = require('../sockets/socket');
+const { emitToHospital } = require('../sockets/socket');
 
 // Helper to map DB status to frontend expected status
 const mapDbStatusToFrontend = (status) => {
@@ -137,7 +137,7 @@ const updateTest = async (req, res) => {
       ip_address: req.ip
     });
 
-    broadcastEvent('lab_test_update', mapped);
+    emitToHospital(req.hospitalId, 'lab_test_update', mapped);
 
     res.json({ success: true, data: mapped });
   } catch (error) {
@@ -224,7 +224,7 @@ const addLabTest = async (req, res) => {
       ip_address: req.ip
     });
 
-    broadcastEvent('lab_test_update', mapped);
+    emitToHospital(req.hospitalId, 'lab_test_update', mapped);
 
     res.status(201).json({ success: true, data: mapped });
   } catch (error) {
