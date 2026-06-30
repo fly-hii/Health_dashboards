@@ -459,7 +459,7 @@ export default function BookAppointmentView() {
             <span className="bav-section-emoji">🏥</span>
             <div>
               <h2 className="bav-section-title">Hospitals in {selectedLocation?.city}</h2>
-              <p className="bav-section-sub">Your registered hospital is highlighted with a badge</p>
+              <p className="bav-section-sub">Your previously visited hospital is highlighted</p>
             </div>
           </div>
 
@@ -469,7 +469,7 @@ export default function BookAppointmentView() {
             <div className="bav-empty">No hospitals found in {selectedLocation?.city}.</div>
           ) : (
             <div className="bav-hospital-list">
-              {/* Show own hospital first */}
+              {/* Show previously visited hospital first */}
               {[...hospitals].sort((a, b) => {
                 const aOwn = parseInt(a.id) === parseInt(user?.hospital_id) ? -1 : 1;
                 const bOwn = parseInt(b.id) === parseInt(user?.hospital_id) ? -1 : 1;
@@ -491,7 +491,7 @@ export default function BookAppointmentView() {
                     <div className="bav-hosp-info">
                       <div className="bav-hosp-name-row">
                         <h3 className="bav-hosp-name">{hosp.name}</h3>
-                        {isOwn && <span className="bav-own-badge">✓ Your Hospital</span>}
+                        {isOwn && <span className="bav-own-badge">🕐 Previously Visited</span>}
                       </div>
                       <p className="bav-hosp-city">📍 {hosp.city}{hosp.state ? `, ${hosp.state}` : ''}</p>
                       {hosp.phone && <p className="bav-hosp-phone">📞 {hosp.phone}</p>}
