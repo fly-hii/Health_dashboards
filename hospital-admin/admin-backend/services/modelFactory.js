@@ -91,6 +91,8 @@ function createModels(sequelize) {
     availability_status:  { type: DataTypes.ENUM('Available','On Leave','Busy'), defaultValue: 'Available' },
     last_login:           DataTypes.DATE,
     consultation_fee:     { type: DataTypes.DECIMAL(10, 2), defaultValue: null },
+    license_number:       { type: DataTypes.STRING(100), defaultValue: null },
+    bio:                  { type: DataTypes.TEXT, defaultValue: null },
   }, { tableName: 'users', timestamps: true, underscored: true });
 
   // ── Patient ───────────────────────────────────────────────────

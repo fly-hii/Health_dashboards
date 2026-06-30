@@ -22,6 +22,9 @@ const mapDoctor = (doc) => {
     employeeId: json.employee_id,
     profilePhoto: json.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${json.name}`,
     availabilityStatus: json.availability_status,
+    consultationFee: json.consultation_fee != null ? parseFloat(json.consultation_fee) : null,
+    licenseNumber: json.license_number,
+    bio: json.bio,
     workingHours: {
       start: json.schedule_start || '10:00',
       end: json.schedule_end || '18:00'
@@ -111,7 +114,7 @@ const createDoctor = async (req, res) => {
   try {
     const hospitalId = req.hospitalId;
     const { User, AuditLog, Hospital } = req.models;
-    const { name, email, phone, department = 'OPD', specialization, qualification, experience, password, status = 'Active', profilePhoto, bio, availableDays, workingHours } = req.body;
+    const { name, email, phone, department = 'OPD', specialization, qualification, experience, password, status = 'Active', profilePhoto, bio, availableDays, workingHours, consultationFee, licenseNumber, address, employeeId: empIdFromBody } = req.body;
 
     const existing = await User.findOne({ where: { email, hospital_id: hospitalId } });
     if (existing) return res.status(409).json({ success: false, message: 'Doctor with this email already exists' });
@@ -143,6 +146,10 @@ const createDoctor = async (req, res) => {
       schedule_days: availableDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       schedule_start: workingHours?.start || '10:00',
       schedule_end: workingHours?.end || '18:00',
+      consultation_fee: consultationFee !== undefined && consultationFee !== '' ? parseFloat(consultationFee) : null,
+      license_number: licenseNumber || null,
+      bio: bio || null,
+      address: address || null,
     });
 
     await AuditLog.create({
@@ -188,7 +195,7 @@ const updateDoctor = async (req, res) => {
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
     const oldData = { name: doctor.name, status: doctor.status };
-    const { password, availableDays, workingHours, profilePhoto, status, ...updateFields } = req.body;
+    const { password, availableDays, workingHours, profilePhoto, status, consultationFee, licenseNumber, ...updateFields } = req.body;
     
     if (password) {
       const salt = await bcrypt.genSalt(10);
@@ -198,6 +205,13 @@ const updateDoctor = async (req, res) => {
     if (workingHours?.start !== undefined) updateFields.schedule_start = workingHours.start;
     if (workingHours?.end !== undefined) updateFields.schedule_end = workingHours.end;
     if (profilePhoto !== undefined) updateFields.profile_image = profilePhoto;
+    // camelCase → snake_case mapping for fee
+    if (consultationFee !== undefined && consultationFee !== '') {
+      updateFields.consultation_fee = parseFloat(consultationFee);
+    }
+    if (licenseNumber !== undefined) {
+      updateFields.license_number = licenseNumber;
+    }
     
     if (status !== undefined) {
       if (status === 'inactive') {
