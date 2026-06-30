@@ -7,7 +7,7 @@ import axios from 'axios';
 import { 
   Phone, Lock, Eye, EyeOff, Calendar, FileText, ClipboardList, 
   User, Shield, LogIn, Heart, Mail, MapPin, Sparkles, UserCheck,
-  AlertCircle, Building
+  AlertCircle
 } from 'lucide-react';
 
 export default function LoginPage({ defaultSignUp = false }) {
@@ -17,7 +17,6 @@ export default function LoginPage({ defaultSignUp = false }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [needHospitalCode, setNeedHospitalCode] = useState(false);
 
   // Sync state with prop changes (e.g. /login vs /register URL navigation)
   useEffect(() => {
@@ -31,7 +30,7 @@ export default function LoginPage({ defaultSignUp = false }) {
     watch: loginWatch,
     formState: { errors: loginErrors } 
   } = useForm({
-    defaultValues: { mobileNumber: '', password: '', hospitalCode: '' }
+    defaultValues: { mobileNumber: '', password: '' }
   });
 
   const { 
@@ -65,19 +64,10 @@ export default function LoginPage({ defaultSignUp = false }) {
         ? { email: data.mobileNumber, password: data.password }
         : { mobileNumber: data.mobileNumber, password: data.password };
       
-      if (needHospitalCode && data.hospitalCode) {
-        payload.hospitalCode = data.hospitalCode;
-      }
-      
       await login(payload);
       toast.success('Logged in successfully!');
     } catch (err) {
-      if (err.message && (err.message.includes('multiple hospitals') || err.message.includes('hospital code'))) {
-        setNeedHospitalCode(true);
-        toast.info('This account is registered with multiple hospitals. Please provide your hospital code to sign in.');
-      } else {
-        toast.error(err.message || 'Login failed. Please check your credentials.');
-      }
+      toast.error(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -133,24 +123,15 @@ export default function LoginPage({ defaultSignUp = false }) {
     setLoading(true);
     try {
       const payload = isEmail ? { email: value } : { mobileNumber: value };
-      const codeVal = loginWatch('hospitalCode');
-      if (needHospitalCode && codeVal) {
-        payload.hospitalCode = codeVal;
-      }
       
       const res = await axios.post('/api/auth/send-otp', payload);
       if (res.data.success) {
         toast.success(res.data.message || 'OTP sent successfully!');
-        navigate('/otp-verification', { state: { mobileNumber: value, hospitalCode: payload.hospitalCode } });
+        navigate('/otp-verification', { state: { mobileNumber: value } });
       }
     } catch (err) {
       const errMsg = err.response?.data?.message || err.message || '';
-      if (errMsg.includes('multiple hospitals') || errMsg.includes('hospital code')) {
-        setNeedHospitalCode(true);
-        toast.info('This account is registered with multiple hospitals. Please provide your hospital code to send OTP.');
-      } else {
-        toast.error(errMsg || 'Failed to send OTP. Please try again.');
-      }
+      toast.error(errMsg || 'Failed to send OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -332,30 +313,7 @@ export default function LoginPage({ defaultSignUp = false }) {
                   )}
                 </div>
 
-                {/* Conditional Hospital Code Input */}
-                {needHospitalCode && (
-                  <div className="flex flex-col text-left">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1.5">Hospital Code *</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-4 text-slate-400">
-                        <Building className="w-4.5 h-4.5" />
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="Enter your hospital code"
-                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${
-                          loginErrors.hospitalCode ? 'border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-[#0F9B8E] focus:ring-[#0F9B8E]/10'
-                        } rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-4 transition-all duration-200 uppercase`}
-                        {...loginRegister('hospitalCode', { required: needHospitalCode ? 'Hospital code is required' : false })}
-                      />
-                    </div>
-                    {loginErrors.hospitalCode && (
-                      <span className="text-red-500 text-[11px] font-semibold mt-1 pl-1 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> {loginErrors.hospitalCode.message}
-                      </span>
-                    )}
-                  </div>
-                )}
+
 
                 {/* Submit button */}
                 <button

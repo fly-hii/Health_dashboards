@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -198,7 +198,6 @@ const register = async (req, res) => {
 // POST /api/auth/login
 const login = async (req, res) => {
   const { email, password, mobileNumber } = req.body;
-  const hospitalCode = req.body.hospitalCode || req.headers['x-hospital-code'] || process.env.HOSPITAL_CODE;
 
   try {
     if ((!email && !mobileNumber) || !password)
@@ -213,53 +212,26 @@ const login = async (req, res) => {
     let db, models;
     let patient;
 
-    if (hospitalCode) {
-      // Step 1: Resolve hospital from master DB
+    // Look up patient across all hospitals — pick the most recently active record
+    // MySQL-compatible null-safe ordering: rows with NULL last_login sort last
+    const matches = await Patient.findAll({
+      where: lookup,
+      order: literal('ISNULL(last_login) ASC, last_login DESC'),
+    });
+    patient = matches[0] || null;
+    if (patient) {
+      resolvedHospitalId = patient.hospital_id;
+      // Verify hospital status in master registry
       const [hospRows] = await masterDb.query(
-        'SELECT id, status, database_type FROM hospitals WHERE code = ? LIMIT 1',
-        { replacements: [hospitalCode.toUpperCase()] }
+        'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
+        { replacements: [resolvedHospitalId] }
       );
       const hospital = hospRows?.[0];
-      if (!hospital?.id) {
-        return res.status(404).json({ success: false, message: `Hospital code "${hospitalCode}" not found` });
-      }
-      if (hospital.status === 'suspended') {
+      if (hospital?.status === 'suspended') {
         return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
       }
-      resolvedHospitalId = hospital.id;
-
-      // Step 2: Resolve tenant DB. Scope the lookup to this hospital — in the
-      // shared SaaS DB an unscoped email/phone match could belong to another tenant.
       db = await getHospitalConnection(resolvedHospitalId);
       models = createModels(db);
-      patient = await models.Patient.findOne({ where: { ...lookup, hospital_id: resolvedHospitalId } });
-    } else {
-      // Fallback: look up in shared database. The same email/phone can exist
-      // under multiple hospitals; resolving an arbitrary one would cross tenant
-      // boundaries, so require a hospital code to disambiguate.
-      const matches = await Patient.findAll({ where: lookup });
-      if (matches.length > 1) {
-        return res.status(409).json({
-          success: false,
-          message: 'This account is registered with multiple hospitals. Please provide your hospital code to sign in.',
-          requireHospitalCode: true,
-        });
-      }
-      patient = matches[0] || null;
-      if (patient) {
-        resolvedHospitalId = patient.hospital_id;
-        // Verify hospital status in master registry
-        const [hospRows] = await masterDb.query(
-          'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
-          { replacements: [resolvedHospitalId] }
-        );
-        const hospital = hospRows?.[0];
-        if (hospital?.status === 'suspended') {
-          return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
-        }
-        db = await getHospitalConnection(resolvedHospitalId);
-        models = createModels(db);
-      }
     }
 
     if (!patient) {
@@ -339,18 +311,13 @@ const sendOtp = async (req, res) => {
         } catch (_) {}
       }
     } else {
-      // Check shared SaaS DB first
+      // Check shared SaaS DB — pick most recently active record across all hospitals
+      // MySQL-compatible null-safe ordering: rows with NULL last_login sort last
       const sharedModels = createModels(sharedSaasDb);
-      const allMatches = await sharedModels.Patient.findAll({ where: lookup });
-
-      if (allMatches.length > 1) {
-        // Patient registered at multiple hospitals — require a hospital code
-        return res.status(409).json({
-          success: false,
-          message: 'This account is registered with multiple hospitals. Please provide your hospital code to sign in.',
-          requireHospitalCode: true,
-        });
-      }
+      const allMatches = await sharedModels.Patient.findAll({
+        where: lookup,
+        order: literal('ISNULL(last_login) ASC, last_login DESC'),
+      });
 
       patient = allMatches[0] || null;
     }
