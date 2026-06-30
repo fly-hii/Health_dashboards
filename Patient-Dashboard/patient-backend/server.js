@@ -456,7 +456,7 @@ app.get('/api/hospitals/:hospitalId/doctors', protect, async (req, res) => {
       qualification: d.qualification || 'MBBS',
       avatar: d.profile_image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(d.name)}&backgroundColor=b6e3f4`,
       availability: d.availability_status || 'Available',
-      consultationFee: d.consultation_fee ? parseFloat(d.consultation_fee) : null,
+      consultationFee: d.consultation_fee !== null && d.consultation_fee !== undefined ? parseFloat(d.consultation_fee) : null,
     }));
 
     res.json({ success: true, data });
@@ -494,7 +494,7 @@ app.get('/api/doctors', protect, async (req, res) => {
 
     const doctors = await req.models.User.findAll({
       where,
-      attributes: ['id', 'name', 'department', 'specialization', 'experience', 'qualification', 'profile_image', 'availability_status', 'employee_id'],
+      attributes: ['id', 'name', 'department', 'specialization', 'experience', 'qualification', 'profile_image', 'availability_status', 'employee_id', 'consultation_fee'],
       order: [['name', 'ASC']],
     });
 
@@ -509,6 +509,7 @@ app.get('/api/doctors', protect, async (req, res) => {
       qualification: d.qualification,
       avatar: d.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${d.name}`,
       availability: d.availability_status || 'Available',
+      consultationFee: d.consultation_fee !== null && d.consultation_fee !== undefined ? parseFloat(d.consultation_fee) : null,
     }));
 
     res.json(mapped);
