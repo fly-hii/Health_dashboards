@@ -583,6 +583,14 @@ export default function BookAppointmentView() {
                       <span className="bav-tag exp">⏱ {doc.experience}</span>
                       <span className="bav-tag qual">{doc.qualification}</span>
                     </div>
+                    {/* Consultation Fee */}
+                    <div className="bav-doctor-fee">
+                      <span className="bav-fee-icon">💊</span>
+                      {doc.consultationFee != null
+                        ? <><span className="bav-fee-amount">₹{doc.consultationFee.toLocaleString('en-IN')}</span><span className="bav-fee-label"> / Consultation</span></>
+                        : <span className="bav-fee-na">Fee: Contact Hospital</span>
+                      }
+                    </div>
                   </div>
                   <div className="bav-doctor-right">
                     <span className={`bav-avail-dot ${doc.availability === 'Available' ? 'avail' : 'busy'}`}>
@@ -719,7 +727,12 @@ export default function BookAppointmentView() {
                 { lbl: 'Date',        val: selectedDate,  highlight: true },
                 { lbl: 'Time',        val: selectedTime,  highlight: true },
                 { lbl: 'Visit Type',  val: 'Consultation' },
-              ].map(row => (
+                selectedDoc?.consultationFee != null && {
+                  lbl: 'Consultation Fee',
+                  val: `₹${selectedDoc.consultationFee.toLocaleString('en-IN')}`,
+                  highlight: true,
+                },
+              ].filter(Boolean).map(row => (
                 <div key={row.lbl} className={`bav-confirm-row ${row.highlight ? 'highlight' : ''}`}>
                   <span className="bav-cr-lbl">{row.lbl}</span>
                   <span className="bav-cr-val">{row.val}</span>
@@ -846,7 +859,45 @@ function MapPicker({ locations, allHospitals, onSelectCity, onSelectHospitalDire
       if (coords) {
         const marker = L.marker([coords.lat, coords.lon], { icon: hospitalIcon });
         
-        // Popup with detail and selection button
+        // ── Hover Tooltip (shows on mouseover) ──────────────────
+        const tooltipHtml = `
+          <div style="
+            min-width: 180px;
+            font-family: inherit;
+          ">
+            <div style="
+              font-weight: 800;
+              font-size: 13px;
+              color: #0f172a;
+              margin-bottom: 4px;
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            ">
+              🏥 ${hosp.name}
+            </div>
+            <div style="font-size: 11px; color: #64748b; margin-bottom: 2px;">
+              📍 ${hosp.city}${hosp.state ? `, ${hosp.state}` : ''}
+            </div>
+            ${hosp.phone ? `<div style="font-size: 11px; color: #64748b;">📞 ${hosp.phone}</div>` : ''}
+            <div style="
+              margin-top: 6px;
+              font-size: 10px;
+              font-weight: 700;
+              color: #0F9D8A;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            ">Click to select →</div>
+          </div>
+        `;
+        marker.bindTooltip(tooltipHtml, {
+          direction: 'top',
+          offset: [0, -28],
+          opacity: 1,
+          className: 'bav-hosp-tooltip',
+        });
+
+        // ── Click Popup (with Select Hospital button) ──────────
         const popupContent = document.createElement('div');
         popupContent.className = 'map-popup-content';
         popupContent.innerHTML = `

@@ -443,7 +443,7 @@ app.get('/api/hospitals/:hospitalId/doctors', protect, async (req, res) => {
 
     const rows = await models.User.findAll({
       where,
-      attributes: ['id', 'name', 'department', 'specialization', 'experience', 'qualification', 'profile_image', 'availability_status', 'employee_id'],
+      attributes: ['id', 'name', 'department', 'specialization', 'experience', 'qualification', 'profile_image', 'availability_status', 'employee_id', 'consultation_fee'],
       order: [['name', 'ASC']],
     });
 
@@ -456,6 +456,7 @@ app.get('/api/hospitals/:hospitalId/doctors', protect, async (req, res) => {
       qualification: d.qualification || 'MBBS',
       avatar: d.profile_image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(d.name)}&backgroundColor=b6e3f4`,
       availability: d.availability_status || 'Available',
+      consultationFee: d.consultation_fee ? parseFloat(d.consultation_fee) : null,
     }));
 
     res.json({ success: true, data });

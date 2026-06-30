@@ -1294,3 +1294,63 @@
   background: #0d8478 !important;
   box-shadow: 0 2px 6px rgba(15,157,138,0.3);
 }
+
+/* ── Hospital Hover Tooltip ─────────────────────────────────── */
+.bav-hosp-tooltip {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-left: 3px solid #0F9D8A !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06) !important;
+  padding: 10px 14px !important;
+  font-family: inherit !important;
+  animation: tooltip-fade-in 0.15s ease-out;
+  pointer-events: none;
+}
+
+.bav-hosp-tooltip::before {
+  border-top-color: #e2e8f0 !important;
+}
+
+@keyframes tooltip-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Leaflet default tooltip arrow override */
+.bav-hosp-tooltip.leaflet-tooltip-top::before {
+  border-top-color: #ffffff !important;
+}
+
+/* ── Doctor Consultation Fee ────────────────────────────────── */
+.bav-doctor-fee {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.bav-fee-icon {
+  font-size: 12px;
+}
+
+.bav-fee-amount {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0F9D8A;
+  letter-spacing: -0.3px;
+}
+
+.bav-fee-label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.bav-fee-na {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+  font-style: italic;
+}
+

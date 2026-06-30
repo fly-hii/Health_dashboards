@@ -90,6 +90,7 @@ function createModels(sequelize) {
     schedule_end:         { type: DataTypes.STRING(20), defaultValue: '05:00 PM' },
     availability_status:  { type: DataTypes.ENUM('Available','On Leave','Busy'), defaultValue: 'Available' },
     last_login:           DataTypes.DATE,
+    consultation_fee:     { type: DataTypes.DECIMAL(10, 2), defaultValue: null },
   }, { tableName: 'users', timestamps: true, underscored: true });
 
   // ── Patient ───────────────────────────────────────────────────
