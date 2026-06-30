@@ -47,8 +47,9 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
 // Routes
-app.use('/api/auth',  require('./routes/authRoutes'));
-app.use('/api/super', require('./routes/superAdminRoutes'));
+app.use('/api/auth',   require('./routes/authRoutes'));
+app.use('/api/super',  require('./routes/superAdminRoutes'));
+app.use('/api/public', require('./routes/publicRoutes'));
 
 app.get('/health', (req, res) => res.json({
   status: 'healthy', service: 'CarePlus Super Admin API v3.0',
@@ -71,6 +72,14 @@ const PORT = process.env.PORT || 5000;
   try {
     await connectMasterDB();        // careplus_master (syncs all super-admin tables)
     console.log('✅ careplus_master ready');
+
+    // Seed the default subscription plan catalogue if empty
+    try {
+      await require('./controllers/planController').ensureSeeded();
+      console.log('✅ subscription plan catalogue ready');
+    } catch (seedErr) {
+      console.error('⚠️ plan catalogue seed skipped:', seedErr.message);
+    }
 
     server.listen(PORT, () => {
       console.log('\n🚀 ==========================================');

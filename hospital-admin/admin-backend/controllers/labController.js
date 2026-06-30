@@ -45,6 +45,7 @@ const getTests = async (req, res) => {
         {
           model: User,
           as: 'technician',
+          foreignKey: 'technician_id',
           attributes: ['id', 'name']
         }
       ],
@@ -93,7 +94,8 @@ const updateTest = async (req, res) => {
     }
     if (result !== undefined) test.result = result;
     if (notes !== undefined) test.notes = notes;
-    if (technicianId) test.doctor_id = technicianId;
+    // Store technician in technician_id (not doctor_id which is the ordering doctor)
+    if (technicianId) test.technician_id = technicianId;
 
     await test.save();
 
@@ -108,6 +110,7 @@ const updateTest = async (req, res) => {
         {
           model: User,
           as: 'technician',
+          foreignKey: 'technician_id',
           attributes: ['id', 'name']
         }
       ]
@@ -186,7 +189,9 @@ const addLabTest = async (req, res) => {
       category,
       priority,
       notes,
-      doctor_id,
+      // doctor_id = ordering doctor (from consultation), technician_id = assigned tech
+      doctor_id: req.body.doctor_id || req.body.consultingDoctorId || null,
+      technician_id: req.body.technicianId || req.body.technician || null,
       consultation_id,
       status: 'Ordered'
     });

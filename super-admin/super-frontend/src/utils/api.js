@@ -44,6 +44,10 @@ export const upsertDbConfig = (id, data) => API.put(`/super/hospitals/${id}/db-c
 export const deleteDbConfig = (id) => API.delete(`/super/hospitals/${id}/db-config`);
 
 
+// ── Subscription Plan Pricing ───────────────────────────────
+export const getPlans = () => API.get('/super/plans');
+export const updatePlan = (id, data) => API.put(`/super/plans/${id}`, data);
+
 // ── Analytics ───────────────────────────────────────────────
 export const getAnalytics = () => API.get('/super/analytics');
 export const getSystemStatus = () => API.get('/super/system-status');

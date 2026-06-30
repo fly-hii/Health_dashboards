@@ -14,6 +14,8 @@ const LabTest = sequelize.define('LabTest', {
   test_name: { type: DataTypes.STRING(200), allowNull: false },
   test_code: { type: DataTypes.STRING(50) },
   category: { type: DataTypes.STRING(100) },
+  doctor_id: { type: DataTypes.INTEGER, references: { model: 'users', key: 'id' } },      // ordering doctor
+  technician_id: { type: DataTypes.INTEGER, references: { model: 'users', key: 'id' } }, // assigned lab tech
   status: {
     type: DataTypes.ENUM('Ordered', 'Sample-Collected', 'Processing', 'Completed', 'Cancelled'),
     defaultValue: 'Ordered',

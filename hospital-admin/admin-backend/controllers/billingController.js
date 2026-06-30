@@ -2,16 +2,19 @@
 
 const { broadcastEvent } = require('../sockets/socket');
 
-// Helper to map DB status to frontend status
-const mapDbStatusToFrontend = (status) => {
-  if (status === 'Pending') return 'Unpaid';
-  return status;
-};
+// DB → Frontend status map
+const DB_TO_FRONTEND_STATUS = { Pending: 'Unpaid', Paid: 'Paid', Failed: 'Failed', Refunded: 'Refunded' };
+// Frontend → DB status map
+const FRONTEND_TO_DB_STATUS = { Unpaid: 'Pending', Paid: 'Paid', Failed: 'Failed', Refunded: 'Refunded' };
+// Valid DB ENUM values
+const VALID_DB_STATUSES = Object.keys(DB_TO_FRONTEND_STATUS);
 
-// Helper to map frontend status to DB status
+const mapDbStatusToFrontend = (status) => DB_TO_FRONTEND_STATUS[status] || status;
+
 const mapFrontendStatusToDb = (status) => {
-  if (status === 'Unpaid') return 'Pending';
-  return status;
+  const mapped = FRONTEND_TO_DB_STATUS[status];
+  if (!mapped) throw new Error(`Invalid payment status '${status}'. Allowed: ${Object.keys(FRONTEND_TO_DB_STATUS).join(', ')}`);
+  return mapped;
 };
 
 // Helper to map payment method to DB ENUM
@@ -25,14 +28,21 @@ const mapPaymentMethodToDb = (method) => {
 const getInvoices = async (req, res) => {
   try {
     const { Payment, Patient } = req.models;
-    const { paymentStatus } = req.query;
+    const { paymentStatus, page = 1, limit = 20 } = req.query;
 
     const where = { hospital_id: req.hospitalId };
     if (paymentStatus) {
-      where.status = mapFrontendStatusToDb(paymentStatus);
+      try {
+        where.status = mapFrontendStatusToDb(paymentStatus);
+      } catch (e) {
+        return res.status(400).json({ success: false, message: e.message });
+      }
     }
 
-    const invoices = await Payment.findAll({
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+
+    const { count, rows } = await Payment.findAndCountAll({
       where,
       include: [
         {
@@ -41,10 +51,12 @@ const getInvoices = async (req, res) => {
           attributes: ['id', 'full_name', 'phone', 'email']
         }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [['created_at', 'DESC']],
+      limit: limitNum,
+      offset: (pageNum - 1) * limitNum,
     });
 
-    const mapped = invoices.map(inv => {
+    const mapped = rows.map(inv => {
       const json = inv.toJSON();
       json._id = json.id;
       json.invoiceNumber = json.invoice_number;
@@ -87,7 +99,12 @@ const getInvoices = async (req, res) => {
       return json;
     });
 
-    res.json({ success: true, count: mapped.length, data: mapped });
+    res.json({
+      success: true,
+      count: mapped.length,
+      data: mapped,
+      pagination: { total: count, page: pageNum, limit: limitNum, totalPages: Math.ceil(count / limitNum) },
+    });
   } catch (error) {
     console.error('Error in getInvoices:', error);
     res.status(500).json({ success: false, message: error.message });

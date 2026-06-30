@@ -41,6 +41,7 @@ Hospital.hasMany(Report, { foreignKey: 'hospital_id', as: 'reports' });
 Hospital.hasMany(Notification, { foreignKey: 'hospital_id', as: 'notifications' });
 Hospital.hasMany(AuditLog, { foreignKey: 'hospital_id', as: 'auditLogs' });
 Hospital.hasMany(Payment, { foreignKey: 'hospital_id', as: 'payments' });
+Hospital.hasMany(MedicineInventory, { foreignKey: 'hospital_id', as: 'medicineInventory' });
 
 // ── Department ─────────────────────────────────────────────
 User.belongsTo(Department, { foreignKey: 'department', targetKey: 'code', as: 'departmentInfo', constraints: false });
@@ -105,6 +106,13 @@ Prescription.belongsTo(Consultation, { foreignKey: 'consultation_id', as: 'consu
 
 Consultation.hasMany(LabTest, { foreignKey: 'consultation_id', as: 'labTests' });
 LabTest.belongsTo(Consultation, { foreignKey: 'consultation_id', as: 'consultation' });
+
+// ── LabTest Doctor/Technician ───────────────────────────────
+User.hasMany(LabTest, { foreignKey: 'doctor_id', as: 'orderedLabTests' });
+LabTest.belongsTo(User, { foreignKey: 'doctor_id', as: 'orderingDoctor' });
+
+User.hasMany(LabTest, { foreignKey: 'technician_id', as: 'assignedLabTests' });
+LabTest.belongsTo(User, { foreignKey: 'technician_id', as: 'technician' });
 
 // ── Prescription ───────────────────────────────────────────
 Prescription.hasMany(PrescriptionMedicine, { foreignKey: 'prescription_id', as: 'medicines' });

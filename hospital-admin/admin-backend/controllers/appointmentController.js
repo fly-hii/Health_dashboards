@@ -1,6 +1,10 @@
 'use strict';
 const { Op } = require('sequelize');
 
+const VALID_APPOINTMENT_STATUSES = ['Pending', 'Confirmed', 'In-Progress', 'Completed', 'Cancelled', 'No-Show'];
+const VALID_VISIT_TYPES = ['New', 'Follow-Up', 'Emergency'];
+const VALID_DEPARTMENTS = ['OPD', 'IPD', 'PHARMACY', 'LABORATORY', 'RECEPTION', 'OTHERS'];
+
 // POST /api/appointments
 const createAppointment = async (req, res) => {
   // Use tenant-scoped transaction from req.db
@@ -117,10 +121,17 @@ const updateAppointmentStatus = async (req, res) => {
     if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
     const { status } = req.body;
+    // Validate status is one of the allowed ENUM values
+    if (!status || !VALID_APPOINTMENT_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Allowed values: ${VALID_APPOINTMENT_STATUSES.join(', ')}`,
+      });
+    }
     const oldStatus = appointment.status;
     await appointment.update({ status });
 
-    // Update token status too
+    // Sync token status
     await Token.update(
       { status: status === 'In-Progress' ? 'In-Progress' : status === 'Completed' ? 'Completed' : 'Waiting' },
       { where: { appointment_id: appointment.id } }
@@ -168,7 +179,30 @@ const updateAppointment = async (req, res) => {
     if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
     const oldData = appointment.toJSON();
-    const updateFields = req.body;
+
+    // Whitelist only safe fields to prevent mass-assignment
+    const { status, date_time, reason, notes, visit_type, department, doctor_id } = req.body;
+    const updateFields = {};
+    if (status !== undefined) {
+      if (!VALID_APPOINTMENT_STATUSES.includes(status))
+        return res.status(400).json({ success: false, message: `Invalid status. Allowed: ${VALID_APPOINTMENT_STATUSES.join(', ')}` });
+      updateFields.status = status;
+    }
+    if (date_time !== undefined) updateFields.date_time = new Date(date_time);
+    if (reason !== undefined) updateFields.reason = reason;
+    if (notes !== undefined) updateFields.notes = notes;
+    if (visit_type !== undefined) {
+      if (!VALID_VISIT_TYPES.includes(visit_type))
+        return res.status(400).json({ success: false, message: `Invalid visit_type. Allowed: ${VALID_VISIT_TYPES.join(', ')}` });
+      updateFields.visit_type = visit_type;
+    }
+    if (department !== undefined) {
+      if (!VALID_DEPARTMENTS.includes(department))
+        return res.status(400).json({ success: false, message: `Invalid department. Allowed: ${VALID_DEPARTMENTS.join(', ')}` });
+      updateFields.department = department;
+    }
+    if (doctor_id !== undefined) updateFields.doctor_id = doctor_id;
+
     await appointment.update(updateFields);
 
     if (updateFields.status) {

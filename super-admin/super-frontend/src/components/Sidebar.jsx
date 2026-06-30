@@ -2,10 +2,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
-  { to: '/',          icon: '📊', label: 'Dashboard' },
-  { to: '/hospitals', icon: '🏥', label: 'Hospitals' },
-  { to: '/analytics', icon: '📈', label: 'Analytics' },
-  { to: '/audit',     icon: '🔍', label: 'Audit Logs' },
+  { to: '/',              icon: '📊', label: 'Dashboard' },
+  { to: '/hospitals',     icon: '🏥', label: 'Hospitals' },
+  { to: '/subscriptions', icon: '💳', label: 'Subscription Prices' },
+  { to: '/analytics',     icon: '📈', label: 'Analytics' },
+  { to: '/audit',         icon: '🔍', label: 'Audit Logs' },
 ];
 
 export default function Sidebar({ isOpen, setIsOpen }) {

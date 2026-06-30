@@ -15,6 +15,8 @@ const {
   toggleDbConnection, listDbConnections, deleteDbConfig,
 } = require('../controllers/dbConnectionController');
 
+const { listPlans, updatePlan: updatePlanPricing } = require('../controllers/planController');
+
 // All routes require Super Admin JWT
 router.use(protect, isSuperAdmin);
 
@@ -34,6 +36,10 @@ router.put   ('/hospitals/:id/db-config',      upsertDbConfig);
 router.post  ('/hospitals/:id/test-db',        testDbConnection);
 router.patch ('/hospitals/:id/db-config/toggle', toggleDbConnection);
 router.delete('/hospitals/:id/db-config',       deleteDbConfig);
+
+// ── Subscription Plan Pricing ──────────────────────────────────
+router.get   ('/plans',                        listPlans);
+router.put   ('/plans/:id',                    updatePlanPricing);
 
 // ── Analytics, Audit & Monitoring ──────────────────────────────
 router.get   ('/analytics',                    getAnalytics);

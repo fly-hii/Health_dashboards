@@ -4,32 +4,40 @@ const { Op } = require('sequelize');
 
 const getOrders = async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, page = 1, limit = 20 } = req.query;
     const { PharmacyOrder, Patient, User } = req.models;
     
     const where = { hospital_id: req.hospitalId };
     if (status) where.status = status;
 
-    const orders = await PharmacyOrder.findAll({
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+
+    const { count, rows } = await PharmacyOrder.findAndCountAll({
       where,
       include: [
         { model: Patient, as: 'patient', attributes: ['id', 'full_name', 'phone'] },
         { model: User, as: 'pharmacist', attributes: ['id', 'name'] }
       ],
-      order: [['created_at', 'DESC']]
+      order: [['created_at', 'DESC']],
+      limit: limitNum,
+      offset: (pageNum - 1) * limitNum,
     });
 
-    // Map keys to match the frontend expectations if needed
-    const formattedOrders = orders.map(order => {
+    const formattedOrders = rows.map(order => {
       const data = order.toJSON();
-      // For compatibility: patient name instead of full_name if expected, pharmacist_id
       if (data.patient) {
         data.patient.name = data.patient.full_name;
       }
       return data;
     });
 
-    res.json({ success: true, count: formattedOrders.length, data: formattedOrders });
+    res.json({
+      success: true,
+      count: formattedOrders.length,
+      data: formattedOrders,
+      pagination: { total: count, page: pageNum, limit: limitNum, totalPages: Math.ceil(count / limitNum) },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -87,7 +95,12 @@ const getInventory = async (req, res) => {
     const where = { hospital_id: req.hospitalId };
     if (status && status !== 'all') where.status = status;
     if (search) {
-      where.name = { [Op.like]: `%${search}%` };
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { generic_name: { [Op.like]: `%${search}%` } },
+        { category: { [Op.like]: `%${search}%` } },
+        { manufacturer: { [Op.like]: `%${search}%` } },
+      ];
     }
 
     const inventory = await MedicineInventory.findAll({

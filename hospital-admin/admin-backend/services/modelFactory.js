@@ -111,8 +111,8 @@ function createModels(sequelize) {
     medical_notes:    DataTypes.TEXT,
     medical_history:  { type: DataTypes.JSON, defaultValue: [] },
     status: {
-      type: DataTypes.ENUM('active','inactive','blocked','discharged','Outpatient','Admitted','Discharged'),
-      defaultValue: 'active',
+      type: DataTypes.ENUM('Active','Inactive','Blocked','Outpatient','Admitted','Discharged'),
+      defaultValue: 'Active',
     },
     admit_date:      DataTypes.DATE,
     discharge_date:  DataTypes.DATE,
@@ -298,7 +298,8 @@ function createModels(sequelize) {
     hospital_id:     { type: DataTypes.INTEGER, allowNull: false },
     consultation_id: DataTypes.INTEGER,
     patient_id:      DataTypes.INTEGER,
-    doctor_id:       DataTypes.INTEGER,
+    doctor_id:       DataTypes.INTEGER, // ordering doctor
+    technician_id:   DataTypes.INTEGER, // assigned lab technician
     test_name:       { type: DataTypes.STRING(200), allowNull: false },
     test_code:       DataTypes.STRING(50),
     category:        DataTypes.STRING(100),

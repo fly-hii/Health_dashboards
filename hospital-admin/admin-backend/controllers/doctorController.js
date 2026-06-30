@@ -27,10 +27,6 @@ const mapDoctor = (doc) => {
       end: json.schedule_end || '18:00'
     },
     availableDays: json.schedule_days || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-    consultationFee: json.consultationFee || 800,
-    licenseNumber: json.licenseNumber || 'MC123456',
-    bio: json.bio || 'Experienced doctor.',
-    address: json.address || 'Hospital premises.'
   };
 };
 

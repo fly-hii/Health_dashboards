@@ -24,8 +24,8 @@ const Patient = sequelize.define('Patient', {
   medical_notes: { type: DataTypes.TEXT },
   medical_history: { type: DataTypes.JSON, defaultValue: [] },
   status: {
-    type: DataTypes.ENUM('active', 'inactive', 'blocked', 'discharged', 'Outpatient', 'Admitted', 'Discharged'),
-    defaultValue: 'active',
+    type: DataTypes.ENUM('Active', 'Inactive', 'Blocked', 'Outpatient', 'Admitted', 'Discharged'),
+    defaultValue: 'Active',
   },
   admit_date: { type: DataTypes.DATE },
   discharge_date: { type: DataTypes.DATE },

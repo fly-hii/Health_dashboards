@@ -15,20 +15,42 @@ router.post('/login-otp/send', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
 
-    const { masterDb } = require('../services/databaseResolver');
+    const { masterDb, sharedSaasDb } = require('../services/databaseResolver');
     const { createModels } = require('../services/modelFactory');
-    const { sharedSaasDb } = require('../services/databaseResolver');
+    const { decrypt } = require('../services/encryptionService');
+    const { Sequelize } = require('sequelize');
 
-    // Look up user
+    // 1. Check shared SaaS DB
     let user;
     const { User } = createModels(sharedSaasDb);
     user = await User.findOne({ where: { email: email.toLowerCase() } });
 
+    // 2. Check master super_admin_users
     if (!user) {
-      // Also check master super_admin_users
       try {
         const [rows] = await masterDb.query('SELECT id, name, email FROM super_admin_users WHERE email = ? LIMIT 1', { replacements: [email.toLowerCase()] });
         if (rows?.[0]) { user = { ...rows[0], role: 'SUPER_ADMIN' }; }
+      } catch (_) {}
+    }
+
+    // 3. Check all active BYOD databases
+    if (!user) {
+      try {
+        const [connections] = await masterDb.query('SELECT * FROM db_connections WHERE is_active = 1');
+        for (const conn of connections) {
+          try {
+            const decryptedPassword = decrypt(conn.password_encrypted);
+            const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+              host: conn.host, port: conn.port || 3306, dialect: 'mysql',
+              dialectModule: require('mysql2'), logging: false,
+              dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+            });
+            const { User: ExternalUser } = createModels(externalDb);
+            const found = await ExternalUser.findOne({ where: { email: email.toLowerCase() } });
+            await externalDb.close().catch(() => {});
+            if (found) { user = found; break; }
+          } catch (_) {}
+        }
       } catch (_) {}
     }
 

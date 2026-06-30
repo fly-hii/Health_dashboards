@@ -4,6 +4,7 @@ const { uploadToS3, deleteFromS3, generateReportKey } = require('../services/s3S
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const GENDERS = ['Male', 'Female', 'Other'];
+const VALID_STATUSES = ['Active', 'Inactive', 'Blocked', 'Outpatient', 'Admitted', 'Discharged'];
 
 /**
  * Map an incoming request body to an allow-listed set of patient fields.
@@ -60,6 +61,10 @@ const validatePatientFields = (fields, { requireCore = false } = {}) => {
   if (fields.email && !EMAIL_RE.test(String(fields.email))) return 'Invalid email format';
   if (fields.gender && !GENDERS.includes(fields.gender)) return 'Invalid gender (expected Male, Female, or Other)';
   if (fields.dob && isNaN(new Date(fields.dob).getTime())) return 'Invalid date of birth';
+  if (fields.status && !VALID_STATUSES.includes(fields.status))
+    return `Invalid status. Allowed values: ${VALID_STATUSES.join(', ')}`;
+  if (fields.medical_history !== undefined && !Array.isArray(fields.medical_history))
+    return 'medical_history must be an array';
   return null;
 };
 

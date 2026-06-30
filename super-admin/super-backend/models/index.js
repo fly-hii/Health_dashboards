@@ -6,6 +6,7 @@ const Subscription  = require('./Subscription');
 const Payment       = require('./Payment');
 const AuditLog      = require('./AuditLog');
 const DbConnection  = require('./DbConnection');
+const PlanPrice     = require('./PlanPrice');
 
 // Hospital ↔ Subscription
 Hospital.hasMany(Subscription, { foreignKey: 'hospital_id', as: 'subscriptions' });
@@ -31,4 +32,4 @@ AuditLog.belongsTo(SuperAdmin, { foreignKey: 'admin_id', as: 'admin' });
 Hospital.hasOne(DbConnection, { foreignKey: 'hospital_id', as: 'dbConnection' });
 DbConnection.belongsTo(Hospital, { foreignKey: 'hospital_id', as: 'hospital' });
 
-module.exports = { SuperAdmin, Hospital, Subscription, Payment, AuditLog, DbConnection };
+module.exports = { SuperAdmin, Hospital, Subscription, Payment, AuditLog, DbConnection, PlanPrice };

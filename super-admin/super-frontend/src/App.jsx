@@ -6,6 +6,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import HospitalsPage from './pages/HospitalsPage';
 import HospitalDetailPage from './pages/HospitalDetailPage';
+import SubscriptionPricesPage from './pages/SubscriptionPricesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import SettingsPage from './pages/SettingsPage';
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/"            element={<DashboardPage />} />
             <Route path="/hospitals"   element={<HospitalsPage />} />
             <Route path="/hospitals/:id" element={<HospitalDetailPage />} />
+            <Route path="/subscriptions" element={<SubscriptionPricesPage />} />
             <Route path="/analytics"   element={<AnalyticsPage />} />
             <Route path="/audit"       element={<AuditLogsPage />} />
             <Route path="/settings"    element={<SettingsPage />} />
