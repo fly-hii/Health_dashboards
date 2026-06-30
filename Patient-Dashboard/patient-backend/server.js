@@ -366,17 +366,40 @@ app.get('/api/hospitals/:hospitalId/departments', protect, async (req, res) => {
     const data = [];
     for (const dept of dbDepts) {
       const deptNameLower = dept.name.trim().toLowerCase();
+
+      const terms = [deptNameLower];
+      if (deptNameLower.endsWith('ology')) {
+        terms.push(deptNameLower.slice(0, -5) + 'olog');
+      } else if (deptNameLower.endsWith(' specialists')) {
+        terms.push(deptNameLower.replace(' specialists', ''));
+      }
+      if (deptNameLower.includes('cardio')) terms.push('cardiolog');
+      if (deptNameLower.includes('derm')) terms.push('dermatolog');
+      if (deptNameLower.includes('ortho')) { terms.push('orthoped'); terms.push('orthopaed'); }
+      if (deptNameLower.includes('pediatr')) terms.push('pediatr');
+      if (deptNameLower.includes('neuro')) terms.push('neurolog');
+      if (deptNameLower.includes('gynecol')) terms.push('gynecol');
+      if (deptNameLower.includes('ophthal')) terms.push('ophthal');
+      if (deptNameLower.includes('psychiat')) terms.push('psychiat');
+      if (deptNameLower.includes('dent')) terms.push('dent');
+      if (deptNameLower.includes('oncolog')) terms.push('oncolog');
+      if (deptNameLower.includes('radiolog')) terms.push('radiolog');
+      if (deptNameLower.includes('surg')) terms.push('surg');
+
+      const uniqueTerms = [...new Set(terms)];
+      const orClauses = uniqueTerms.map(() => `LOWER(TRIM(department)) LIKE ? OR LOWER(TRIM(specialization)) LIKE ?`).join(' OR ');
+      const replacements = [targetId];
+      for (const t of uniqueTerms) {
+        replacements.push(`%${t}%`, `%${t}%`);
+      }
+
       const [countRows] = await db.query(
         `SELECT COUNT(*) as cnt FROM users 
          WHERE hospital_id = ? 
            AND role = 'DOCTOR' 
            AND status = 'Active'
-           AND (
-             LOWER(TRIM(department)) = ?
-             OR LOWER(TRIM(department)) LIKE ?
-             OR LOWER(TRIM(specialization)) LIKE ?
-           )`,
-        { replacements: [targetId, deptNameLower, `%${deptNameLower}%`, `%${deptNameLower}%`] }
+           AND (${orClauses})`,
+        { replacements }
       );
       data.push({
         name: dept.name.trim(),
@@ -413,15 +436,32 @@ app.get('/api/hospitals/:hospitalId/doctors', protect, async (req, res) => {
     // e.g. department="cardiology" will match specialization="Cardiologist".
     if (department) {
       const deptLower = department.trim().toLowerCase();
-      where[Op.and] = [
-        {
-          [Op.or]: [
-            seqWhere(fn('LOWER', col('department')), deptLower),
-            seqWhere(fn('LOWER', col('department')), { [Op.like]: `%${deptLower}%` }),
-            seqWhere(fn('LOWER', col('specialization')), { [Op.like]: `%${deptLower}%` }),
-          ]
-        }
-      ];
+      const terms = [deptLower];
+      if (deptLower.endsWith('ology')) {
+        terms.push(deptLower.slice(0, -5) + 'olog');
+      } else if (deptLower.endsWith(' specialists')) {
+        terms.push(deptLower.replace(' specialists', ''));
+      }
+      if (deptLower.includes('cardio')) terms.push('cardiolog');
+      if (deptLower.includes('derm')) terms.push('dermatolog');
+      if (deptLower.includes('ortho')) { terms.push('orthoped'); terms.push('orthopaed'); }
+      if (deptLower.includes('pediatr')) terms.push('pediatr');
+      if (deptLower.includes('neuro')) terms.push('neurolog');
+      if (deptLower.includes('gynecol')) terms.push('gynecol');
+      if (deptLower.includes('ophthal')) terms.push('ophthal');
+      if (deptLower.includes('psychiat')) terms.push('psychiat');
+      if (deptLower.includes('dent')) terms.push('dent');
+      if (deptLower.includes('oncolog')) terms.push('oncolog');
+      if (deptLower.includes('radiolog')) terms.push('radiolog');
+      if (deptLower.includes('surg')) terms.push('surg');
+      
+      const uniqueTerms = [...new Set(terms)];
+      const orClauses = [];
+      for (const t of uniqueTerms) {
+        orClauses.push(seqWhere(fn('LOWER', col('department')), { [Op.like]: `%${t}%` }));
+        orClauses.push(seqWhere(fn('LOWER', col('specialization')), { [Op.like]: `%${t}%` }));
+      }
+      where[Op.and] = [{ [Op.or]: orClauses }];
     }
 
     // Auto-update availability_status to 'Busy' if inactive for > 2 hours

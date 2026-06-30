@@ -1326,12 +1326,14 @@
 .bav-doctor-fee {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   margin-top: 6px;
 }
 
 .bav-fee-icon {
-  font-size: 12px;
+  font-size: 13px;
+  position: relative;
+  top: 1px; /* Optical centering for emoji */
 }
 
 .bav-fee-amount {

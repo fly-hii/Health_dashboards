@@ -137,6 +137,15 @@ const Skeleton = ({ count = 4, type = 'card' }) => (
   </div>
 );
 
+const formatDoctorName = (name) => {
+  if (!name) return '';
+  const trimmed = name.trim();
+  if (/^dr\.?\s+/i.test(trimmed)) {
+    return trimmed.replace(/^dr\.?\s+/i, 'Dr. ');
+  }
+  return `Dr. ${trimmed}`;
+};
+
 // ─────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────
@@ -329,7 +338,7 @@ export default function BookAppointmentView() {
     selectedLocation && selectedLocation.city,
     selectedHospital && selectedHospital.name,
     selectedDept     && selectedDept.name,
-    selectedDoc      && `Dr. ${selectedDoc.name}`,
+    selectedDoc      && formatDoctorName(selectedDoc.name),
   ].filter(Boolean);
 
   return (
@@ -577,7 +586,7 @@ export default function BookAppointmentView() {
                     onError={e => { e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(doc.name)}`; }}
                   />
                   <div className="bav-doctor-info">
-                    <h3 className="bav-doctor-name">Dr. {doc.name}</h3>
+                    <h3 className="bav-doctor-name">{formatDoctorName(doc.name)}</h3>
                     <p className="bav-doctor-spec">{doc.specialization}</p>
                     <div className="bav-doctor-tags">
                       <span className="bav-tag exp">⏱ {doc.experience}</span>
@@ -620,7 +629,7 @@ export default function BookAppointmentView() {
             <span className="bav-section-emoji">📅</span>
             <div>
               <h2 className="bav-section-title">Choose Date &amp; Time</h2>
-              <p className="bav-section-sub">Dr. {selectedDoc?.name} · {selectedDept?.name}</p>
+              <p className="bav-section-sub">{formatDoctorName(selectedDoc?.name)} · {selectedDept?.name}</p>
             </div>
           </div>
 
@@ -679,7 +688,7 @@ export default function BookAppointmentView() {
           {selectedDate && selectedTime && (
             <div className="bav-proceed-area">
               <p className="bav-selected-slot">
-                🗓 {selectedDate} at {selectedTime} — with Dr. {selectedDoc?.name}
+                🗓 {selectedDate} at {selectedTime} — with {formatDoctorName(selectedDoc?.name)}
               </p>
               <button className="bav-proceed-btn" onClick={() => setStep(6)}>
                 Proceed to Confirm →
@@ -713,7 +722,7 @@ export default function BookAppointmentView() {
                 onError={e => { e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(selectedDoc?.name || '')}`; }}
               />
               <div>
-                <p className="bav-confirm-doc-name">Dr. {selectedDoc?.name}</p>
+                <p className="bav-confirm-doc-name">{formatDoctorName(selectedDoc?.name)}</p>
                 <p className="bav-confirm-doc-spec">{selectedDoc?.specialization} · {selectedDoc?.qualification}</p>
                 <p className="bav-confirm-doc-exp">⏱ {selectedDoc?.experience}</p>
               </div>
@@ -727,9 +736,11 @@ export default function BookAppointmentView() {
                 { lbl: 'Date',        val: selectedDate,  highlight: true },
                 { lbl: 'Time',        val: selectedTime,  highlight: true },
                 { lbl: 'Visit Type',  val: 'Consultation' },
-                selectedDoc?.consultationFee != null && {
+                {
                   lbl: 'Consultation Fee',
-                  val: `₹${selectedDoc.consultationFee.toLocaleString('en-IN')}`,
+                  val: selectedDoc?.consultationFee != null
+                    ? `₹${selectedDoc.consultationFee.toLocaleString('en-IN')}`
+                    : 'Contact Hospital',
                   highlight: true,
                 },
               ].filter(Boolean).map(row => (
@@ -769,7 +780,7 @@ export default function BookAppointmentView() {
             {[
               { lbl: 'Appointment ID', val: bookingResult?.appointment?.id || bookingResult?.appointment?._id || bookingResult?.id },
               { lbl: 'Hospital',   val: selectedHospital?.name },
-              { lbl: 'Doctor',     val: `Dr. ${selectedDoc?.name}` },
+              { lbl: 'Doctor',     val: formatDoctorName(selectedDoc?.name) },
               { lbl: 'Department', val: selectedDept?.name },
               { lbl: 'Date',       val: selectedDate },
               { lbl: 'Time',       val: selectedTime },
