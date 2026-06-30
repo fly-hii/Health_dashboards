@@ -31,6 +31,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [queue, setQueue] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -204,8 +205,9 @@ export default function App() {
         setActiveTab={setActiveTab} 
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
+        isCollapsed={isSidebarCollapsed}
       />
-      <div className="main-content-layout">
+      <div className={`main-content-layout${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <TopNavbar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -213,7 +215,13 @@ export default function App() {
           onDiagnosePatient={handleDiagnosePatient}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          onToggleSidebar={() => setIsSidebarOpen(true)}
+          onToggleSidebar={() => {
+            if (window.innerWidth < 768) {
+              setIsSidebarOpen(prev => !prev);
+            } else {
+              setIsSidebarCollapsed(prev => !prev);
+            }
+          }}
         />
         <main className="content-body">
           {renderActiveView()}

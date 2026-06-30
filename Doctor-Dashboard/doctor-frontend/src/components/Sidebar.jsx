@@ -21,7 +21,7 @@ const RxIcon = (props) => (
   </svg>
 );
 
-export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) {
+export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, isCollapsed }) {
   const { logout } = useAuth();
 
   const menuItems = [
@@ -50,13 +50,15 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) 
           onClick={() => setIsOpen(false)}
         />
       )}
-      <aside className={`fixed md:sticky top-0 left-0 z-[100] w-[280px] h-screen bg-white border-r border-[#E5E7EB] flex flex-col justify-between p-6 shrink-0 font-sans transition-transform duration-300 ease-in-out md:translate-x-0 ${
-        isOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
-      <div className="flex flex-col gap-6">
+      <aside className={`fixed md:sticky top-0 left-0 z-[100] h-screen bg-white border-r border-[#E5E7EB] flex flex-col justify-between shrink-0 font-sans transition-all duration-300 ease-in-out
+        ${isCollapsed ? 'md:w-[72px] md:p-3' : 'md:w-[280px] md:p-6'}
+        w-[280px] p-6
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+      `}>
+      <div className="flex flex-col gap-6 overflow-hidden">
         {/* Brand Logo */}
         <div 
-          className="flex items-center gap-3 px-2 py-4 cursor-pointer" 
+          className={`flex items-center gap-3 px-2 py-4 cursor-pointer ${isCollapsed ? 'md:justify-center md:px-0' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
           <div className="w-10 h-10 bg-[#e6f5f3] rounded-xl flex items-center justify-center text-[#0F9D8A] shrink-0">
@@ -64,7 +66,7 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) 
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </div>
-          <div className="flex flex-col">
+          <div className={`flex flex-col transition-all duration-200 ${isCollapsed ? 'md:hidden' : ''}`}>
             <span className="font-sans font-bold text-xl leading-none text-[#0B1F3A]">CarePlus</span>
             <span className="font-sans font-semibold text-[10px] tracking-[0.25em] text-[#64748b] mt-1">HOSPITAL</span>
           </div>
@@ -79,22 +81,28 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) 
               <button
                 key={item.id}
                 onClick={() => handleTabClick(item.id)}
-                className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-                  isActive 
+                title={isCollapsed ? item.label : undefined}
+                className={`w-full flex items-center justify-between rounded-xl font-medium text-sm transition-all duration-200
+                  ${isCollapsed ? 'md:justify-center md:px-0 md:py-3' : ''}
+                  px-4 py-3.5
+                  ${isActive 
                     ? 'bg-gradient-to-r from-[#0F9D8A] to-[#0A8E7C] text-white shadow-md shadow-[#0F9D8A]/10' 
                     : 'text-[#475569] hover:bg-slate-50 hover:text-[#0B1F3A]'
-                }`}
+                  }`}
               >
-                <div className="flex items-center gap-3.5">
-                  <Icon className={`w-[18px] h-[18px] ${isActive ? 'text-white' : 'text-[#94a3b8]'}`} />
-                  <span>{item.label}</span>
+                <div className={`flex items-center gap-3.5 ${isCollapsed ? 'md:gap-0' : ''}`}>
+                  <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-white' : 'text-[#94a3b8]'}`} />
+                  <span className={`transition-all duration-200 ${isCollapsed ? 'md:hidden' : ''}`}>{item.label}</span>
                 </div>
-                {item.badge && (
+                {item.badge && !isCollapsed && (
                   <span className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-full ${
                     isActive ? 'bg-white text-[#0F9D8A]' : 'bg-[#EF4444] text-white'
                   }`}>
                     {item.badge}
                   </span>
+                )}
+                {item.badge && isCollapsed && (
+                  <span className="hidden md:flex absolute top-1 right-1 w-3 h-3 bg-[#EF4444] rounded-full border border-white" />
                 )}
               </button>
             );
@@ -105,14 +113,19 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) 
       {/* Logout Button */}
       <div className="pt-4 border-t border-[#E5E7EB]">
         <button 
-          onClick={logout} 
-          className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-xl font-medium text-sm text-[#475569] hover:bg-rose-50 hover:text-rose-600 transition-all duration-200"
+          onClick={logout}
+          title={isCollapsed ? 'Logout' : undefined}
+          className={`w-full flex items-center gap-3.5 rounded-xl font-medium text-sm text-[#475569] hover:bg-rose-50 hover:text-rose-600 transition-all duration-200
+            ${isCollapsed ? 'md:justify-center md:px-0 md:py-3' : ''}
+            px-4 py-3.5
+          `}
         >
-          <LogOut className="w-[18px] h-[18px] text-[#94a3b8] group-hover:text-rose-600" />
-          <span>Logout</span>
+          <LogOut className="w-[18px] h-[18px] text-[#94a3b8] shrink-0" />
+          <span className={`transition-all duration-200 ${isCollapsed ? 'md:hidden' : ''}`}>Logout</span>
         </button>
       </div>
     </aside>
     </>
   );
 }
+

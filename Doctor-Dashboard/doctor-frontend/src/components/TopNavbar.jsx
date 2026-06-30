@@ -30,11 +30,12 @@ export default function TopNavbar({ searchQuery, setSearchQuery, queue, onDiagno
   return (
     <header className="w-full h-[90px] bg-white border-b border-[#E5E7EB] flex items-center justify-between px-4 md:px-8 shrink-0 font-sans">
       {/* Search & Toggle Menu */}
-      <div className="flex items-center gap-6 flex-1">
+      <div className="flex items-center gap-4 flex-1">
         <button 
-          className="p-2 hover:bg-slate-50 rounded-lg text-[#475569] transition-all md:hidden"
+          className="p-2 hover:bg-slate-100 rounded-lg text-[#475569] transition-all duration-200 shrink-0"
           onClick={onToggleSidebar}
           aria-label="Toggle sidebar menu"
+          title="Toggle sidebar"
         >
           <Menu className="w-5 h-5 text-[#0B1F3A]" />
         </button>
