@@ -12,8 +12,16 @@ const protect = async (req, res, next) => {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer '))
     return res.status(401).json({ success: false, message: 'Not authorized, no token' });
+
+  const token = auth.split(' ')[1];
+  let decoded;
   try {
-    const decoded    = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
+  }
+
+  try {
     if (decoded.role !== 'PATIENT')
       return res.status(403).json({ success: false, message: 'Not authorized for this portal' });
 
@@ -37,11 +45,11 @@ const protect = async (req, res, next) => {
     req.user = user; req.hospitalId = parseInt(hospitalId); req.db = db; req.models = models;
     next();
   } catch (err) {
-    console.error('[AuthMiddleware] Error:', err.message);
+    console.error('[AuthMiddleware] Database/System error:', err.message);
     if (err.message === 'Hospital account is suspended') {
       return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
     }
-    return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
+    return res.status(500).json({ success: false, message: 'Internal server error resolving database or loading user context' });
   }
 };
 

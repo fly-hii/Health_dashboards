@@ -20,9 +20,15 @@ const protect = async (req, res, next) => {
   if (!auth?.startsWith('Bearer '))
     return res.status(401).json({ success: false, message: 'Not authorized, no token' });
 
+  const token = auth.split(' ')[1];
+  let decoded;
   try {
-    const token   = auth.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
+  }
+
+  try {
     // Hospital Admin portal: only hospital staff roles allowed
     // SUPER_ADMIN must use the Super Admin portal (port 5000)
     const HOSPITAL_ALLOWED_ROLES = ['HOSPITAL_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'PHARMACIST', 'LAB_TECHNICIAN', 'PATIENT'];
@@ -53,11 +59,11 @@ const protect = async (req, res, next) => {
     req.models     = models;
     next();
   } catch (err) {
-    console.error('Auth error:', err.message);
+    console.error('Database/System Auth error:', err.message);
     if (err.message === 'Hospital account is suspended') {
       return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
     }
-    return res.status(401).json({ success: false, message: 'Not authorized, token failed' });
+    return res.status(500).json({ success: false, message: 'Internal server error resolving database or loading user context' });
   }
 };
 
