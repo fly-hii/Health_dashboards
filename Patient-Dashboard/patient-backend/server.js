@@ -649,7 +649,7 @@ app.get('/api/appointments', protect, async (req, res) => {
           apptId: `APT${String(a.id).padStart(4, '0')}`,
           doctor: a.doctor?.name ? `Dr. ${a.doctor.name}` : 'Doctor',
           department: deptName,
-          dateTime: a.date_time ? new Date(a.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+          dateTime: a.date_time ? new Date(a.date_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '',
           tokenNumber: a.token_number,
           status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
           rawStatus: a.status,
@@ -705,8 +705,8 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
           doctorName: a.doctor ? `Dr. ${a.doctor.name}` : 'Doctor',
           doctorAvatar: a.doctor?.profile_image || `https://api.dicebear.com/7.x/adventurer/svg?seed=${a.doctor?.name}`,
           department: deptName,
-          appointmentDate: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-          appointmentTime: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+          appointmentDate: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
+          appointmentTime: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '',
           tokenNumber: a.token_number,
           reason: a.reason || 'Routine checkup',
           status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
@@ -771,8 +771,8 @@ app.get('/api/patient/appointments/:id', protect, async (req, res) => {
         _id: appt.id,
         appointmentId: `APT${String(appt.id).padStart(4, '0')}`,
         department: deptName,
-        appointmentDate: appt.date_time ? new Date(appt.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-        appointmentTime: appt.date_time ? new Date(appt.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+        appointmentDate: appt.date_time ? new Date(appt.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
+        appointmentTime: appt.date_time ? new Date(appt.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '',
         tokenNumber: appt.token_number,
         status: appt.status === 'Completed' ? 'Completed' : (appt.status === 'Cancelled' || appt.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
         rawStatus: appt.status,
@@ -1092,7 +1092,7 @@ async function getAppointmentStatusAndTimeline(appt, connModels) {
     if (!date) return null;
     const d = new Date(date);
     if (isNaN(d.getTime())) return null;
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
   };
 
   const timeline = {
@@ -1968,7 +1968,7 @@ app.get('/api/patient/notifications/:id', protect, async (req, res) => {
             _id: plainAppt.id,
             id: plainAppt.id,
             appointmentDate: plainAppt.date_time,
-            appointmentTime: plainAppt.date_time ? new Date(plainAppt.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+            appointmentTime: plainAppt.date_time ? new Date(plainAppt.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '',
             department: deptName,
             status: plainAppt.status,
             reason: plainAppt.reason,
@@ -2108,8 +2108,8 @@ app.get('/api/history', protect, async (req, res) => {
           doctorAvatar: a.doctor?.profile_image || null,
           department: deptName,
           specialization: a.doctor?.specialization || deptName,
-          date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-          time: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+          date: a.date_time ? new Date(a.date_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '',
+          time: a.date_time ? new Date(a.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : '',
           diagnosis: a.reason || 'Routine Consultation',
           notes: a.notes || '',
           status: 'Completed',

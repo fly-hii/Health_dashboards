@@ -304,7 +304,7 @@ const getDashboardSchedule = async (req, res) => {
 
     const mapped = appointments.map(appt => {
       const dt = new Date(appt.date_time);
-      let timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      let timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
       
       let status = 'waiting';
       if (appt.status === 'In-Progress') status = 'in_progress';

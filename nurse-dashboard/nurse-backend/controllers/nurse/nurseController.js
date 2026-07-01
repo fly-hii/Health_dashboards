@@ -140,7 +140,7 @@ const getPatientQueue = async (req, res, next) => {
       json.status = mapStatus(json.status);
       json.appointmentDate = json.date_time;
       json.appointmentTime = json.date_time
-        ? new Date(json.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        ? new Date(json.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })
         : null;
       json.tokenNumber = json.token_number;
       json.department = json.doctor?.department || json.department || 'OPD';
@@ -210,7 +210,7 @@ const getAppointmentDetails = async (req, res, next) => {
     json._id = json.id;
     json.appointmentDate = json.date_time;
     json.appointmentTime = json.date_time
-      ? new Date(json.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      ? new Date(json.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })
       : null;
     json.tokenNumber = json.token_number;
     json.department = json.doctor?.department || json.department || 'OPD';
@@ -314,7 +314,7 @@ const getPatientProfile = async (req, res, next) => {
         _id: j.id,
         appointmentDate: j.date_time,
         appointmentTime: j.date_time
-          ? new Date(j.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          ? new Date(j.date_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })
           : null,
         department: j.department,
         tokenNumber: j.token_number,
