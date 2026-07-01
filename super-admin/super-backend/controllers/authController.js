@@ -355,6 +355,8 @@ const registerHospitalPublic = async (req, res) => {
           plan ENUM('basic', 'standard', 'premium', 'enterprise') DEFAULT 'basic',
           plan_expires_at DATETIME,
           max_users INT DEFAULT 10,
+          max_patients INT DEFAULT 500,
+          database_type ENUM('shared', 'external') DEFAULT 'shared',
           settings JSON,
           created_at DATETIME NOT NULL,
           updated_at DATETIME NOT NULL
@@ -411,8 +413,8 @@ const registerHospitalPublic = async (req, res) => {
 
       // 4. Insert hospital row in BYOD DB
       await externalDb.query(
-        `INSERT INTO hospitals (id, name, code, email, phone, address, city, state, country, plan, status, plan_expires_at, max_users, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        `INSERT INTO hospitals (id, name, code, email, phone, address, city, state, country, plan, status, plan_expires_at, max_users, max_patients, database_type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         {
           replacements: [
             hospital.id,
@@ -427,7 +429,9 @@ const registerHospitalPublic = async (req, res) => {
             plan,
             'active',
             planExpiresAt,
-            maxUsers
+            maxUsers,
+            500, // max_patients default
+            database_type
           ]
         }
       );
