@@ -205,7 +205,7 @@ async function getHospitalConnection(hospitalId) {
   // Auto-sync HMS schema on first connection (non-destructive)
   const { createModels } = require('./modelFactory');
   const models = createModels(externalDb);
-  await externalDb.sync({ force: false, alter: false });
+  await externalDb.sync({ force: false, alter: true });
   console.log(`[DB Resolver] External DB connected + synced for hospital ${id} (${conn.database_name}@${conn.host})`);
 
   connectionCache.set(id, {

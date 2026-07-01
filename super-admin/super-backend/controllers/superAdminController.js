@@ -187,7 +187,7 @@ const createHospital = async (req, res) => {
         await externalDb.authenticate();
         const { createModels } = require('../../../hospital-admin/admin-backend/services/modelFactory');
         const models = createModels(externalDb);
-        await externalDb.sync({ force: false, alter: false });
+        await externalDb.sync({ force: false, alter: true });
 
         // Insert hospital
         await models.Hospital.create({
