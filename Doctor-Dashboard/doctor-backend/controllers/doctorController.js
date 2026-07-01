@@ -171,6 +171,35 @@ const login = async (req, res) => {
         models = createModels(db);
       }
     }
+    
+    if (!hospitalCode && !user) {
+      try {
+        const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+        const { Sequelize } = require('sequelize');
+        for (const conn of connections) {
+          try {
+            const decryptedPassword = decrypt(conn.password_encrypted);
+            const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+              host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+              dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+            });
+            const [users] = await externalDb.query("SELECT * FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+            await externalDb.close();
+            if (users && users.length > 0) {
+              const matchedUser = users[0];
+              const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, matchedUser.password);
+              if (ok) {
+                resolvedHospitalId = conn.hospital_id;
+                db = await getHospitalConnection(resolvedHospitalId);
+                models = createModels(db);
+                user = await models.User.findByPk(matchedUser.id);
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
 
     if (!user) {
       const existsElsewhere = await checkUserInOtherPortals(email, password, otp);

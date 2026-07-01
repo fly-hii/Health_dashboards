@@ -432,6 +432,43 @@ router.post('/auth/login', async (req, res) => {
       }
     }
 
+    if (!hospitalCode && !user) {
+      try {
+        const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+        const { Sequelize } = require('sequelize');
+        const { decrypt } = require('../services/encryptionService');
+        const isOtpValid = (id, code) => {
+          const record = _loginOtpStore.get(id.toLowerCase());
+          return record && record.otp === code.toString() && Date.now() <= record.expiresAt;
+        };
+        for (const conn of connections) {
+          try {
+            const decryptedPassword = decrypt(conn.password_encrypted);
+            const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+              host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+              dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+            });
+            const [users] = await externalDb.query(
+              "SELECT * FROM users WHERE email = ? OR employee_id = ? LIMIT 1",
+              { replacements: [storeId.toLowerCase(), storeId] }
+            );
+            await externalDb.close();
+            if (users && users.length > 0) {
+              const matchedUser = users[0];
+              const ok = otp ? isOtpValid(storeId, otp) : (password ? await bcrypt.compare(password, matchedUser.password) : false);
+              if (ok) {
+                resolvedHospitalId = conn.hospital_id;
+                db = await getHospitalConnection(resolvedHospitalId);
+                models = createModels(db);
+                user = await models.User.findByPk(matchedUser.id);
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
     if (!user) {
       const existsElsewhere = await checkUserInOtherPortals(storeId, password, otp);
       if (existsElsewhere) {

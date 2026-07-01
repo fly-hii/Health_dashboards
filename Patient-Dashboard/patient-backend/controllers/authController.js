@@ -233,7 +233,40 @@ const login = async (req, res) => {
       db = await getHospitalConnection(resolvedHospitalId);
       models = createModels(db);
     }
-
+    
+    if (!patient) {
+      try {
+        const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
+        const { Sequelize } = require('sequelize');
+        const { decrypt } = require('../services/encryptionService');
+        for (const conn of connections) {
+          try {
+            const decryptedPassword = decrypt(conn.password_encrypted);
+            const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+              host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
+              dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+            });
+            const [patients] = await externalDb.query(
+              "SELECT * FROM patients WHERE email = ? OR phone = ? LIMIT 1",
+              { replacements: [email || null, mobileNumber || null] }
+            );
+            await externalDb.close();
+            if (patients && patients.length > 0) {
+              const matchedPatient = patients[0];
+              const ok = await bcrypt.compare(password, matchedPatient.password);
+              if (ok) {
+                resolvedHospitalId = conn.hospital_id;
+                db = await getHospitalConnection(resolvedHospitalId);
+                models = createModels(db);
+                patient = await models.Patient.findByPk(matchedPatient.id);
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+    
     if (!patient) {
       if (email) {
         const existsElsewhere = await checkUserInOtherPortals(email, password);
