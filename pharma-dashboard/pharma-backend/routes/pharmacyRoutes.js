@@ -798,7 +798,7 @@ router.get('/prescriptions/:id', protect, async (req, res) => {
         name: order.prescription?.doctor?.name || 'Dr. Rohit Mehta',
         department: order.prescription?.doctor?.department || 'General Medicine'
       },
-      visitDate: order.prescription?.created_at || order.created_at,
+      visitDate: order.prescription?.createdAt || order.prescription?.created_at || order.createdAt || order.created_at,
       medicines: order.prescription?.medicines?.map(med => ({
         name: med.name,
         dosage: med.dosage,
@@ -1082,7 +1082,7 @@ router.get('/notifications', protect, async (req, res) => {
         title: json.title,
         message: json.message,
         isRead: json.status === 'read',
-        createdAt: json.created_at,
+        createdAt: json.createdAt || json.created_at,
       };
     });
     res.json(mapped);
