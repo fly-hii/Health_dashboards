@@ -261,7 +261,7 @@ export default function HospitalDetailPage() {
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                         <span style={{ textTransform: 'capitalize' }}>{s.plan}</span>
                         <span className={`badge badge-${STATUS_BADGE[s.status] || 'warning'}`} style={{ fontSize: 10 }}>{s.status}</span>
-                        <span className="text-muted">{new Date(s.created_at).toLocaleDateString()}</span>
+                        <span className="text-muted">{new Date(s.createdAt || s.created_at).toLocaleDateString()}</span>
                       </div>
                     ))}
                   </div>
@@ -384,7 +384,7 @@ export default function HospitalDetailPage() {
                   </td></tr>
                 ) : payments.map((p, i) => (
                   <tr key={i}>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{new Date(p.created_at).toLocaleDateString()}</td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{new Date(p.createdAt || p.created_at).toLocaleDateString()}</td>
                     <td style={{ fontWeight: 600 }}>₹{parseFloat(p.amount || 0).toLocaleString()}</td>
                     <td style={{ fontSize: 13 }}>{p.payment_method || '—'}</td>
                     <td><span className={`badge badge-${p.status === 'success' ? 'success' : 'danger'}`}>{p.status}</span></td>

@@ -181,7 +181,7 @@ export default function DashboardPage() {
                       <td><span className={`badge badge-${STATUS[h.status] || 'warning'}`}>{h.status}</span></td>
                       <td>{h.user_count || 0}</td>
                       <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                        {new Date(h.created_at).toLocaleDateString()}
+                        {new Date(h.createdAt || h.created_at).toLocaleDateString()}
                       </td>
                       <td>
                         <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/hospitals/${h.id}`)}>

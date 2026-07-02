@@ -130,7 +130,7 @@ function ReportPreviewModal({ report, profile, onClose }) {
         <div className="preview-modal-header">
           <div className="text-left">
             <h3>{report.reportName || report.title || report.name || report.file_name || 'Report'}</h3>
-            <p>Uploaded on {report.reportDate || report.date || (report.created_at ? new Date(report.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')} &bull; Size: {report.fileSize || (report.file_size ? (report.file_size / 1024).toFixed(1) + ' KB' : '') || report.size || 'N/A'}</p>
+            <p>Uploaded on {report.reportDate || report.date || (report.createdAt || report.created_at ? new Date(report.createdAt || report.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')} &bull; Size: {report.fileSize || (report.file_size ? (report.file_size / 1024).toFixed(1) + ' KB' : '') || report.size || 'N/A'}</p>
           </div>
           <button onClick={onClose} className="preview-close-btn-circle" title="Close">
             <XIcon />
@@ -470,7 +470,7 @@ export default function ReportsView({ reports, profile, onUploadSuccess }) {
                   </div>
                   <div className="report-header-text">
                     <h4 className="report-title-txt" title={reportNameStr}>{reportNameStr}</h4>
-                    <p className="report-date-txt">{rep.reportDate || rep.date || (rep.created_at ? new Date(rep.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')}</p>
+                    <p className="report-date-txt">{rep.reportDate || rep.date || (rep.createdAt || rep.created_at ? new Date(rep.createdAt || rep.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')}</p>
                   </div>
                   <button 
                     onClick={() => handleDownload(rep)}

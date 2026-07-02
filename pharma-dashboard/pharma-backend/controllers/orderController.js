@@ -217,7 +217,21 @@ const getDashboardStats = async (req, res) => {
     const pendingOrders = await PharmacyOrder.count({ where: { hospital_id: req.hospitalId, status: 'Pending' } });
     const processingOrders = await PharmacyOrder.count({ where: { hospital_id: req.hospitalId, status: 'Processing' } });
     const readyOrders = await PharmacyOrder.count({ where: { hospital_id: req.hospitalId, status: 'Ready' } });
-    const deliveredOrders = await PharmacyOrder.count({ where: { hospital_id: req.hospitalId, status: 'Delivered' } });
+    // Filter delivered orders count by today's date
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const deliveredOrders = await PharmacyOrder.count({
+      where: {
+        hospital_id: req.hospitalId,
+        status: 'Delivered',
+        delivered_at: {
+          [Op.between]: [startOfToday, endOfToday]
+        }
+      }
+    });
 
     // Aggregate revenue
     const revenueSum = await PharmacyOrder.sum('total_amount', {

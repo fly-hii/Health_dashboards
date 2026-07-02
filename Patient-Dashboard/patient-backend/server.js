@@ -711,7 +711,7 @@ app.get('/api/patient/appointments', protect, async (req, res) => {
           reason: a.reason || 'Routine checkup',
           status: a.status === 'Completed' ? 'Completed' : (a.status === 'Cancelled' || a.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
           rawStatus: a.status,
-          createdAt: a.created_at,
+          createdAt: a.createdAt || a.created_at,
           hospitalId: conn.hospitalId,
           hospitalName: conn.hospitalName
         };
@@ -776,7 +776,7 @@ app.get('/api/patient/appointments/:id', protect, async (req, res) => {
         tokenNumber: appt.token_number,
         status: appt.status === 'Completed' ? 'Completed' : (appt.status === 'Cancelled' || appt.status === 'No-Show') ? 'Cancelled' : 'Upcoming',
         rawStatus: appt.status,
-        createdAt: appt.created_at,
+        createdAt: appt.createdAt || appt.created_at,
       },
       doctor: {
         _id: appt.doctor?.id,
@@ -1476,7 +1476,7 @@ app.get('/api/prescriptions', protect, async (req, res) => {
       const mapped = prescriptions.map(p => ({
         id: `PR${String(p.id).padStart(4, '0')}`,
         doctor: p.doctor,
-        date: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        date: (p.createdAt || p.created_at) ? new Date(p.createdAt || p.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         medicines: p.medicines ? p.medicines.map(m => `${m.name} - ${m.dosage} (${m.frequency}, ${m.duration})`) : [],
         medicineCount: p.medicines ? p.medicines.length : 0,
         instructions: p.instructions || '',
@@ -1512,7 +1512,7 @@ app.get('/api/reports', protect, async (req, res) => {
     }
 
     // Sort by created_at descending
-    allReports.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    allReports.sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at));
 
     res.json({ success: true, data: allReports });
   } catch (error) {
@@ -1758,7 +1758,7 @@ app.get('/api/notifications', protect, async (req, res) => {
     }
 
     // Sort by created_at descending
-    allNotifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    allNotifications.sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at));
 
     res.json({ success: true, data: allNotifications.slice(0, 50) });
   } catch (error) {
@@ -1880,7 +1880,7 @@ app.get('/api/patient/notifications', protect, async (req, res) => {
         read: n.status === 'read',
         priority: n.priority || 'medium',
         metadata: n.metadata || {},
-        createdAt: n.created_at,
+        createdAt: n.createdAt || n.created_at,
         hospitalId: conn.hospitalId,
         hospitalName: conn.hospitalName,
       }));
@@ -2147,7 +2147,7 @@ app.get('/api/pharmacy/orders', protect, async (req, res) => {
     }
 
     // Sort orders by created_at descending
-    allOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    allOrders.sort((a, b) => new Date(b.createdAt || b.created_at) - new Date(a.createdAt || a.created_at));
 
     res.json({ success: true, data: allOrders });
   } catch (error) {
