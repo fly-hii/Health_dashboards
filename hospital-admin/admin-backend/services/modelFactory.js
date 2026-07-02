@@ -19,7 +19,16 @@ let DataTypes;
 try {
   DataTypes = require('sequelize').DataTypes;
 } catch (err) {
-  DataTypes = require.main.require('sequelize').DataTypes;
+  try {
+    const seqPath = require.resolve('sequelize', { paths: [process.cwd()] });
+    DataTypes = require(seqPath).DataTypes;
+  } catch (err2) {
+    try {
+      DataTypes = require.main.require('sequelize').DataTypes;
+    } catch (err3) {
+      throw new Error("Could not resolve 'sequelize' in modelFactory.js: " + err3.message);
+    }
+  }
 }
 
 // Model cache: WeakMap<sequelizeInstance, models>
