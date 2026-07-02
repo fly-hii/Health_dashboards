@@ -25,8 +25,8 @@ const DEFAULT_PLANS = [
     sort_order: 2,
   },
   {
-    plan_key: 'premium',
-    name: 'Premium Suite',
+    plan_key: 'enterprise',
+    name: 'Enterprise Plan',
     price: 699,
     currency: 'USD',
     description: 'For large hospital networks and medical groups.',

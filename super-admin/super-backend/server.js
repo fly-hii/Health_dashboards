@@ -52,7 +52,7 @@ app.use('/api/super',  require('./routes/superAdminRoutes'));
 app.use('/api/public', require('./routes/publicRoutes'));
 
 app.get('/health', (req, res) => res.json({
-  status: 'healthy', service: 'CarePlus Super Admin API v3.0.2',
+  status: 'healthy', service: 'CarePlus Super Admin API v3.0.3',
   masterDb: process.env.MASTER_DB_NAME,
   saasDb: process.env.SAAS_DB_NAME,
   timestamp: new Date(),
