@@ -640,7 +640,7 @@ router.get('/profile', protect, async (req, res) => {
     name: json.name,
     email: json.email,
     employeeId: json.employee_id,
-    role: json.role,
+    role: json.specialization || 'Pharmacist',
     phone: json.phone,
     profilePhoto: json.profile_image,
     storeLocation: json.address || '',
@@ -655,7 +655,7 @@ router.put('/profile', protect, async (req, res) => {
       email: email !== undefined ? (email || req.user.email) : req.user.email,
       phone: phone !== undefined ? (phone || req.user.phone) : req.user.phone,
       profile_image: profilePhoto !== undefined ? (profilePhoto || req.user.profile_image) : req.user.profile_image,
-      role: role !== undefined ? (role || req.user.role) : req.user.role,
+      specialization: role !== undefined ? role : req.user.specialization,
       address: storeLocation !== undefined ? storeLocation : req.user.address,
     });
     const json = req.user.toJSON();
@@ -666,7 +666,7 @@ router.put('/profile', protect, async (req, res) => {
       name: json.name,
       email: json.email,
       employeeId: json.employee_id,
-      role: json.role,
+      role: json.specialization || 'Pharmacist',
       phone: json.phone,
       profilePhoto: json.profile_image,
       storeLocation: json.address || '',

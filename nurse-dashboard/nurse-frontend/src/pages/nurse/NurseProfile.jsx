@@ -102,35 +102,44 @@ const NurseProfile = () => {
   const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load profile data from user object and localStorage
+  // Load profile data from user object
   useEffect(() => {
     if (user) {
-      setPersonalInfo(prev => ({
-        ...prev,
+      setPersonalInfo({
         name: user.name || '',
+        dob: user.dob || '1995-05-12',
+        gender: user.gender || 'Female',
+        phone: user.phone || '',
         email: user.email || '',
-        phone: user.phone || ''
-      }));
+        address: user.address || '123 Green Street, Hyderabad, Telangana - 500001'
+      });
       
-      setProfessionalInfo(prev => ({
-        ...prev,
+      setProfessionalInfo({
         employeeId: user.employeeId || '',
-        department: user.department || 'General Medicine'
-      }));
+        department: user.department || 'General Medicine',
+        designation: user.designation || 'Senior Staff Nurse',
+        employeeType: user.employeeType || 'Full Time',
+        joiningDate: user.joiningDate || '2022-03-15',
+        shiftTiming: user.shiftTiming || '09:00 AM – 06:00 PM',
+        licenseNumber: user.licenseNumber || 'RN-458721',
+        emergencyContact: user.emergencyContact || '+91 9876543211',
+        accountStatus: user.status || 'Active'
+      });
+
+      setAccountSettings({
+        username: user.username || 'nurseanjali',
+        is2faEnabled: user.is2faEnabled ?? false
+      });
 
       setAvatar(getImageUrl(user.avatar) || DEFAULT_AVATAR);
-
     }
 
-    // Load extra local details from localStorage
+    // Load extra local preferences from localStorage
     const storageKey = user ? `nurse_profile_details_${user.email || user.id}` : 'nurse_profile_details';
     const savedDetails = localStorage.getItem(storageKey);
     if (savedDetails) {
       try {
         const details = JSON.parse(savedDetails);
-        if (details.personal) setPersonalInfo(p => ({ ...p, ...details.personal }));
-        if (details.professional) setProfessionalInfo(p => ({ ...p, ...details.professional }));
-        if (details.account) setAccountSettings(a => ({ ...a, ...details.account }));
         if (details.notifications) setNotificationPrefs(n => ({ ...n, ...details.notifications }));
         if (details.system) setSystemPrefs(s => ({ ...s, ...details.system }));
       } catch (err) {
@@ -203,18 +212,26 @@ const NurseProfile = () => {
       const res = await authService.updateProfile({
         name: personalInfo.name,
         phone: personalInfo.phone,
+        dob: personalInfo.dob,
+        gender: personalInfo.gender,
+        address: personalInfo.address,
         department: professionalInfo.department,
+        designation: professionalInfo.designation,
+        employeeType: professionalInfo.employeeType,
+        joiningDate: professionalInfo.joiningDate,
+        shiftTiming: professionalInfo.shiftTiming,
+        licenseNumber: professionalInfo.licenseNumber,
+        emergencyContact: professionalInfo.emergencyContact,
+        username: accountSettings.username,
+        is2faEnabled: accountSettings.is2faEnabled,
         avatar: avatar !== DEFAULT_AVATAR ? avatar : ''
       });
       
       // Update global context user state
       updateUser(res.data.user);
 
-      // 2. Save mock/extra fields to localStorage for persistent state
+      // 2. Save preferences to localStorage
       const extraDetails = {
-        personal: personalInfo,
-        professional: professionalInfo,
-        account: accountSettings,
         notifications: notificationPrefs,
         system: systemPrefs
       };
@@ -234,26 +251,26 @@ const NurseProfile = () => {
     if (user) {
       setPersonalInfo({
         name: user.name || '',
-        dob: '1995-05-12',
-        gender: 'Female',
+        dob: user.dob || '1995-05-12',
+        gender: user.gender || 'Female',
         phone: user.phone || '',
         email: user.email || '',
-        address: '123 Green Street, Hyderabad, Telangana - 500001'
+        address: user.address || '123 Green Street, Hyderabad, Telangana - 500001'
       });
       setProfessionalInfo({
-        employeeId: user.employeeId || 'NUR102',
+        employeeId: user.employeeId || '',
         department: user.department || 'General Medicine',
-        designation: 'Senior Staff Nurse',
-        employeeType: 'Full Time',
-        joiningDate: '2022-03-15',
-        shiftTiming: '09:00 AM – 06:00 PM',
-        licenseNumber: 'RN-458721',
-        emergencyContact: '+91 9876543211',
-        accountStatus: 'Active'
+        designation: user.designation || 'Senior Staff Nurse',
+        employeeType: user.employeeType || 'Full Time',
+        joiningDate: user.joiningDate || '2022-03-15',
+        shiftTiming: user.shiftTiming || '09:00 AM – 06:00 PM',
+        licenseNumber: user.licenseNumber || 'RN-458721',
+        emergencyContact: user.emergencyContact || '+91 9876543211',
+        accountStatus: user.status || 'Active'
       });
       setAccountSettings({
-        username: 'nurseanjali',
-        is2faEnabled: false
+        username: user.username || 'nurseanjali',
+        is2faEnabled: user.is2faEnabled ?? false
       });
       setNotificationPrefs({
         appointmentUpdates: true,

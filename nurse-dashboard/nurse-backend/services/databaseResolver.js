@@ -171,6 +171,7 @@ async function getHospitalConnection(hospitalId) {
   // Auto-sync HMS schema on first connection (non-destructive)
   const { createModels } = require('./modelFactory');
   const models = createModels(externalDb);
+  await ensureUserColumns(externalDb).catch(err => console.error('[DB Resolver] Failed ensureUserColumns on external DB:', err));
   // Schema synchronization is handled during registration/updates to avoid runtime overhead
   console.log(`[DB Resolver] External DB connected for hospital ${id} (${conn.database_name}@${conn.host})`);
 
@@ -252,9 +253,40 @@ async function initConnections() {
     } catch (colErr) {
       console.warn('⚠️ [DB Resolver] Failed to check/add columns to vitals table:', colErr.message);
     }
+    
+    // Check and add missing columns to users table
+    await ensureUserColumns(sharedSaasDb).catch(err => console.error('[DB Resolver] Failed ensureUserColumns on SaaS DB:', err));
   } catch (err) {
     console.error('❌ [DB Resolver] DB init failed:', err.message);
     throw err;
+  }
+}
+
+/**
+ * Dynamically check and add missing columns to users table.
+ */
+async function ensureUserColumns(sequelize) {
+  try {
+    const [columns] = await sequelize.query("SHOW COLUMNS FROM users");
+    const existing = new Set(columns.map(c => c.Field));
+    const toAdd = [];
+    if (!existing.has('dob')) toAdd.push("ADD COLUMN dob DATE NULL");
+    if (!existing.has('gender')) toAdd.push("ADD COLUMN gender VARCHAR(50) NULL");
+    if (!existing.has('designation')) toAdd.push("ADD COLUMN designation VARCHAR(100) NULL");
+    if (!existing.has('employee_type')) toAdd.push("ADD COLUMN employee_type VARCHAR(100) NULL");
+    if (!existing.has('joining_date')) toAdd.push("ADD COLUMN joining_date DATE NULL");
+    if (!existing.has('shift_timing')) toAdd.push("ADD COLUMN shift_timing VARCHAR(100) NULL");
+    if (!existing.has('license_number')) toAdd.push("ADD COLUMN license_number VARCHAR(100) NULL");
+    if (!existing.has('emergency_contact')) toAdd.push("ADD COLUMN emergency_contact VARCHAR(100) NULL");
+    if (!existing.has('username')) toAdd.push("ADD COLUMN username VARCHAR(100) NULL");
+    if (!existing.has('is_2fa_enabled')) toAdd.push("ADD COLUMN is_2fa_enabled TINYINT(1) DEFAULT 0");
+
+    if (toAdd.length > 0) {
+      await sequelize.query(`ALTER TABLE users ${toAdd.join(', ')}`);
+      console.log(`[DB Resolver] Added missing columns to users table: ${toAdd.length} columns`);
+    }
+  } catch (e) {
+    console.error('[DB Resolver] Failed to check/alter users columns:', e);
   }
 }
 

@@ -312,10 +312,16 @@ const registerHospitalPublic = async (req, res) => {
     }
 
     // Map plan user limits
-    let maxUsers = 10;
-    if (plan === 'standard') maxUsers = 50;
-    else if (plan === 'premium') maxUsers = 200;
-    else if (plan === 'enterprise') maxUsers = 1000;
+    const PLAN_LIMITS = {
+      trial: { maxUsers: 10, maxPatients: 500 },
+      basic: { maxUsers: 5, maxPatients: 500 },
+      standard: { maxUsers: 25, maxPatients: 2000 },
+      premium: { maxUsers: 100, maxPatients: 10000 },
+      enterprise: { maxUsers: 9999, maxPatients: 999999 }
+    };
+    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.basic;
+    const maxUsers = limits.maxUsers;
+    const maxPatients = limits.maxPatients;
 
     // Create hospital record in careplus_master
     const hospital = await Hospital.create({
@@ -331,6 +337,7 @@ const registerHospitalPublic = async (req, res) => {
       status: 'active',
       plan_expires_at: planExpiresAt,
       max_users: maxUsers,
+      max_patients: maxPatients,
       database_type
     }, { transaction: t });
 
@@ -338,63 +345,10 @@ const registerHospitalPublic = async (req, res) => {
 
     // If external DB, build tables and insert records there
     if (database_type === 'external' && externalDb) {
-      // 1. Create hospitals table
-      await externalDb.query(`
-        CREATE TABLE IF NOT EXISTS hospitals (
-          id INT PRIMARY KEY AUTO_INCREMENT,
-          name VARCHAR(200) NOT NULL,
-          code VARCHAR(20) NOT NULL UNIQUE,
-          email VARCHAR(200) UNIQUE,
-          phone VARCHAR(20),
-          address TEXT,
-          city VARCHAR(100),
-          state VARCHAR(100),
-          country VARCHAR(100) DEFAULT 'India',
-          logo_url TEXT,
-          status ENUM('active', 'suspended', 'trial', 'expired') DEFAULT 'trial',
-          plan ENUM('basic', 'standard', 'premium', 'enterprise') DEFAULT 'basic',
-          plan_expires_at DATETIME,
-          max_users INT DEFAULT 10,
-          max_patients INT DEFAULT 500,
-          database_type ENUM('shared', 'external') DEFAULT 'shared',
-          settings JSON,
-          created_at DATETIME NOT NULL,
-          updated_at DATETIME NOT NULL
-        ) ENGINE=InnoDB;
-      `);
-
-      // 2. Create users table
-      await externalDb.query(`
-        CREATE TABLE IF NOT EXISTS users (
-          id INT PRIMARY KEY AUTO_INCREMENT,
-          hospital_id INT,
-          name VARCHAR(200) NOT NULL,
-          email VARCHAR(200) NOT NULL UNIQUE,
-          password VARCHAR(255) NOT NULL,
-          role ENUM('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'PHARMACIST', 'LAB_TECHNICIAN', 'PATIENT') NOT NULL DEFAULT 'HOSPITAL_ADMIN',
-          department VARCHAR(100) DEFAULT 'OTHERS',
-          status ENUM('Active', 'Inactive') DEFAULT 'Active',
-          phone VARCHAR(20),
-          profile_image TEXT,
-          address TEXT,
-          employee_id VARCHAR(50),
-          specialization VARCHAR(200),
-          experience INT,
-          qualification VARCHAR(200),
-          consultation_fee DECIMAL(10,2) DEFAULT NULL,
-          license_number VARCHAR(100) DEFAULT NULL,
-          bio TEXT DEFAULT NULL,
-          shift ENUM('Morning', 'Evening', 'Night') DEFAULT 'Morning',
-          schedule_days JSON,
-          schedule_start VARCHAR(20) DEFAULT '09:00 AM',
-          schedule_end VARCHAR(20) DEFAULT '05:00 PM',
-          availability_status ENUM('Available', 'On Leave', 'Busy') DEFAULT 'Available',
-          last_login DATETIME,
-          created_at DATETIME NOT NULL,
-          updated_at DATETIME NOT NULL,
-          FOREIGN KEY (hospital_id) REFERENCES hospitals(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB;
-      `);
+      // Sync all 17 HMS models/tables to external BYOD database
+      const { createModels } = require('../../../hospital-admin/admin-backend/services/modelFactory');
+      createModels(externalDb);
+      await externalDb.sync({ force: false, alter: true });
 
       // 3. Create db_connections record in careplus_master registry
       const encPwd = encrypt(db_password);
@@ -430,7 +384,7 @@ const registerHospitalPublic = async (req, res) => {
             'active',
             planExpiresAt,
             maxUsers,
-            500, // max_patients default
+            maxPatients,
             database_type
           ]
         }
@@ -447,8 +401,8 @@ const registerHospitalPublic = async (req, res) => {
     } else {
       // Insert Hospital row in sharedSaasDb to satisfy foreign key constraint
       await sharedSaasDb.query(
-        `INSERT INTO hospitals (id, name, code, email, phone, address, city, state, country, plan, status, plan_expires_at, max_users, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        `INSERT INTO hospitals (id, name, code, email, phone, address, city, state, country, plan, status, plan_expires_at, max_users, max_patients, database_type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'shared', NOW(), NOW())`,
         {
           replacements: [
             hospital.id,
@@ -463,7 +417,8 @@ const registerHospitalPublic = async (req, res) => {
             plan,
             'active',
             planExpiresAt,
-            maxUsers
+            maxUsers,
+            maxPatients
           ]
         }
       );

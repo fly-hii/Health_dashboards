@@ -145,7 +145,6 @@ export default function Sidebar({ isMinimized, isMobileOpen, setIsMobileOpen }) 
                     { name: 'Hospital Profile', path: '/admin/hospital-profile' },
                     { name: 'Department Management', path: '/admin/departments' },
                     { name: 'Staff Management', path: '/admin/staff' },
-                    { name: 'Hospital Settings', path: '/admin/hospital-settings' },
                   ].map((subItem) => {
                     const isActive = location.pathname === subItem.path;
                     return (

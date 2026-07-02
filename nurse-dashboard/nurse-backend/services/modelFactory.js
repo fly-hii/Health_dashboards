@@ -102,6 +102,46 @@ function createModels(sequelize) {
         this.setDataValue('employee_id', val);
       }
     },
+    dob:                  DataTypes.DATEONLY,
+    gender:               DataTypes.STRING(50),
+    designation:          DataTypes.STRING(100),
+    employee_type:        DataTypes.STRING(100),
+    employeeType: {
+      type: DataTypes.VIRTUAL,
+      get() { return this.getDataValue('employee_type'); },
+      set(val) { this.setDataValue('employee_type', val); }
+    },
+    joining_date:         DataTypes.DATEONLY,
+    joiningDate: {
+      type: DataTypes.VIRTUAL,
+      get() { return this.getDataValue('joining_date'); },
+      set(val) { this.setDataValue('joining_date', val); }
+    },
+    shift_timing:         DataTypes.STRING(100),
+    shiftTiming: {
+      type: DataTypes.VIRTUAL,
+      get() { return this.getDataValue('shift_timing'); },
+      set(val) { this.setDataValue('shift_timing', val); }
+    },
+    license_number:       DataTypes.STRING(100),
+    licenseNumber: {
+      type: DataTypes.VIRTUAL,
+      get() { return this.getDataValue('license_number'); },
+      set(val) { this.setDataValue('license_number', val); }
+    },
+    emergency_contact:    DataTypes.STRING(100),
+    emergencyContact: {
+      type: DataTypes.VIRTUAL,
+      get() { return this.getDataValue('emergency_contact'); },
+      set(val) { this.setDataValue('emergency_contact', val); }
+    },
+    username:             DataTypes.STRING(100),
+    is_2fa_enabled:       { type: DataTypes.BOOLEAN, defaultValue: false },
+    is2faEnabled: {
+      type: DataTypes.VIRTUAL,
+      get() { return this.getDataValue('is_2fa_enabled'); },
+      set(val) { this.setDataValue('is_2fa_enabled', val); }
+    },
     specialization:       DataTypes.STRING(200),
     experience:           DataTypes.INTEGER,
     qualification:        DataTypes.STRING(200),
