@@ -16,26 +16,32 @@
  *   const { Patient, Appointment } = models;
  */
 let DataTypes;
-try {
-  DataTypes = require('sequelize').DataTypes;
-} catch (err) {
-  try {
-    const seqPath = require.resolve('sequelize', { paths: [process.cwd()] });
-    DataTypes = require(seqPath).DataTypes;
-  } catch (err2) {
-    try {
-      DataTypes = require.main.require('sequelize').DataTypes;
-    } catch (err3) {
-      throw new Error("Could not resolve 'sequelize' in modelFactory.js: " + err3.message);
-    }
-  }
-}
 
 // Model cache: WeakMap<sequelizeInstance, models>
 // WeakMap allows garbage-collection when the Sequelize instance is evicted
 const modelCache = new WeakMap();
 
 function createModels(sequelize) {
+  if (!DataTypes) {
+    DataTypes = sequelize.constructor.DataTypes || (sequelize.Sequelize && sequelize.Sequelize.DataTypes);
+    if (!DataTypes) {
+      try {
+        DataTypes = require('sequelize').DataTypes;
+      } catch (err) {
+        try {
+          const seqPath = require.resolve('sequelize', { paths: [process.cwd()] });
+          DataTypes = require(seqPath).DataTypes;
+        } catch (err2) {
+          try {
+            DataTypes = require.main.require('sequelize').DataTypes;
+          } catch (err3) {
+            throw new Error("Could not resolve 'sequelize' in modelFactory.js: " + err3.message);
+          }
+        }
+      }
+    }
+  }
+
   // Return cached models for this exact connection
   if (modelCache.has(sequelize)) {
     return modelCache.get(sequelize);
