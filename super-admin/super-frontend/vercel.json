@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://health-dashboards-super-admin-backe.vercel.app/api/:path*"
+      "destination": "https://health-dashboards-2-super-admin.onrender.com/api/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
