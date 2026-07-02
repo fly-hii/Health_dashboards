@@ -101,15 +101,6 @@ function createModels(sequelize) {
     profile_image:        DataTypes.TEXT,
     address:              DataTypes.TEXT,
     employee_id:          DataTypes.STRING(50),
-    employeeId: {
-      type: DataTypes.VIRTUAL,
-      get() {
-        return this.getDataValue('employee_id');
-      },
-      set(val) {
-        this.setDataValue('employee_id', val);
-      }
-    },
     specialization:       DataTypes.STRING(200),
     experience:           DataTypes.INTEGER,
     qualification:        DataTypes.STRING(200),
@@ -122,7 +113,21 @@ function createModels(sequelize) {
     consultation_fee:     { type: DataTypes.DECIMAL(10, 2), defaultValue: null },
     license_number:       { type: DataTypes.STRING(100), defaultValue: null },
     bio:                  { type: DataTypes.TEXT, defaultValue: null },
-  }, { tableName: 'users', timestamps: true, underscored: true });
+  }, {
+    tableName: 'users',
+    timestamps: true,
+    underscored: true,
+    getterMethods: {
+      employeeId() {
+        return this.getDataValue('employee_id');
+      }
+    },
+    setterMethods: {
+      employeeId(val) {
+        this.setDataValue('employee_id', val);
+      }
+    }
+  });
 
   // ── Patient ───────────────────────────────────────────────────
   const Patient = sequelize.define('Patient', {
