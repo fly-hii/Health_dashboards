@@ -123,7 +123,8 @@ const NurseProfile = () => {
     }
 
     // Load extra local details from localStorage
-    const savedDetails = localStorage.getItem('nurse_profile_details');
+    const storageKey = user ? `nurse_profile_details_${user.email || user.id}` : 'nurse_profile_details';
+    const savedDetails = localStorage.getItem(storageKey);
     if (savedDetails) {
       try {
         const details = JSON.parse(savedDetails);
@@ -217,7 +218,8 @@ const NurseProfile = () => {
         notifications: notificationPrefs,
         system: systemPrefs
       };
-      localStorage.setItem('nurse_profile_details', JSON.stringify(extraDetails));
+      const storageKey = user ? `nurse_profile_details_${user.email || user.id}` : 'nurse_profile_details';
+      localStorage.setItem(storageKey, JSON.stringify(extraDetails));
 
       toast.success('Profile changes saved successfully!');
     } catch (err) {
@@ -266,7 +268,8 @@ const NurseProfile = () => {
         desktopNotifications: true
       });
       setAvatar(user.avatar || DEFAULT_AVATAR);
-      localStorage.removeItem('nurse_profile_details');
+      const storageKey = user ? `nurse_profile_details_${user.email || user.id}` : 'nurse_profile_details';
+      localStorage.removeItem(storageKey);
       toast.info('Form reset to initial account settings!');
     }
   };

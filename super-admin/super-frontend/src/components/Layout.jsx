@@ -6,11 +6,22 @@ import Sidebar from './Sidebar';
 export default function Layout() {
   const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('super_sidebar_collapsed') === 'true';
+  });
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed(prev => {
+      const newVal = !prev;
+      localStorage.setItem('super_sidebar_collapsed', String(newVal));
+      return newVal;
+    });
+  };
 
   if (!user) return <Navigate to="/login" replace />;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <button 
         className="mobile-menu-btn"
         onClick={() => setIsSidebarOpen(true)}
@@ -18,7 +29,12 @@ export default function Layout() {
       >
         ☰
       </button>
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        setIsOpen={setIsSidebarOpen} 
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
+      />
       <main className="main-content">
         <Outlet />
       </main>

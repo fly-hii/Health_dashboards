@@ -643,17 +643,20 @@ router.get('/profile', protect, async (req, res) => {
     role: json.role,
     phone: json.phone,
     profilePhoto: json.profile_image,
+    storeLocation: json.address || '',
   });
 });
 
 router.put('/profile', protect, async (req, res) => {
   try {
-    const { fullName, email, phone, profilePhoto } = req.body;
+    const { fullName, email, phone, profilePhoto, role, storeLocation } = req.body;
     await req.user.update({
-      name: fullName || req.user.name,
-      email: email || req.user.email,
-      phone: phone || req.user.phone,
-      profile_image: profilePhoto || req.user.profile_image,
+      name: fullName !== undefined ? (fullName || req.user.name) : req.user.name,
+      email: email !== undefined ? (email || req.user.email) : req.user.email,
+      phone: phone !== undefined ? (phone || req.user.phone) : req.user.phone,
+      profile_image: profilePhoto !== undefined ? (profilePhoto || req.user.profile_image) : req.user.profile_image,
+      role: role !== undefined ? (role || req.user.role) : req.user.role,
+      address: storeLocation !== undefined ? storeLocation : req.user.address,
     });
     const json = req.user.toJSON();
     res.json({
@@ -666,6 +669,7 @@ router.put('/profile', protect, async (req, res) => {
       role: json.role,
       phone: json.phone,
       profilePhoto: json.profile_image,
+      storeLocation: json.address || '',
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
