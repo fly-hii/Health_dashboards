@@ -27,7 +27,7 @@ if (!dbName || !dbUser || !dbHost) {
       dialect: 'mysql',
       dialectModule: require('mysql2'),
       logging: process.env.NODE_ENV === 'development' ? (sql) => console.log(`[SQL] ${sql}`) : false,
-      pool: { max: 10, min: 0, acquire: 30000, idle: 10000, evict: 10000 },
+      pool: { max: 2, min: 0, acquire: 30000, idle: 5000, evict: 5000 },
       dialectOptions: {
         connectTimeout: 60000,
         ...(process.env.DB_SSL === 'true' ? { ssl: { require: true, rejectUnauthorized: false } } : {})
