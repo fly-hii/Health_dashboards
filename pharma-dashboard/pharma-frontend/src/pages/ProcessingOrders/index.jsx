@@ -37,8 +37,10 @@ export default function ProcessingOrders() {
   const handleMarkReady = async (id) => {
     try {
       await api.patch(`/api/pharmacy/orders/${id}/status`, { status: 'Ready' });
-      toast.success('Order marked as Ready for pickup');
-      fetchOrders();
+      toast.success('Order marked as Ready for pickup. Redirecting...');
+      setTimeout(() => {
+        navigate('/pharmacy/orders/ready');
+      }, 2500);
     } catch (error) {
       toast.error('Failed to update order status');
     }

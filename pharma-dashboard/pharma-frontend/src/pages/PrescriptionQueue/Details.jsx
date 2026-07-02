@@ -77,7 +77,6 @@ export default function PrescriptionDetails() {
     if (status === 'Pending') return 'Processing';
     return null; // No further action from prescription queue
   };
-
   const handleStatusTransition = async () => {
     const nextStatus = getNextStatus(order.status);
     if (!nextStatus) return;
@@ -86,16 +85,16 @@ export default function PrescriptionDetails() {
     try {
       // Call endpoint to update state
       await api.put(`/api/pharmacy/prescriptions/${id}/status`, { status: nextStatus });
-      toast.success(`Prescription marked as ${nextStatus}`);
-      fetchOrderDetails();
+      toast.success(`Prescription marked as ${nextStatus}. Redirecting in 2 seconds...`);
+      setTimeout(() => {
+        navigate('/pharmacy/orders/processing');
+      }, 2500);
     } catch (err) {
       console.error(err);
       toast.error('Failed to update status');
-    } finally {
       setUpdating(false);
     }
   };
-
   const handlePrint = () => {
     window.print();
   };

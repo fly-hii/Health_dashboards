@@ -21,7 +21,11 @@ const isOtpValid = (email, otp) => {
   return record && record.otp === otp.toString() && Date.now() <= record.expiresAt;
 };
 
+// Simple in-memory cache to map email -> hospitalId to avoid slow sequential DB lookups
+const userHospitalCache = new Map();
+
 const checkUserInOtherPortals = async (email, password, otp) => {
+  const normEmail = email.toLowerCase();
   try {
     const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
     if (superAdmins && superAdmins.length > 0) {
@@ -47,33 +51,74 @@ const checkUserInOtherPortals = async (email, password, otp) => {
     }
   } catch (_) {}
 
+  // Check userHospitalCache first
+  if (userHospitalCache.has(normEmail)) {
+    const cachedHospitalId = userHospitalCache.get(normEmail);
+    const { getHospitalConnection } = require('../services/databaseResolver');
+    try {
+      const externalDb = await getHospitalConnection(cachedHospitalId);
+      const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+      if (users && users.length > 0) {
+        const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, users[0].password);
+        if (ok) return true;
+      }
+      const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+      if (patients && patients.length > 0) {
+        const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, patients[0].password);
+        if (ok) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   try {
     const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
     const { decrypt } = require('../services/encryptionService');
     const { getHospitalConnection } = require('../services/databaseResolver');
     const { Sequelize } = require('sequelize');
-    for (const conn of connections) {
+
+    const checkPromises = connections.map(async (conn) => {
+      let externalDb;
       try {
         const decryptedPassword = decrypt(conn.password_encrypted);
-        const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+        externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
           host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
-          dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+          dialectOptions: {
+            connectTimeout: 5000,
+            ...(conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+          },
+          pool: { max: 1, min: 0, acquire: 5000, idle: 1000 },
         });
-        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { 
+          replacements: [email],
+          timeout: 5000
+        });
         if (users && users.length > 0) {
+          userHospitalCache.set(normEmail, conn.hospital_id);
           const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, users[0].password);
-          await externalDb.close();
-          if (ok) return true;
+          await externalDb.close().catch(() => {});
+          if (ok) return { success: true };
+          return null;
         }
-        const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { replacements: [email] });
+        const [patients] = await externalDb.query("SELECT password FROM patients WHERE email = ? LIMIT 1", { 
+          replacements: [email],
+          timeout: 5000
+        });
+        await externalDb.close().catch(() => {});
         if (patients && patients.length > 0) {
+          userHospitalCache.set(normEmail, conn.hospital_id);
           const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, patients[0].password);
-          await externalDb.close();
-          if (ok) return true;
+          if (ok) return { success: true };
+          return null;
         }
-        await externalDb.close();
-      } catch (_) {}
-    }
+      } catch (_) {
+        if (externalDb) await externalDb.close().catch(() => {});
+      }
+      return null;
+    });
+
+    const results = await Promise.all(checkPromises);
+    if (results.some(r => r && r.success)) return true;
   } catch (_) {}
 
   return false;
@@ -141,31 +186,50 @@ const login = async (req, res) => {
       models = createModels(db);
       user = await models.User.findOne({ where: { email, hospital_id: resolvedHospitalId } });
     } else {
-      // Fallback: look up in shared database. Because the shared SaaS DB holds
-      // users from every hospital, the same email can exist under multiple
-      // tenants — resolving an arbitrary one would cross tenant boundaries.
-      // Require an explicit hospital code to disambiguate in that case.
-      const matches = await User.findAll({ where: { email } });
-      if (matches.length > 1) {
-        return res.status(409).json({
-          success: false,
-          message: 'This email is registered with multiple hospitals. Please provide your hospital code to sign in.',
-        });
-      }
-      user = matches[0] || null;
-      if (user) {
-        resolvedHospitalId = user.hospital_id;
-        // Verify hospital status in master registry
+      // Fallback: check cache first to avoid slow scan/queries
+      if (userHospitalCache.has(email.toLowerCase())) {
+        const cachedHospitalId = userHospitalCache.get(email.toLowerCase());
         const [hospRows] = await masterDb.query(
           'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
-          { replacements: [resolvedHospitalId] }
+          { replacements: [cachedHospitalId] }
         );
         const hospital = hospRows?.[0];
         if (hospital?.status === 'suspended') {
           return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
         }
+        resolvedHospitalId = cachedHospitalId;
         db = await getHospitalConnection(resolvedHospitalId);
         models = createModels(db);
+        user = await models.User.findOne({ where: { email, hospital_id: resolvedHospitalId } });
+      }
+
+      if (!user) {
+        // Fallback: look up in shared database. Because the shared SaaS DB holds
+        // users from every hospital, the same email can exist under multiple
+        // tenants — resolving an arbitrary one would cross tenant boundaries.
+        // Require an explicit hospital code to disambiguate in that case.
+        const matches = await User.findAll({ where: { email } });
+        if (matches.length > 1) {
+          return res.status(409).json({
+            success: false,
+            message: 'This email is registered with multiple hospitals. Please provide your hospital code to sign in.',
+          });
+        }
+        user = matches[0] || null;
+        if (user) {
+          resolvedHospitalId = user.hospital_id;
+          // Verify hospital status in master registry
+          const [hospRows] = await masterDb.query(
+            'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
+            { replacements: [resolvedHospitalId] }
+          );
+          const hospital = hospRows?.[0];
+          if (hospital?.status === 'suspended') {
+            return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
+          }
+          db = await getHospitalConnection(resolvedHospitalId);
+          models = createModels(db);
+        }
       }
     }
     
@@ -174,27 +238,46 @@ const login = async (req, res) => {
         const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
         const { Sequelize } = require('sequelize');
         const { decrypt } = require('../services/encryptionService');
-        for (const conn of connections) {
+        
+        const checkPromises = connections.map(async (conn) => {
+          let externalDb;
           try {
             const decryptedPassword = decrypt(conn.password_encrypted);
-            const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+            externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
               host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
-              dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+              dialectOptions: {
+                connectTimeout: 5000,
+                ...(conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+              },
+              pool: { max: 1, min: 0, acquire: 5000, idle: 1000 }
             });
-            const [users] = await externalDb.query("SELECT * FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
-            await externalDb.close();
+            const [users] = await externalDb.query("SELECT * FROM users WHERE email = ? LIMIT 1", { 
+              replacements: [email],
+              timeout: 5000
+            });
+            await externalDb.close().catch(() => {});
             if (users && users.length > 0) {
               const matchedUser = users[0];
+              userHospitalCache.set(email.toLowerCase(), conn.hospital_id);
+              
               const ok = otp ? isOtpValid(email, otp) : await bcrypt.compare(password, matchedUser.password);
               if (ok) {
-                resolvedHospitalId = conn.hospital_id;
-                db = await getHospitalConnection(resolvedHospitalId);
-                models = createModels(db);
-                user = await models.User.findByPk(matchedUser.id);
-                break;
+                return { conn, matchedUser };
               }
             }
-          } catch (_) {}
+          } catch (_) {
+            if (externalDb) await externalDb.close().catch(() => {});
+          }
+          return null;
+        });
+
+        const results = await Promise.all(checkPromises);
+        const match = results.find(r => r !== null);
+        if (match) {
+          resolvedHospitalId = match.conn.hospital_id;
+          db = await getHospitalConnection(resolvedHospitalId);
+          models = createModels(db);
+          user = await models.User.findByPk(match.matchedUser.id);
         }
       } catch (_) {}
     }

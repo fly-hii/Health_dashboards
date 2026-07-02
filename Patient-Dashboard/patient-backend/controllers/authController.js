@@ -17,7 +17,11 @@ const maskEmail = (email) => {
 };
 
 
+// Simple in-memory cache to map email/identifier -> hospitalId to avoid slow sequential DB lookups
+const userHospitalCache = new Map();
+
 const checkUserInOtherPortals = async (email, password) => {
+  const normEmail = email ? email.toLowerCase() : '';
   try {
     const [superAdmins] = await masterDb.query("SELECT password FROM super_admin_users WHERE email = ? LIMIT 1", { replacements: [email] });
     if (superAdmins && superAdmins.length > 0) {
@@ -35,27 +39,59 @@ const checkUserInOtherPortals = async (email, password) => {
     }
   } catch (_) {}
 
+  // Check userHospitalCache first
+  if (normEmail && userHospitalCache.has(normEmail)) {
+    const cachedHospitalId = userHospitalCache.get(normEmail);
+    const { getHospitalConnection } = require('../services/databaseResolver');
+    try {
+      const externalDb = await getHospitalConnection(cachedHospitalId);
+      const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+      if (users && users.length > 0) {
+        const ok = await bcrypt.compare(password, users[0].password);
+        if (ok) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   try {
     const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
     const { decrypt } = require('../services/encryptionService');
     const { getHospitalConnection } = require('../services/databaseResolver');
     const { Sequelize } = require('sequelize');
-    for (const conn of connections) {
+
+    const checkPromises = connections.map(async (conn) => {
+      let externalDb;
       try {
         const decryptedPassword = decrypt(conn.password_encrypted);
-        const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+        externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
           host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
-          dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+          dialectOptions: {
+            connectTimeout: 5000,
+            ...(conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+          },
+          pool: { max: 1, min: 0, acquire: 5000, idle: 1000 },
         });
-        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { replacements: [email] });
+        const [users] = await externalDb.query("SELECT password FROM users WHERE email = ? LIMIT 1", { 
+          replacements: [email],
+          timeout: 5000
+        });
+        await externalDb.close().catch(() => {});
         if (users && users.length > 0) {
+          if (normEmail) {
+            userHospitalCache.set(normEmail, conn.hospital_id);
+          }
           const ok = await bcrypt.compare(password, users[0].password);
-          await externalDb.close();
-          if (ok) return true;
+          if (ok) return { success: true };
         }
-        await externalDb.close();
-      } catch (_) {}
-    }
+      } catch (_) {
+        if (externalDb) await externalDb.close().catch(() => {});
+      }
+      return null;
+    });
+
+    const results = await Promise.all(checkPromises);
+    if (results.some(r => r && r.success)) return true;
   } catch (_) {}
 
   return false;
@@ -212,26 +248,46 @@ const login = async (req, res) => {
     let db, models;
     let patient;
 
-    // Look up patient across all hospitals — pick the most recently active record
-    // MySQL-compatible null-safe ordering: rows with NULL last_login sort last
-    const matches = await Patient.findAll({
-      where: lookup,
-      order: literal('ISNULL(last_login) ASC, last_login DESC'),
-    });
-    patient = matches[0] || null;
-    if (patient) {
-      resolvedHospitalId = patient.hospital_id;
-      // Verify hospital status in master registry
+    const cacheKey = email ? email.toLowerCase() : (mobileNumber ? `phone:${mobileNumber}` : null);
+
+    if (cacheKey && userHospitalCache.has(cacheKey)) {
+      const cachedHospitalId = userHospitalCache.get(cacheKey);
       const [hospRows] = await masterDb.query(
         'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
-        { replacements: [resolvedHospitalId] }
+        { replacements: [cachedHospitalId] }
       );
       const hospital = hospRows?.[0];
       if (hospital?.status === 'suspended') {
         return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
       }
+      resolvedHospitalId = cachedHospitalId;
       db = await getHospitalConnection(resolvedHospitalId);
       models = createModels(db);
+      patient = await models.Patient.findOne({ where: lookup });
+    }
+
+    if (!patient) {
+      // Look up patient across all hospitals — pick the most recently active record
+      // MySQL-compatible null-safe ordering: rows with NULL last_login sort last
+      const matches = await Patient.findAll({
+        where: lookup,
+        order: literal('ISNULL(last_login) ASC, last_login DESC'),
+      });
+      patient = matches[0] || null;
+      if (patient) {
+        resolvedHospitalId = patient.hospital_id;
+        // Verify hospital status in master registry
+        const [hospRows] = await masterDb.query(
+          'SELECT status FROM hospitals WHERE id = ? LIMIT 1',
+          { replacements: [resolvedHospitalId] }
+        );
+        const hospital = hospRows?.[0];
+        if (hospital?.status === 'suspended') {
+          return res.status(403).json({ success: false, message: 'Hospital account is suspended. Contact CarePlus support.' });
+        }
+        db = await getHospitalConnection(resolvedHospitalId);
+        models = createModels(db);
+      }
     }
     
     if (!patient) {
@@ -239,30 +295,50 @@ const login = async (req, res) => {
         const [connections] = await masterDb.query("SELECT * FROM db_connections WHERE is_active = 1");
         const { Sequelize } = require('sequelize');
         const { decrypt } = require('../services/encryptionService');
-        for (const conn of connections) {
+        
+        const checkPromises = connections.map(async (conn) => {
+          let externalDb;
           try {
             const decryptedPassword = decrypt(conn.password_encrypted);
-            const externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
+            externalDb = new Sequelize(conn.database_name, conn.username, decryptedPassword, {
               host: conn.host, port: conn.port || 3306, dialect: 'mysql', dialectModule: require('mysql2'), logging: false,
-              dialectOptions: conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {},
+              dialectOptions: {
+                connectTimeout: 5000,
+                ...(conn.ssl_enabled ? { ssl: { require: true, rejectUnauthorized: false } } : {})
+              },
+              pool: { max: 1, min: 0, acquire: 5000, idle: 1000 }
             });
             const [patients] = await externalDb.query(
               "SELECT * FROM patients WHERE email = ? OR phone = ? LIMIT 1",
-              { replacements: [email || null, mobileNumber || null] }
+              { replacements: [email || null, mobileNumber || null], timeout: 5000 }
             );
-            await externalDb.close();
+            await externalDb.close().catch(() => {});
             if (patients && patients.length > 0) {
               const matchedPatient = patients[0];
+              if (email) {
+                userHospitalCache.set(email.toLowerCase(), conn.hospital_id);
+              }
+              if (mobileNumber) {
+                userHospitalCache.set(`phone:${mobileNumber}`, conn.hospital_id);
+              }
               const ok = await bcrypt.compare(password, matchedPatient.password);
               if (ok) {
-                resolvedHospitalId = conn.hospital_id;
-                db = await getHospitalConnection(resolvedHospitalId);
-                models = createModels(db);
-                patient = await models.Patient.findByPk(matchedPatient.id);
-                break;
+                return { conn, matchedPatient };
               }
             }
-          } catch (_) {}
+          } catch (_) {
+            if (externalDb) await externalDb.close().catch(() => {});
+          }
+          return null;
+        });
+
+        const results = await Promise.all(checkPromises);
+        const match = results.find(r => r !== null);
+        if (match) {
+          resolvedHospitalId = match.conn.hospital_id;
+          db = await getHospitalConnection(resolvedHospitalId);
+          models = createModels(db);
+          patient = await models.Patient.findByPk(match.matchedPatient.id);
         }
       } catch (_) {}
     }

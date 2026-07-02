@@ -81,6 +81,15 @@ function createModels(sequelize) {
     profile_image:        DataTypes.TEXT,
     address:              DataTypes.TEXT,
     employee_id:          DataTypes.STRING(50),
+    employeeId: {
+      type: DataTypes.VIRTUAL,
+      get() {
+        return this.getDataValue('employee_id');
+      },
+      set(val) {
+        this.setDataValue('employee_id', val);
+      }
+    },
     specialization:       DataTypes.STRING(200),
     experience:           DataTypes.INTEGER,
     qualification:        DataTypes.STRING(200),

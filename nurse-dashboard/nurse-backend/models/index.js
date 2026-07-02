@@ -14,6 +14,15 @@ const User = sequelize.define('User', {
   phone: DataTypes.STRING(20),
   profile_image: DataTypes.TEXT,
   employee_id: DataTypes.STRING(50),
+  employeeId: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return this.getDataValue('employee_id');
+    },
+    set(val) {
+      this.setDataValue('employee_id', val);
+    }
+  },
   shift: DataTypes.STRING(20),
   availability_status: DataTypes.STRING(20),
   last_login: DataTypes.DATE,

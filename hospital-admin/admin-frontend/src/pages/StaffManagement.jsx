@@ -24,8 +24,8 @@ export default function StaffManagement() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('ADMIN');
-  const [department, setDepartment] = useState('OTHERS');
+  const [role, setRole] = useState('DOCTOR');
+  const [department, setDepartment] = useState('OPD');
   const [status, setStatus] = useState('Active');
   const [employeeId, setEmployeeId] = useState('');
   
@@ -51,9 +51,7 @@ export default function StaffManagement() {
     { label: 'Nurses', val: 'NURSE' },
     { label: 'Pharmacists', val: 'PHARMACIST' },
     { label: 'Lab Techs', val: 'LAB_TECHNICIAN' },
-    { label: 'Receptionists', val: 'RECEPTIONIST' },
-    { label: 'Admins', val: 'ADMIN' },
-    { label: 'Hospital Admins', val: 'HOSPITAL_ADMIN' }
+    { label: 'Receptionists', val: 'RECEPTIONIST' }
   ];
 
   const deptOptions = ['ALL', 'OPD', 'IPD', 'PHARMACY', 'LABORATORY', 'RECEPTION', 'OTHERS'];
@@ -118,10 +116,10 @@ export default function StaffManagement() {
     setEmail('');
     setPhone('');
     setPassword('user123'); // Default password suggestion
-    setRole('ADMIN');
-    setDepartment('OTHERS');
+    setRole('DOCTOR');
+    setDepartment('OPD');
     setStatus('Active');
-    setEmployeeId('ADM');
+    setEmployeeId('DOC');
 
     // Reset role-specific
     setSpecialization('');
@@ -269,6 +267,9 @@ export default function StaffManagement() {
 
   // Perform client-side filter
   const filteredUsers = users.filter(u => {
+    // Hide ADMIN and HOSPITAL_ADMIN from the staff list
+    if (u.role === 'ADMIN' || u.role === 'HOSPITAL_ADMIN') return false;
+
     const matchesRole = selectedRoleTab === 'ALL' || u.role === selectedRoleTab;
     const matchesDept = selectedDeptFilter === 'ALL' || u.department === selectedDeptFilter;
     const matchesSearch = !searchQuery || 
@@ -583,8 +584,7 @@ export default function StaffManagement() {
                     onChange={(e) => handleRoleChange(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-primary"
                   >
-                    <option value="HOSPITAL_ADMIN">Hospital Admin</option>
-                    <option value="ADMIN">Admin</option>
+                    {/* Admins are hidden from staff creation/modification */}
                     <option value="DOCTOR">Doctor</option>
                     <option value="NURSE">Nurse</option>
                     <option value="PHARMACIST">Pharmacist</option>

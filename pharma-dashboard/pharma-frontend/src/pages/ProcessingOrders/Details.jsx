@@ -79,12 +79,13 @@ export default function ProcessingOrderDetails() {
     try {
       // Transition order status to 'Ready' (Packed and ready for delivery)
       await api.patch(`/api/pharmacy/orders/${id}/status`, { status: 'Ready' });
-      toast.success('Order packed successfully');
-      navigate('/pharmacy/orders/ready');
+      toast.success('Order packed successfully. Redirecting in 2 seconds...');
+      setTimeout(() => {
+        navigate('/pharmacy/orders/ready');
+      }, 2500);
     } catch (error) {
       console.error(error);
       toast.error('Failed to finalize packing');
-    } finally {
       setUpdating(false);
     }
   };

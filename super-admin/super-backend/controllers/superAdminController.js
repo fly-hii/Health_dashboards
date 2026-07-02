@@ -35,17 +35,20 @@ const syncHospitalSubscriptionToTenantDb = async (hospital) => {
       });
       try {
         await externalDb.authenticate();
-        const { createModels } = require('../../../hospital-admin/admin-backend/services/modelFactory');
-        const models = createModels(externalDb);
-        const tenantHospital = await models.Hospital.findByPk(hospital.id);
-        if (tenantHospital) {
-          await tenantHospital.update({
-            plan: hospital.plan,
-            status: hospital.status,
-            plan_expires_at: hospital.plan_expires_at,
-          });
-          console.log(`[Tenant DB Sync] Successfully synchronized subscription for external hospital ID ${hospital.id}`);
-        }
+        await externalDb.query(
+          'UPDATE hospitals SET plan = ?, status = ?, plan_expires_at = ?, max_users = ?, max_patients = ?, updated_at = NOW() WHERE id = ?',
+          {
+            replacements: [
+              hospital.plan,
+              hospital.status,
+              hospital.plan_expires_at || null,
+              hospital.max_users,
+              hospital.max_patients,
+              hospital.id,
+            ]
+          }
+        );
+        console.log(`[Tenant DB Sync] Successfully synchronized subscription for external hospital ID ${hospital.id}`);
       } catch (err) {
         console.error(`[Tenant DB Sync] Error updating external DB for hospital ID ${hospital.id}:`, err);
       } finally {
@@ -54,12 +57,14 @@ const syncHospitalSubscriptionToTenantDb = async (hospital) => {
     } else {
       // Shared SaaS DB
       await sharedSaasDb.query(
-        'UPDATE hospitals SET plan = ?, status = ?, plan_expires_at = ?, updated_at = NOW() WHERE id = ?',
+        'UPDATE hospitals SET plan = ?, status = ?, plan_expires_at = ?, max_users = ?, max_patients = ?, updated_at = NOW() WHERE id = ?',
         {
           replacements: [
             hospital.plan,
             hospital.status,
             hospital.plan_expires_at || null,
+            hospital.max_users,
+            hospital.max_patients,
             hospital.id,
           ]
         }
@@ -374,7 +379,23 @@ const updatePlan = async (req, res) => {
     else if (billingCycle === 'quarterly') exp.setMonth(exp.getMonth() + 3);
     else exp.setFullYear(exp.getFullYear() + 1);
 
-    await h.update({ plan, plan_expires_at: exp, status: 'active' }, { transaction: t });
+    const PLAN_LIMITS = {
+      trial: { maxUsers: 10, maxPatients: 500 },
+      basic: { maxUsers: 5, maxPatients: 500 },
+      standard: { maxUsers: 25, maxPatients: 2000 },
+      premium: { maxUsers: 100, maxPatients: 10000 },
+      enterprise: { maxUsers: 9999, maxPatients: 999999 }
+    };
+    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.basic;
+
+    await h.update({
+      plan,
+      plan_expires_at: exp,
+      status: 'active',
+      max_users: limits.maxUsers,
+      max_patients: limits.maxPatients
+    }, { transaction: t });
+
     const sub = await Subscription.create({ hospital_id: h.id, plan, status: 'active', amount,
       billing_cycle: billingCycle, starts_at: new Date(), expires_at: exp }, { transaction: t });
 
