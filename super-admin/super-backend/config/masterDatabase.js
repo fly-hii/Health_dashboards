@@ -43,6 +43,14 @@ const connectMasterDB = async () => {
     console.log('✅ careplus_master connected');
     await masterDb.sync({ force: false, alter: false });
     console.log('✅ careplus_master schema synced');
+
+    // Dynamically ensure profile_image exists in super_admin_users table
+    try {
+      await masterDb.query("ALTER TABLE super_admin_users ADD COLUMN profile_image TEXT");
+      console.log('✅ Added profile_image column to super_admin_users table');
+    } catch (alterErr) {
+      // Column already exists or alter command failed, safe to ignore
+    }
   } catch (err) {
     console.error('❌ careplus_master connection failed:', err.message);
     throw err;

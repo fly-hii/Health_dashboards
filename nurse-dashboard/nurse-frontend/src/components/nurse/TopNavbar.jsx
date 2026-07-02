@@ -3,14 +3,14 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import config from '../../config';
-import { Menu, Search, Bell, ChevronDown, User as UserIcon, LogOut } from 'lucide-react';
+import { Menu, Search, Bell, ChevronDown, User as UserIcon, LogOut, Sun, Moon } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../ui/dropdown-menu';
 import { getImageUrl } from '../../utils/imageUrl';
 
 
 const TopNavbar = ({ collapsed, onToggleSidebar, onMobileMenu }) => {
-  const { user, logout }          = useAuth();
+  const { user, logout, theme, toggleTheme } = useAuth();
   const { unreadCount }           = useNotifications();
   const [search, setSearch]       = useState('');
   const navigate = useNavigate();
@@ -67,6 +67,16 @@ const TopNavbar = ({ collapsed, onToggleSidebar, onMobileMenu }) => {
 
       {/* Right Navigation Actions */}
       <div className="flex items-center gap-5 ml-auto">
+        {/* Dark Mode Toggle */}
+        <button
+          onClick={toggleTheme}
+          type="button"
+          className="relative flex items-center justify-center w-10 h-10 rounded-full bg-slate-50 border border-[#E5E7EB] text-slate-600 hover:bg-slate-100 hover:text-slate-950 transition-colors cursor-pointer"
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}
+        </button>
+
         {/* Notification Bell */}
         <Link
           to="/notifications"

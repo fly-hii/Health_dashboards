@@ -28,6 +28,17 @@ export default function App() {
   const { isAuthenticated, loading, user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeAppointment, setActiveAppointment] = useState(null);
+
+  useEffect(() => {
+    const isDark = user?.preferences?.darkMode || localStorage.getItem('theme') === 'dark';
+    const activeTheme = isDark ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', activeTheme);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [user]);
   const [searchQuery, setSearchQuery] = useState('');
   const [queue, setQueue] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -84,6 +95,31 @@ export default function App() {
     return () => { socket.disconnect(); };
   }, [isAuthenticated, user]);
 
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchCentralNotifications = async () => {
+    if (!isAuthenticated || !user) return;
+    try {
+      const res = await api.getNotifications();
+      if (res && res.success) {
+        const rawNotifications = res.data || res.notifications || [];
+        const normalized = rawNotifications.map(n => ({
+          _id: n.id || n._id,
+          type: n.type || 'vitals',
+          title: n.title || 'Notification',
+          message: n.message || '',
+          time: n.time || n.createdAt || new Date(),
+          read: n.read || n.status === 'read' || false
+        }));
+        setNotifications(normalized);
+        setUnreadCount(normalized.filter(n => !n.read).length);
+      }
+    } catch (err) {
+      console.error('Error fetching central notifications:', err);
+    }
+  };
+
   const fetchCentralQueue = async () => {
     if (!isAuthenticated || !user) return;
     try {
@@ -99,12 +135,18 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
     fetchCentralQueue();
+    fetchCentralNotifications();
 
-    window.addEventListener('dashboard_refresh', fetchCentralQueue);
-    const interval = setInterval(fetchCentralQueue, 15000);
+    const handleRefresh = () => {
+      fetchCentralQueue();
+      fetchCentralNotifications();
+    };
+
+    window.addEventListener('dashboard_refresh', handleRefresh);
+    const interval = setInterval(handleRefresh, 15000);
 
     return () => {
-      window.removeEventListener('dashboard_refresh', fetchCentralQueue);
+      window.removeEventListener('dashboard_refresh', handleRefresh);
       clearInterval(interval);
     };
   }, [isAuthenticated, user]);
@@ -206,6 +248,7 @@ export default function App() {
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
         isCollapsed={isSidebarCollapsed}
+        unreadCount={unreadCount}
       />
       <div className={`main-content-layout${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <TopNavbar
@@ -215,6 +258,9 @@ export default function App() {
           onDiagnosePatient={handleDiagnosePatient}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          unreadCount={unreadCount}
+          notifications={notifications}
+          onRefreshNotifications={fetchCentralNotifications}
           onToggleSidebar={() => {
             if (window.innerWidth < 768) {
               setIsSidebarOpen(prev => !prev);

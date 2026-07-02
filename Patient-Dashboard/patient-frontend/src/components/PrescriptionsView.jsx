@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from '../utils/toast';
 import './PrescriptionsView.css';
 
@@ -93,7 +94,7 @@ export default function PrescriptionsView({ prescriptions }) {
       </div>
 
       {/* Detailed Prescription Modal */}
-      {selectedPresc && (
+      {selectedPresc && createPortal(
         <div className="modal-overlay flex items-center justify-center fade-in">
           <div className="modal-content card slide-up">
             <div className="modal-header flex justify-between items-center mb-4">
@@ -149,7 +150,8 @@ export default function PrescriptionsView({ prescriptions }) {
               <button onClick={() => setSelectedPresc(null)} className="btn btn-primary">Close</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

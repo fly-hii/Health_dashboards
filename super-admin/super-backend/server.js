@@ -46,6 +46,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
+const path = require('path');
+const fs   = require('fs');
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
 // Routes
 app.use('/api/auth',   require('./routes/authRoutes'));
 app.use('/api/super',  require('./routes/superAdminRoutes'));

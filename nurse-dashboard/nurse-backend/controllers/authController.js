@@ -5,6 +5,18 @@ const { masterDb } = require('../services/databaseResolver');
 const { loginOtpStore } = require('./forgotPasswordController');
 const fs = require('fs');
 const path = require('path');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'ap-south-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+const BUCKET = process.env.AWS_S3_BUCKET || 'careplus-reports';
+
 
 const isValidLoginOtp = (email, otp) => {
   const record = loginOtpStore.get(email.toLowerCase());
@@ -325,8 +337,9 @@ const login = async (req, res) => {
     const token = generateToken(user);
     const userData = user.toJSON();
     delete userData.password;
-    userData.avatar = userData.profile_image || '';
-    userData.profileImage = userData.profile_image || '';
+    const signedImg = await signAvatarUrl(userData.profile_image);
+    userData.avatar = signedImg || '';
+    userData.profileImage = signedImg || '';
     res.json({ success: true, token, user: userData });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -338,8 +351,10 @@ const getProfile = async (req, res) => {
   try {
     const userData = req.user.toJSON();
     delete userData.password;
-    userData.avatar = userData.profile_image || '';
-    userData.profileImage = userData.profile_image || '';
+    const signedImg = await signAvatarUrl(userData.profile_image);
+    userData.avatar = signedImg || '';
+    userData.profileImage = signedImg || '';
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ success: true, data: { user: userData } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -356,15 +371,18 @@ const updateProfile = async (req, res) => {
       const matches = profileImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
       if (matches && matches.length === 3) {
         const contentType = matches[1];
-        const buffer = Buffer.from(matches[2], 'base64');
         const extension = contentType.split('/')[1] || 'jpg';
         const fileName = `avatar-${req.user.id}-${Date.now()}.${extension}`;
-        // Always store profile avatars locally in /uploads directory
-        console.log('Storing nurse avatar locally in /uploads directory.');
-        updates.profile_image = await saveBase64Locally(req, profileImage, fileName);
+        const s3Key = `hospitals/${req.user.hospital_id || req.hospitalId || 'unknown'}/nurses/${req.user.id}/avatars/${Date.now()}.${extension}`;
+        
+        updates.profile_image = await uploadBase64ToS3(profileImage, s3Key, req, fileName);
       }
     } else if (profileImage !== undefined) {
-      updates.profile_image = profileImage;
+      if (profileImage && (profileImage.startsWith('http://') || profileImage.startsWith('https://'))) {
+        // Do not overwrite database with pre-signed URL
+      } else {
+        updates.profile_image = profileImage;
+      }
     }
 
     // Clean unmapped/virtual fields before Sequelize update
@@ -374,8 +392,9 @@ const updateProfile = async (req, res) => {
     await req.user.update(updates);
     const userData = req.user.toJSON();
     delete userData.password;
-    userData.avatar = userData.profile_image || '';
-    userData.profileImage = userData.profile_image || '';
+    const signedImg = await signAvatarUrl(userData.profile_image);
+    userData.avatar = signedImg || '';
+    userData.profileImage = signedImg || '';
     res.json({ success: true, user: userData, data: { user: userData }, message: 'Profile updated successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -395,6 +414,61 @@ const saveBase64Locally = async (req, base64Data, fileName) => {
   const filePath = path.join(uploadsDir, fileName);
   await fs.promises.writeFile(filePath, buffer);
   return `/uploads/${fileName}`;
+};
+
+const uploadBase64ToS3 = async (base64Data, s3Key, req, fileName) => {
+  const isMock = !process.env.AWS_ACCESS_KEY_ID || 
+                 process.env.AWS_ACCESS_KEY_ID === 'your_access_key' || 
+                 process.env.AWS_ACCESS_KEY_ID.startsWith('YOUR_');
+
+  if (isMock) {
+    console.warn('⚠️ AWS S3 credentials are default placeholders. Bypassing upload to store locally.');
+    return saveBase64Locally(req, base64Data, fileName);
+  }
+
+  const matches = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 image data format');
+  }
+  const contentType = matches[1];
+  const buffer = Buffer.from(matches[2], 'base64');
+
+  console.log('Uploading avatar to AWS S3 bucket:', BUCKET);
+  await s3Client.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: s3Key,
+    Body: buffer,
+    ContentType: contentType,
+  }));
+
+  return `https://${BUCKET}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${s3Key}`;
+};
+
+const getSignedDownloadUrl = async (s3Key, expiresIn = 604800) => {
+  const isMock = !process.env.AWS_ACCESS_KEY_ID || 
+                 process.env.AWS_ACCESS_KEY_ID === 'your_access_key' || 
+                 process.env.AWS_ACCESS_KEY_ID.startsWith('YOUR_');
+  if (isMock) {
+    return `https://mock-s3-bucket.s3.amazonaws.com/${s3Key}?signed=true`;
+  }
+  const command = new GetObjectCommand({ Bucket: BUCKET, Key: s3Key });
+  return getSignedUrl(s3Client, command, { expiresIn });
+};
+
+const signAvatarUrl = async (avatarUrl) => {
+  if (!avatarUrl) return avatarUrl;
+  if (avatarUrl.includes('s3.ap-south-1.amazonaws.com') || avatarUrl.includes('.s3.amazonaws.com')) {
+    const match = avatarUrl.match(/amazonaws\.com\/(.+)$/);
+    if (match && match[1]) {
+      try {
+        const signedUrl = await getSignedDownloadUrl(match[1]);
+        return signedUrl;
+      } catch (err) {
+        console.warn('⚠️ Warning: Failed to sign S3 URL:', err.message);
+      }
+    }
+  }
+  return avatarUrl;
 };
 
 // PUT /api/auth/change-password

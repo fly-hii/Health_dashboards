@@ -100,10 +100,12 @@ export default function NotificationsView({ onDiagnosePatient }) {
   };
 
   return (
-    <div className="notifications-view-container slide-up">
-      <div className="view-title">
-        <h3>Notifications</h3>
-        <p>Stay updated with your appointments, patient queue activities, and alerts.</p>
+    <div className="p-8 flex flex-col gap-6 bg-[#F8FAFC] min-h-[calc(100vh-80px)] font-sans overflow-y-auto notifications-view-container slide-up text-left">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col text-left">
+          <h1 className="text-3xl font-bold text-[#0B1F3A]">Notifications</h1>
+          <p className="text-sm text-[#64748B] mt-1">Stay updated with your appointments, patient queue activities, and alerts.</p>
+        </div>
       </div>
 
       <div className="notifications-card card">

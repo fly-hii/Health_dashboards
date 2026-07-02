@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Bell, Search, Menu, Check, ChevronDown, User, LogOut, Settings } from 'lucide-react';
+import { Bell, Search, Menu, Check, ChevronDown, User, LogOut, Settings, Sun, Moon } from 'lucide-react';
 import api, { getImageUrl } from '../services/api';
 import { socket } from '../sockets/socket';
 
@@ -14,6 +14,19 @@ export default function Header({ searchTerm = '', setSearchTerm, setIsSidebarOpe
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
+
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   const [profile, setProfile] = useState({
     fullName: '',
@@ -181,6 +194,16 @@ export default function Header({ searchTerm = '', setSearchTerm, setIsSidebarOpe
 
       {/* Right section: Notifications & User Profile */}
       <div className="flex items-center gap-4 relative">
+        {/* Dark Mode Toggle */}
+        <button
+          onClick={toggleTheme}
+          type="button"
+          className="p-2 text-[#6B7280] hover:text-[#111827] hover:bg-[#F3F4F6] rounded-full transition-colors cursor-pointer flex items-center justify-center"
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
+
         {/* Notification Bell */}
         <div ref={dropdownRef} className="relative">
           <button

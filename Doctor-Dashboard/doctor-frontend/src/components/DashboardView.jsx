@@ -140,7 +140,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
         {/* Card 1: Patients in Queue */}
         <div className="bg-white border border-[#E5E7EB] rounded-[20px] p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all h-[155px]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#ECFDF5] flex items-center justify-center text-[#10B981] shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[#10B981]/10 flex items-center justify-center text-[#10B981] shrink-0">
               <Users className="w-[18px] h-[18px]" />
             </div>
             <span className="text-sm font-semibold text-[#64748B]">Patients in Queue</span>
@@ -159,7 +159,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
         {/* Card 2: Today's Consultations */}
         <div className="bg-white border border-[#E5E7EB] rounded-[20px] p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all h-[155px]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[#2563EB]/10 flex items-center justify-center text-[#2563EB] shrink-0">
               <Stethoscope className="w-[18px] h-[18px]" />
             </div>
             <span className="text-sm font-semibold text-[#64748B]">Today's Consultations</span>
@@ -178,7 +178,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
         {/* Card 3: Completed Today */}
         <div className="bg-white border border-[#E5E7EB] rounded-[20px] p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all h-[155px]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#F5F3FF] flex items-center justify-center text-[#7C3AED] shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[#7C3AED]/10 flex items-center justify-center text-[#7C3AED] shrink-0">
               <ClipboardCheck className="w-[18px] h-[18px]" />
             </div>
             <span className="text-sm font-semibold text-[#64748B]">Completed Today</span>
@@ -197,7 +197,7 @@ export default function DashboardView({ onDiagnosePatient, onQueueFetched, setAc
         {/* Card 4: Follow-ups */}
         <div className="bg-white border border-[#E5E7EB] rounded-[20px] p-6 shadow-sm flex flex-col justify-between hover:shadow-md transition-all h-[155px]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#FFF7ED] flex items-center justify-center text-[#EA580C] shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[#EA580C]/10 flex items-center justify-center text-[#EA580C] shrink-0">
               <UserPlus className="w-[18px] h-[18px]" />
             </div>
             <span className="text-sm font-semibold text-[#64748B]">Follow-ups</span>

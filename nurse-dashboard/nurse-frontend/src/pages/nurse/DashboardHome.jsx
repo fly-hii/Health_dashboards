@@ -140,7 +140,7 @@ const DashboardHome = () => {
                   <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Patients in Queue</span>
                   <div className="text-4xl font-extrabold text-[#F97316] leading-none">{patientsInQueue}</div>
                 </div>
-                <div className="w-12 h-12 rounded-full bg-teal-50/50 text-[#0EA5A4] flex items-center justify-center transition-colors group-hover:bg-teal-50">
+                <div className="w-12 h-12 rounded-full bg-[#0EA5A4]/10 text-[#0EA5A4] flex items-center justify-center transition-colors group-hover:bg-[#0EA5A4]/20">
                   <Users size={22} strokeWidth={2.5} />
                 </div>
               </div>
@@ -162,7 +162,7 @@ const DashboardHome = () => {
                   <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Vitals Completed</span>
                   <div className="text-4xl font-extrabold text-slate-900 leading-none">{vitalsCompleted}</div>
                 </div>
-                <div className="w-12 h-12 rounded-full bg-orange-50/50 text-[#F97316] flex items-center justify-center transition-colors group-hover:bg-orange-50">
+                <div className="w-12 h-12 rounded-full bg-[#F97316]/10 text-[#F97316] flex items-center justify-center transition-colors group-hover:bg-[#F97316]/20">
                   <Heart size={22} strokeWidth={2.5} />
                 </div>
               </div>
@@ -178,7 +178,7 @@ const DashboardHome = () => {
                   <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Pending to Doctor</span>
                   <div className="text-4xl font-extrabold text-[#0EA5A4] leading-none">{pendingToDoctor}</div>
                 </div>
-                <div className="w-12 h-12 rounded-full bg-cyan-50/50 text-cyan-600 flex items-center justify-center transition-colors group-hover:bg-cyan-50">
+                <div className="w-12 h-12 rounded-full bg-cyan-500/10 text-cyan-600 flex items-center justify-center transition-colors group-hover:bg-cyan-500/20">
                   <Briefcase size={22} strokeWidth={2.5} />
                 </div>
               </div>
@@ -200,7 +200,7 @@ const DashboardHome = () => {
                   <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Total Patients</span>
                   <div className="text-4xl font-extrabold text-slate-900 leading-none">{totalPatients}</div>
                 </div>
-                <div className="w-12 h-12 rounded-full bg-emerald-50/50 text-[#10B981] flex items-center justify-center transition-colors group-hover:bg-emerald-50">
+                <div className="w-12 h-12 rounded-full bg-[#10B981]/10 text-[#10B981] flex items-center justify-center transition-colors group-hover:bg-[#10B981]/20">
                   <UserCheck size={22} strokeWidth={2.5} />
                 </div>
               </div>

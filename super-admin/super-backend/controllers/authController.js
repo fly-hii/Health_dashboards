@@ -8,6 +8,20 @@ const { encrypt } = require('../services/encryptionService');
 const { sharedSaasDb } = require('../services/databaseResolver');
 const { loginOtpStore } = require('./forgotPasswordController');
 const { sendWelcomeEmail } = require('../services/emailService');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const fs = require('fs');
+const path = require('path');
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'ap-south-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+const BUCKET = process.env.AWS_S3_BUCKET || 'careplus-reports';
+
 
 const isValidLoginOtp = (email, otp) => {
   const record = loginOtpStore.get(email.toLowerCase());
@@ -167,7 +181,15 @@ const logout = async (req, res) => {
 
 // GET /api/auth/me
 const getMe = async (req, res) => {
-  res.json({ success: true, user: req.user });
+  try {
+    const user = { ...req.user };
+    user.profile_image = await signAvatarUrl(user.profile_image);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('getMe error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // PUT /api/auth/change-password
@@ -207,9 +229,79 @@ const changePassword = async (req, res) => {
   }
 };
 
+const saveBase64Locally = async (req, base64Data, fileName) => {
+  const matches = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 image data format');
+  }
+  const buffer = Buffer.from(matches[2], 'base64');
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  const filePath = path.join(uploadsDir, fileName);
+  await fs.promises.writeFile(filePath, buffer);
+  return `/uploads/${fileName}`;
+};
+
+const uploadBase64ToS3 = async (base64Data, s3Key, req, fileName) => {
+  const isMock = !process.env.AWS_ACCESS_KEY_ID || 
+                 process.env.AWS_ACCESS_KEY_ID === 'your_access_key' || 
+                 process.env.AWS_ACCESS_KEY_ID.startsWith('YOUR_');
+
+  if (isMock) {
+    console.warn('⚠️ AWS S3 credentials are default placeholders. Bypassing upload to store locally.');
+    return saveBase64Locally(req, base64Data, fileName);
+  }
+
+  const matches = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new Error('Invalid base64 image data format');
+  }
+  const contentType = matches[1];
+  const buffer = Buffer.from(matches[2], 'base64');
+
+  console.log('Uploading avatar to AWS S3 bucket:', BUCKET);
+  await s3Client.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: s3Key,
+    Body: buffer,
+    ContentType: contentType,
+  }));
+
+  return `https://${BUCKET}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${s3Key}`;
+};
+
+const getSignedDownloadUrl = async (s3Key, expiresIn = 3600) => {
+  const isMock = !process.env.AWS_ACCESS_KEY_ID || 
+                 process.env.AWS_ACCESS_KEY_ID === 'your_access_key' || 
+                 process.env.AWS_ACCESS_KEY_ID.startsWith('YOUR_');
+  if (isMock) {
+    return `https://mock-s3-bucket.s3.amazonaws.com/${s3Key}?signed=true`;
+  }
+  const command = new GetObjectCommand({ Bucket: BUCKET, Key: s3Key });
+  return getSignedUrl(s3Client, command, { expiresIn });
+};
+
+const signAvatarUrl = async (avatarUrl) => {
+  if (!avatarUrl) return avatarUrl;
+  if (avatarUrl.includes('s3.ap-south-1.amazonaws.com') || avatarUrl.includes('.s3.amazonaws.com')) {
+    const match = avatarUrl.match(/amazonaws\.com\/(.+)$/);
+    if (match && match[1]) {
+      try {
+        const signedUrl = await getSignedDownloadUrl(match[1]);
+        return signedUrl;
+      } catch (err) {
+        console.warn('⚠️ Warning: Failed to sign S3 URL:', err.message);
+      }
+    }
+  }
+  return avatarUrl;
+};
+
 // PUT /api/auth/profile
 const updateProfile = async (req, res) => {
-  const { name, email } = req.body;
+  const { name, email, profileImage } = req.body;
   try {
     if (!name || !email)
       return res.status(400).json({ success: false, message: 'Name and email are required' });
@@ -225,7 +317,29 @@ const updateProfile = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Email address is already in use by another admin' });
     }
 
-    await admin.update({ name, email });
+    const updates = { name, email };
+
+    if (profileImage !== undefined) {
+      if (profileImage && profileImage.startsWith('data:image/')) {
+        const matches = profileImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const contentType = matches[1];
+          const extension = contentType.split('/')[1] || 'jpg';
+          const fileName = `avatar-${admin.id}-${Date.now()}.${extension}`;
+          const s3Key = `super-admins/${admin.id}/avatars/${Date.now()}.${extension}`;
+          
+          updates.profile_image = await uploadBase64ToS3(profileImage, s3Key, req, fileName);
+        }
+      } else {
+        if (profileImage && (profileImage.startsWith('http://') || profileImage.startsWith('https://'))) {
+          // Do not overwrite database with pre-signed URL
+        } else {
+          updates.profile_image = profileImage;
+        }
+      }
+    }
+
+    await admin.update(updates);
 
     AuditLog.create({
       admin_id: admin.id, hospital_id: null,
@@ -234,10 +348,11 @@ const updateProfile = async (req, res) => {
       ip_address: req.ip,
     }).catch(console.error);
 
+    const signedProfileImage = await signAvatarUrl(admin.profile_image);
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      user: { id: admin.id, name: admin.name, email: admin.email, role: 'SUPER_ADMIN' }
+      user: { id: admin.id, name: admin.name, email: admin.email, role: 'SUPER_ADMIN', profile_image: signedProfileImage }
     });
   } catch (error) {
     console.error('Super admin profile update error:', error);

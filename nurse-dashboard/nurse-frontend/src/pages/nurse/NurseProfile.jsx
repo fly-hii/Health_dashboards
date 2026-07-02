@@ -44,7 +44,7 @@ const DEPARTMENTS = [
 const DEFAULT_AVATAR = config.defaultAvatar;
 
 const NurseProfile = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, theme, toggleTheme } = useAuth();
   
   // Tabs: 'personal', 'professional', 'security'
   const [activeTab, setActiveTab] = useState('personal');
@@ -101,6 +101,7 @@ const NurseProfile = () => {
 
   const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Load profile data from user object
   useEffect(() => {
@@ -239,6 +240,7 @@ const NurseProfile = () => {
       localStorage.setItem(storageKey, JSON.stringify(extraDetails));
 
       toast.success('Profile changes saved successfully!');
+      setIsEditMode(false);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save changes');
     } finally {
@@ -324,13 +326,12 @@ const NurseProfile = () => {
   // Profile completion rate (derived check)
   const getCompletionPercentage = () => {
     let score = 0;
-    let total = 6;
+    let total = 5;
     if (personalInfo.name) score++;
     if (personalInfo.dob) score++;
     if (personalInfo.address) score++;
     if (professionalInfo.licenseNumber) score++;
     if (professionalInfo.emergencyContact) score++;
-    if (accountSettings.is2faEnabled) score++;
     return Math.round((score / total) * 100);
   };
 
@@ -384,24 +385,26 @@ const NurseProfile = () => {
             />
 
             {/* Photo Action Buttons */}
-            <div className="flex items-center gap-2 mb-4 w-full">
-              <Button
-                onClick={triggerFileSelect}
-                className="flex-1 bg-white border border-[#E5E7EB] text-slate-700 hover:text-[#0EA5A4] hover:bg-teal-50/50 hover:border-teal-200 rounded-xl text-xs font-bold transition-all h-9 flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Upload size={14} />
-                Change Photo
-              </Button>
-              {avatar !== DEFAULT_AVATAR && (
+            {isEditMode && (
+              <div className="flex items-center gap-2 mb-4 w-full">
                 <Button
-                  onClick={handleRemovePhoto}
-                  className="w-9 h-9 p-0 bg-white border border-red-100 text-red-500 hover:bg-red-50 hover:border-red-200 rounded-xl transition-all flex items-center justify-center cursor-pointer shrink-0"
-                  title="Remove Photo"
+                  onClick={triggerFileSelect}
+                  className="flex-1 bg-white border border-[#E5E7EB] text-slate-700 hover:text-[#0EA5A4] hover:bg-teal-50/50 hover:border-teal-200 rounded-xl text-xs font-bold transition-all h-9 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Trash2 size={14} />
+                  <Upload size={14} />
+                  Change Photo
                 </Button>
-              )}
-            </div>
+                {avatar !== DEFAULT_AVATAR && (
+                  <Button
+                    onClick={handleRemovePhoto}
+                    className="w-9 h-9 p-0 bg-white border border-red-100 text-red-500 hover:bg-red-50 hover:border-red-200 rounded-xl transition-all flex items-center justify-center cursor-pointer shrink-0"
+                    title="Remove Photo"
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                )}
+              </div>
+            )}
             
             <p className="text-[10px] text-slate-400 font-bold text-center">
               JPG, PNG up to 2MB. Image crop supported.
@@ -445,32 +448,10 @@ const NurseProfile = () => {
                 <CheckCircle2 size={15} className="text-emerald-500" />
                 <span>License Verified</span>
               </div>
-              <div className="flex items-center gap-2.5 text-xs text-slate-600 font-bold">
-                <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${
-                  accountSettings.is2faEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'
-                }`}>
-                  {accountSettings.is2faEnabled ? <Check size={10} strokeWidth={3} /> : <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />}
-                </div>
-                <span>Two-Factor Authentication</span>
-              </div>
+
             </div>
           </Card>
 
-          {/* Audit Logs / System Info Panel */}
-          <Card className="border border-[#E5E7EB] rounded-[20px] shadow-sm bg-white p-6 space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-800 pb-3 border-b border-[#E5E7EB]">System Audit</h3>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-slate-400">Last Login:</span>
-                <span className="text-slate-700 font-bold">Today, 09:15 AM</span>
-              </div>
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-slate-400">Last Updated:</span>
-                <span className="text-slate-700">2 Days Ago</span>
-              </div>
-            </div>
-          </Card>
 
         </div>
 
@@ -521,70 +502,108 @@ const NurseProfile = () => {
               {/* TAB 1: PERSONAL INFORMATION */}
               {activeTab === 'personal' && (
                 <div className="space-y-6">
-                  <div>
-                    <h3 className="text-base font-extrabold text-slate-900 mb-1">Personal Information</h3>
-                    <p className="text-xs text-slate-500 font-semibold">Update your demographic details and contact fields.</p>
+                  <div className="flex justify-between items-center pb-3 border-b border-[#E5E7EB]">
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900 mb-1">Personal Information</h3>
+                      <p className="text-xs text-slate-500 font-semibold">Update your demographic details and contact fields.</p>
+                    </div>
+                    {!isEditMode ? (
+                      <Button
+                        type="button"
+                        onClick={() => setIsEditMode(true)}
+                        className="px-4 py-2 border border-[#E5E7EB] hover:bg-slate-50 text-[#0EA5A4] font-semibold text-xs rounded-xl flex items-center gap-1.5 bg-transparent cursor-pointer"
+                      >
+                        <User size={14} /> Edit Profile
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setIsEditMode(false);
+                          handleResetForm();
+                        }}
+                        className="px-4 py-2 border border-[#E5E7EB] hover:bg-slate-50 text-slate-500 font-semibold text-xs rounded-xl flex items-center gap-1.5 bg-transparent cursor-pointer"
+                      >
+                        <X size={14} /> Cancel
+                      </Button>
+                    )}
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {/* Full Name */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Full Name</label>
-                      <input 
-                        type="text" 
-                        name="name" 
-                        value={personalInfo.name} 
-                        onChange={handlePersonalChange} 
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
-                        placeholder="Nurse Name" 
-                        required
-                      />
+                      {isEditMode ? (
+                        <input 
+                          type="text" 
+                          name="name" 
+                          value={personalInfo.name} 
+                          onChange={handlePersonalChange} 
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
+                          placeholder="Nurse Name" 
+                          required
+                        />
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{personalInfo.name}</div>
+                      )}
                     </div>
 
                     {/* Date of Birth */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Date of Birth</label>
-                      <div className="relative">
-                        <input 
-                          type="date" 
-                          name="dob" 
-                          value={personalInfo.dob} 
-                          onChange={handlePersonalChange} 
-                          className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
-                        />
-                        <Calendar size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      </div>
+                      {isEditMode ? (
+                        <div className="relative">
+                          <input 
+                            type="date" 
+                            name="dob" 
+                            value={personalInfo.dob} 
+                            onChange={handlePersonalChange} 
+                            className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
+                          />
+                          <Calendar size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{personalInfo.dob}</div>
+                      )}
                     </div>
 
                     {/* Gender select */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Gender</label>
-                      <select 
-                        name="gender" 
-                        value={personalInfo.gender} 
-                        onChange={handlePersonalChange}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
-                      >
-                        <option value="Female">Female</option>
-                        <option value="Male">Male</option>
-                        <option value="Other">Other</option>
-                      </select>
+                      {isEditMode ? (
+                        <select 
+                          name="gender" 
+                          value={personalInfo.gender} 
+                          onChange={handlePersonalChange}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
+                        >
+                          <option value="Female">Female</option>
+                          <option value="Male">Male</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{personalInfo.gender}</div>
+                      )}
                     </div>
 
                     {/* Phone Number */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Phone Number</label>
-                      <div className="relative">
-                        <input 
-                          type="tel" 
-                          name="phone" 
-                          value={personalInfo.phone} 
-                          onChange={handlePersonalChange}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
-                          placeholder="Phone number" 
-                        />
-                        <Phone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      </div>
+                      {isEditMode ? (
+                        <div className="relative">
+                          <input 
+                            type="tel" 
+                            name="phone" 
+                            value={personalInfo.phone} 
+                            onChange={handlePersonalChange}
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
+                            placeholder="Phone number" 
+                          />
+                          <Phone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{personalInfo.phone}</div>
+                      )}
                     </div>
 
                     {/* Email address */}
@@ -608,17 +627,21 @@ const NurseProfile = () => {
                     {/* Address Textarea */}
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Address</label>
-                      <div className="relative">
-                        <textarea 
-                          name="address" 
-                          value={personalInfo.address} 
-                          onChange={handlePersonalChange}
-                          rows={3}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all resize-none leading-relaxed"
-                          placeholder="Your complete residential address..." 
-                        />
-                        <MapPin size={14} className="absolute left-4 top-4 text-slate-400 pointer-events-none" />
-                      </div>
+                      {isEditMode ? (
+                        <div className="relative">
+                          <textarea 
+                            name="address" 
+                            value={personalInfo.address} 
+                            onChange={handlePersonalChange}
+                            rows={3}
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all resize-none leading-relaxed"
+                            placeholder="Your complete residential address..." 
+                          />
+                          <MapPin size={14} className="absolute left-4 top-4 text-slate-400 pointer-events-none" />
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5 leading-relaxed">{personalInfo.address}</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -627,9 +650,31 @@ const NurseProfile = () => {
               {/* TAB 2: PROFESSIONAL INFORMATION */}
               {activeTab === 'professional' && (
                 <div className="space-y-6">
-                  <div>
-                    <h3 className="text-base font-extrabold text-slate-900 mb-1">Professional Details</h3>
-                    <p className="text-xs text-slate-500 font-semibold">Verify clinical credentials and organizational assignments.</p>
+                  <div className="flex justify-between items-center pb-3 border-b border-[#E5E7EB]">
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900 mb-1">Professional Details</h3>
+                      <p className="text-xs text-slate-500 font-semibold">Verify clinical credentials and organizational assignments.</p>
+                    </div>
+                    {!isEditMode ? (
+                      <Button
+                        type="button"
+                        onClick={() => setIsEditMode(true)}
+                        className="px-4 py-2 border border-[#E5E7EB] hover:bg-slate-50 text-[#0EA5A4] font-semibold text-xs rounded-xl flex items-center gap-1.5 bg-transparent cursor-pointer"
+                      >
+                        <User size={14} /> Edit Profile
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setIsEditMode(false);
+                          handleResetForm();
+                        }}
+                        className="px-4 py-2 border border-[#E5E7EB] hover:bg-slate-50 text-slate-500 font-semibold text-xs rounded-xl flex items-center gap-1.5 bg-transparent cursor-pointer"
+                      >
+                        <X size={14} /> Cancel
+                      </Button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -651,85 +696,109 @@ const NurseProfile = () => {
                     {/* Department dropdown */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Department</label>
-                      <select 
-                        name="department" 
-                        value={professionalInfo.department} 
-                        onChange={handleProfessionalChange}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
-                      >
-                        {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
+                      {isEditMode ? (
+                        <select 
+                          name="department" 
+                          value={professionalInfo.department} 
+                          onChange={handleProfessionalChange}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
+                        >
+                          {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                        </select>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{professionalInfo.department}</div>
+                      )}
                     </div>
 
                     {/* Designation */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Designation</label>
-                      <input 
-                        type="text" 
-                        name="designation" 
-                        value={professionalInfo.designation} 
-                        onChange={handleProfessionalChange}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
-                        placeholder="e.g. Senior Nurse" 
-                      />
+                      {isEditMode ? (
+                        <input 
+                          type="text" 
+                          name="designation" 
+                          value={professionalInfo.designation} 
+                          onChange={handleProfessionalChange}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
+                          placeholder="e.g. Senior Nurse" 
+                        />
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{professionalInfo.designation}</div>
+                      )}
                     </div>
 
                     {/* Employee Type select */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Employee Type</label>
-                      <select 
-                        name="employeeType" 
-                        value={professionalInfo.employeeType} 
-                        onChange={handleProfessionalChange}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
-                      >
-                        <option value="Full Time">Full Time</option>
-                        <option value="Part Time">Part Time</option>
-                        <option value="Contract">Contract</option>
-                      </select>
+                      {isEditMode ? (
+                        <select 
+                          name="employeeType" 
+                          value={professionalInfo.employeeType} 
+                          onChange={handleProfessionalChange}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
+                        >
+                          <option value="Full Time">Full Time</option>
+                          <option value="Part Time">Part Time</option>
+                          <option value="Contract">Contract</option>
+                        </select>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{professionalInfo.employeeType}</div>
+                      )}
                     </div>
 
                     {/* Joining Date */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Joining Date</label>
-                      <div className="relative">
-                        <input 
-                          type="date" 
-                          name="joiningDate" 
-                          value={professionalInfo.joiningDate} 
-                          onChange={handleProfessionalChange}
-                          className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
-                        />
-                        <Calendar size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      </div>
+                      {isEditMode ? (
+                        <div className="relative">
+                          <input 
+                            type="date" 
+                            name="joiningDate" 
+                            value={professionalInfo.joiningDate} 
+                            onChange={handleProfessionalChange}
+                            className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
+                          />
+                          <Calendar size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{professionalInfo.joiningDate}</div>
+                      )}
                     </div>
 
                     {/* Shift Timing */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Shift Timing</label>
-                      <select 
-                        name="shiftTiming" 
-                        value={professionalInfo.shiftTiming} 
-                        onChange={handleProfessionalChange}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
-                      >
-                        <option value="09:00 AM – 06:00 PM">09:00 AM – 06:00 PM (Morning)</option>
-                        <option value="02:00 PM – 10:00 PM">02:00 PM – 10:00 PM (Evening)</option>
-                        <option value="10:00 PM – 06:00 AM">10:00 PM – 06:00 AM (Night)</option>
-                      </select>
+                      {isEditMode ? (
+                        <select 
+                          name="shiftTiming" 
+                          value={professionalInfo.shiftTiming} 
+                          onChange={handleProfessionalChange}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all cursor-pointer"
+                        >
+                          <option value="09:00 AM – 06:00 PM">09:00 AM – 06:00 PM (Morning)</option>
+                          <option value="02:00 PM – 10:00 PM">02:00 PM – 10:00 PM (Evening)</option>
+                          <option value="10:00 PM – 06:00 AM">10:00 PM – 06:00 AM (Night)</option>
+                        </select>
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{professionalInfo.shiftTiming}</div>
+                      )}
                     </div>
 
                     {/* License Number */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Registered Nurse License No.</label>
-                      <input 
-                        type="text" 
-                        name="licenseNumber" 
-                        value={professionalInfo.licenseNumber} 
-                        onChange={handleProfessionalChange}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
-                        placeholder="License Number" 
-                      />
+                      {isEditMode ? (
+                        <input 
+                          type="text" 
+                          name="licenseNumber" 
+                          value={professionalInfo.licenseNumber} 
+                          onChange={handleProfessionalChange}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
+                          placeholder="License Number" 
+                        />
+                      ) : (
+                        <div className="text-xs font-bold text-slate-700 py-2.5">{professionalInfo.licenseNumber}</div>
+                      )}
                     </div>
 
                     {/* Emergency Contact */}
@@ -774,17 +843,20 @@ const NurseProfile = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {/* Username */}
+                      {/* Email Address */}
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Username</label>
-                        <input 
-                          type="text" 
-                          name="username" 
-                          value={accountSettings.username} 
-                          onChange={handleAccountChange}
-                          className="w-full px-4 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#0EA5A4] focus:bg-white focus:ring-4 focus:ring-teal-500/5 transition-all"
-                          placeholder="Username" 
-                        />
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Email Address</label>
+                        <div className="relative">
+                          <input 
+                            type="email" 
+                            value={personalInfo.email} 
+                            disabled
+                            className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-[#E5E7EB] rounded-xl text-xs font-semibold text-slate-400 outline-none cursor-not-allowed"
+                            placeholder="Email Address" 
+                          />
+                          <Mail size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                          <Lock size={12} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
                       </div>
 
                       {/* Password Placeholder */}
@@ -811,28 +883,6 @@ const NurseProfile = () => {
                       >
                         <Key size={14} />
                         Change Password
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          setAccountSettings(prev => {
-                            const new2fa = !prev.is2faEnabled;
-                            if (new2fa) {
-                              toast.info('🛡️ Two-Factor Authentication QR code generated! Scan in your authenticator app.');
-                            } else {
-                              toast.warning('🛡️ Two-Factor Authentication disabled.');
-                            }
-                            return { ...prev, is2faEnabled: new2fa };
-                          });
-                        }}
-                        className={`px-4 py-2 border rounded-xl text-xs font-bold transition-all h-9 flex items-center justify-center gap-1.5 cursor-pointer ${
-                          accountSettings.is2faEnabled 
-                            ? 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600' 
-                            : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <ShieldCheck size={14} />
-                        {accountSettings.is2faEnabled ? 'Disable 2FA' : 'Enable 2FA'}
                       </Button>
                     </div>
                   </div>
@@ -897,12 +947,13 @@ const NurseProfile = () => {
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
+                          disabled={!isEditMode}
                           onClick={() => handleNotificationToggle('emergencyAlerts')}
                           className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer transition-all ${
                             notificationPrefs.emergencyAlerts 
                               ? 'bg-[#0EA5A4] border-[#0EA5A4] text-white shadow-sm shadow-teal-500/25' 
                               : 'bg-white border-slate-300 hover:border-slate-400'
-                          }`}
+                          } ${!isEditMode ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           {notificationPrefs.emergencyAlerts && <Check size={13} strokeWidth={3} />}
                         </button>
@@ -913,12 +964,13 @@ const NurseProfile = () => {
                       <div className="flex items-center gap-3 md:col-span-2">
                         <button
                           type="button"
+                          disabled={!isEditMode}
                           onClick={() => handleNotificationToggle('emailNotifications')}
                           className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer transition-all ${
                             notificationPrefs.emailNotifications 
                               ? 'bg-[#0EA5A4] border-[#0EA5A4] text-white shadow-sm shadow-teal-500/25' 
                               : 'bg-white border-slate-300 hover:border-slate-400'
-                          }`}
+                          } ${!isEditMode ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           {notificationPrefs.emailNotifications && <Check size={13} strokeWidth={3} />}
                         </button>
@@ -943,16 +995,18 @@ const NurseProfile = () => {
                         </div>
                         <button 
                           type="button"
+                          disabled={!isEditMode}
                           onClick={() => {
                             handleSystemToggle('darkMode');
+                            toggleTheme();
                             toast.info(`Dark Mode preference updated!`);
                           }}
                           className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all duration-300 ${
-                            systemPrefs.darkMode ? 'bg-[#0EA5A4]' : 'bg-slate-300'
-                          }`}
+                            theme === 'dark' ? 'bg-[#0EA5A4]' : 'bg-slate-300'
+                          } ${!isEditMode ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-all duration-300 ${
-                            systemPrefs.darkMode ? 'translate-x-5' : 'translate-x-0'
+                            theme === 'dark' ? 'translate-x-5' : 'translate-x-0'
                           }`} />
                         </button>
                       </div>
@@ -965,10 +1019,11 @@ const NurseProfile = () => {
                         </div>
                         <button 
                           type="button"
+                          disabled={!isEditMode}
                           onClick={() => handleSystemToggle('smsNotifications')}
                           className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all duration-300 ${
                             systemPrefs.smsNotifications ? 'bg-[#0EA5A4]' : 'bg-slate-300'
-                          }`}
+                          } ${!isEditMode ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-all duration-300 ${
                             systemPrefs.smsNotifications ? 'translate-x-5' : 'translate-x-0'
@@ -984,10 +1039,11 @@ const NurseProfile = () => {
                         </div>
                         <button 
                           type="button"
+                          disabled={!isEditMode}
                           onClick={() => handleSystemToggle('desktopNotifications')}
                           className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-all duration-300 ${
                             systemPrefs.desktopNotifications ? 'bg-[#0EA5A4]' : 'bg-slate-300'
-                          }`}
+                          } ${!isEditMode ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
                           <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-all duration-300 ${
                             systemPrefs.desktopNotifications ? 'translate-x-5' : 'translate-x-0'
@@ -1000,78 +1056,33 @@ const NurseProfile = () => {
               )}
 
               {/* Form Footer Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-6 border-t border-[#E5E7EB]">
-                <Button
-                  type="button"
-                  onClick={handleResetForm}
-                  variant="outline"
-                  className="px-6 py-2 border-[#E5E7EB] text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-xl text-xs font-bold cursor-pointer h-10 flex items-center justify-center"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2 bg-gradient-to-r from-[#0EA5A4] to-[#0F766E] text-white text-xs font-bold rounded-xl cursor-pointer hover:opacity-90 shadow-md hover:shadow-lg transition-all h-10 flex items-center justify-center gap-2"
-                >
-                  <Save size={14} />
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
+              {isEditMode && (
+                <div className="flex items-center justify-end gap-3 pt-6 border-t border-[#E5E7EB]">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setIsEditMode(false);
+                      handleResetForm();
+                    }}
+                    variant="outline"
+                    className="px-6 py-2 border-[#E5E7EB] text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-xl text-xs font-bold cursor-pointer h-10 flex items-center justify-center"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-gradient-to-r from-[#0EA5A4] to-[#0F766E] text-white text-xs font-bold rounded-xl cursor-pointer hover:opacity-90 shadow-md hover:shadow-lg transition-all h-10 flex items-center justify-center gap-2"
+                  >
+                    <Save size={14} />
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              )}
 
             </form>
           </Card>
 
-          {/* Recent Activity Logs */}
-          <Card className="border border-[#E5E7EB] rounded-[20px] shadow-sm bg-white p-6 space-y-5">
-            <h3 className="text-sm font-extrabold text-slate-800 pb-3 border-b border-[#E5E7EB] flex items-center gap-2">
-              <History size={16} className="text-slate-500" /> Recent Security Activity
-            </h3>
-            
-            <div className="space-y-4">
-              {/* Activity 1 */}
-              <div className="flex items-start gap-3.5">
-                <div className="w-8 h-8 rounded-full bg-teal-50 text-[#0EA5A4] flex items-center justify-center shrink-0">
-                  <Smartphone size={14} />
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-xs font-bold text-slate-800">Nurse Portal Login</h4>
-                  <p className="text-[10px] text-slate-500 font-semibold">IP Address 192.168.1.45 • Chrome on Windows 11</p>
-                  <span className="text-[9px] text-slate-400 font-bold block pt-0.5 flex items-center gap-1">
-                    <Clock size={10} /> Today, 09:15 AM
-                  </span>
-                </div>
-              </div>
-
-              {/* Activity 2 */}
-              <div className="flex items-start gap-3.5">
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <User size={14} />
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-xs font-bold text-slate-800">Emergency Contact Updated</h4>
-                  <p className="text-[10px] text-slate-500 font-semibold">Emergency phone updated from primary profile settings.</p>
-                  <span className="text-[9px] text-slate-400 font-bold block pt-0.5 flex items-center gap-1">
-                    <Clock size={10} /> 2 Days Ago
-                  </span>
-                </div>
-              </div>
-
-              {/* Activity 3 */}
-              <div className="flex items-start gap-3.5">
-                <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-                  <Lock size={14} />
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-xs font-bold text-slate-800">Password Changed</h4>
-                  <p className="text-[10px] text-slate-500 font-semibold">Security password changed successfully via nurse profile.</p>
-                  <span className="text-[9px] text-slate-400 font-bold block pt-0.5 flex items-center gap-1">
-                    <Clock size={10} /> 1 Month Ago
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Card>
 
         </div>
 

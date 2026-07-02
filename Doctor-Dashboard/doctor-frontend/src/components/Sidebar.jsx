@@ -21,7 +21,7 @@ const RxIcon = (props) => (
   </svg>
 );
 
-export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, isCollapsed }) {
+export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, isCollapsed, unreadCount }) {
   const { logout } = useAuth();
 
   const menuItems = [
@@ -32,7 +32,6 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, is
     { id: 'reports', label: 'Reports', icon: BarChart3 },
     { id: 'notifications', label: 'Notifications', icon: Bell, badge: 3 },
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const handleTabClick = (tabId) => {
@@ -75,8 +74,9 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, is
         {/* Navigation */}
         <nav className="flex flex-col gap-1.5">
           {menuItems.map((item) => {
-            const isActive = activeTab === item.id;
+            const isActive = activeTab === item.id || (item.id === 'profile' && activeTab === 'settings');
             const Icon = item.icon;
+            const badgeCount = item.id === 'notifications' ? unreadCount : item.badge;
             return (
               <button
                 key={item.id}
@@ -94,14 +94,14 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen, is
                   <Icon className={`w-[18px] h-[18px] shrink-0 ${isActive ? 'text-white' : 'text-[#94a3b8]'}`} />
                   <span className={`transition-all duration-200 ${isCollapsed ? 'md:hidden' : ''}`}>{item.label}</span>
                 </div>
-                {item.badge && !isCollapsed && (
+                {badgeCount > 0 && !isCollapsed && (
                   <span className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold rounded-full ${
                     isActive ? 'bg-white text-[#0F9D8A]' : 'bg-[#EF4444] text-white'
                   }`}>
-                    {item.badge}
+                    {badgeCount}
                   </span>
                 )}
-                {item.badge && isCollapsed && (
+                {badgeCount > 0 && isCollapsed && (
                   <span className="hidden md:flex absolute top-1 right-1 w-3 h-3 bg-[#EF4444] rounded-full border border-white" />
                 )}
               </button>

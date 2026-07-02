@@ -461,3 +461,200 @@ a {
 
 .cp-toast--enter { animation: cpToastIn  0.28s ease forwards; }
 .cp-toast--exit  { animation: cpToastOut 0.32s ease forwards; }
+
+/* Universal Custom Dark Theme overrides */
+html.dark, html[data-theme="dark"] {
+  background-color: #0b0f19 !important;
+  color-scheme: dark;
+  
+  --bg-app: #0b0f19 !important;
+  --bg-card: #111827 !important;
+  --bg-sidebar: #111827 !important;
+  --bg-header: #111827 !important;
+
+  --text-main: #f3f4f6 !important;
+  --text-muted: #9ca3af !important;
+  --text-light: #64748b !important;
+  
+  --border-color: #1f2937 !important;
+  --border-darker: #374151 !important;
+
+  --primary-light: rgba(13, 148, 136, 0.15) !important;
+  --primary-border: #1f2937 !important;
+  --success-light: rgba(16, 185, 129, 0.15) !important;
+  --success-border: #1f2937 !important;
+  --warning-light: rgba(245, 158, 11, 0.15) !important;
+  --warning-border: #1f2937 !important;
+  --danger-light: rgba(239, 68, 68, 0.15) !important;
+  --danger-border: #1f2937 !important;
+  --info-light: rgba(2, 132, 199, 0.15) !important;
+  --info-border: #1f2937 !important;
+}
+
+html.dark body, html[data-theme="dark"] body {
+  background-color: #0b0f19 !important;
+  color: #f3f4f6 !important;
+}
+
+/* Background overrides */
+html.dark .bg-white, html[data-theme="dark"] .bg-white,
+html.dark .bg-\[\#FFFFFF\], html[data-theme="dark"] .bg-\[\#FFFFFF\],
+html.dark header, html[data-theme="dark"] header,
+html.dark .top-navbar, html[data-theme="dark"] .top-navbar,
+html.dark .sidebar-container, html[data-theme="dark"] .sidebar-container,
+html.dark aside, html[data-theme="dark"] aside {
+  background-color: #111827 !important;
+}
+
+html.dark .bg-slate-50, html[data-theme="dark"] .bg-slate-50,
+html.dark .bg-\[\#F8FAFC\], html[data-theme="dark"] .bg-\[\#F8FAFC\],
+html.dark .bg-gray-50, html[data-theme="dark"] .bg-gray-50,
+html.dark .bg-slate-100, html[data-theme="dark"] .bg-slate-100,
+html.dark .bg-\[\#F3F4F6\], html[data-theme="dark"] .bg-\[\#F3F4F6\],
+html.dark .bg-slate-100\/50, html[data-theme="dark"] .bg-slate-100\/50 {
+  background-color: #1f2937 !important;
+}
+
+/* Border overrides */
+html.dark *, html[data-theme="dark"] * {
+  border-color: #374151 !important;
+}
+
+/* Text color overrides */
+html.dark .text-slate-900, html[data-theme="dark"] .text-slate-900,
+html.dark .text-slate-800, html[data-theme="dark"] .text-slate-800,
+html.dark .text-slate-700, html[data-theme="dark"] .text-slate-700,
+html.dark .text-gray-900, html[data-theme="dark"] .text-gray-900,
+html.dark .text-\[\#111827\], html[data-theme="dark"] .text-\[\#111827\],
+html.dark .text-slate-950, html[data-theme="dark"] .text-slate-950,
+html.dark h1, html[data-theme="dark"] h1,
+html.dark h2, html[data-theme="dark"] h2,
+html.dark h3, html[data-theme="dark"] h3,
+html.dark h4, html[data-theme="dark"] h4 {
+  color: #f3f4f6 !important;
+}
+
+html.dark .text-slate-600, html[data-theme="dark"] .text-slate-600,
+html.dark .text-slate-500, html[data-theme="dark"] .text-slate-500,
+html.dark .text-slate-400, html[data-theme="dark"] .text-slate-400,
+html.dark .text-gray-500, html[data-theme="dark"] .text-gray-500,
+html.dark .text-gray-400, html[data-theme="dark"] .text-gray-400,
+html.dark .text-\[\#6B7280\], html[data-theme="dark"] .text-\[\#6B7280\],
+html.dark .text-muted-icon, html[data-theme="dark"] .text-muted-icon {
+  color: #9ca3af !important;
+}
+
+/* Input, select & textarea overrides */
+html.dark input, html[data-theme="dark"] input,
+html.dark select, html[data-theme="dark"] select,
+html.dark textarea, html[data-theme="dark"] textarea {
+  background-color: transparent !important;
+  background: transparent !important;
+  color: #f3f4f6 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html.dark input::placeholder, html[data-theme="dark"] input::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Keep brand elements and highlights glowing/teal */
+html.dark .bg-primary, html[data-theme="dark"] .bg-primary,
+html.dark .bg-\[\#0EA5A4\], html[data-theme="dark"] .bg-\[\#0EA5A4\],
+html.dark .bg-\[\#0F9D8A\], html[data-theme="dark"] .bg-\[\#0F9D8A\] {
+  background-color: #0ea5a4 !important;
+  color: #ffffff !important;
+}
+
+html.dark .text-primary, html[data-theme="dark"] .text-primary,
+html.dark .text-\[\#0EA5A4\], html[data-theme="dark"] .text-\[\#0EA5A4\],
+html.dark .text-\[\#0F9D8A\], html[data-theme="dark"] .text-\[\#0F9D8A\] {
+  color: #0ea5a4 !important;
+}
+
+/* Pattern matching dark style overrides for custom css files */
+html.dark [class*="-card"], html[data-theme="dark"] [class*="-card"],
+html.dark [class*="card-"], html[data-theme="dark"] [class*="card-"],
+html.dark [class$="card"], html[data-theme="dark"] [class$="card"],
+html.dark [class*="-panel"], html[data-theme="dark"] [class*="-panel"],
+html.dark [class*="-wrapper"], html[data-theme="dark"] [class*="-wrapper"],
+html.dark [class*="-btn"]:not([class*="-btn--active"]):not([class*="btn-primary"]):not([class*="-active"]):not(.bav-select-doc-btn):not(.bav-book-btn), html[data-theme="dark"] [class*="-btn"]:not([class*="-btn--active"]):not([class*="btn-primary"]):not([class*="-active"]):not(.bav-select-doc-btn):not(.bav-book-btn),
+html.dark [class*="-select"], html[data-theme="dark"] [class*="-select"],
+html.dark [class*="-input"], html[data-theme="dark"] [class*="-input"],
+html.dark [class*="empty-state"], html[data-theme="dark"] [class*="empty-state"] {
+  background-color: var(--bg-card) !important;
+  background: var(--bg-card) !important;
+  color: var(--text-main) !important;
+}
+
+html.dark [class*="empty-icon"], html[data-theme="dark"] [class*="empty-icon"] {
+  background-color: var(--bg-app) !important;
+  background: var(--bg-app) !important;
+  color: #0d9488 !important;
+}
+
+html.dark [class*="-table-head-row"], html[data-theme="dark"] [class*="-table-head-row"],
+html.dark [class*="-th"], html[data-theme="dark"] [class*="-th"],
+html.dark thead tr, html[data-theme="dark"] thead tr,
+html.dark th, html[data-theme="dark"] th {
+  background-color: var(--bg-app) !important;
+  background: var(--bg-app) !important;
+  color: var(--text-muted) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+html.dark [class*="-table-row"]:hover, html[data-theme="dark"] [class*="-table-row"]:hover,
+html.dark tbody tr:hover, html[data-theme="dark"] tbody tr:hover {
+  background-color: var(--bg-app) !important;
+  background: var(--bg-app) !important;
+}
+
+/* Notifications Dark Mode overrides */
+html.dark .notif-item-row--unread, html[data-theme="dark"] .notif-item-row--unread {
+  background-color: rgba(13, 148, 136, 0.12) !important;
+}
+
+html.dark .notif-item-row:hover, html[data-theme="dark"] .notif-item-row:hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+html.dark .notif-item-row--read, html[data-theme="dark"] .notif-item-row--read {
+  background-color: transparent !important;
+}
+
+html.dark .notif-circle-icon, html[data-theme="dark"] .notif-circle-icon {
+  background-color: #1f2937 !important;
+}
+
+html.dark .notif-tab-btn:hover:not(.notif-tab-btn--active), html[data-theme="dark"] .notif-tab-btn:hover:not(.notif-tab-btn--active) {
+  background-color: #1f2937 !important;
+}
+
+/* Glassmorphic search/filter panel containers */
+html.dark .bg-slate-50\/40, html[data-theme="dark"] .bg-slate-50\/40,
+html.dark .bg-slate-50\/50, html[data-theme="dark"] .bg-slate-50\/50,
+html.dark .bg-slate-100\/50, html[data-theme="dark"] .bg-slate-100\/50,
+html.dark .bg-slate-50, html[data-theme="dark"] .bg-slate-50 {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Explicit override for select doctor button and book button */
+html.dark .bav-select-doc-btn:not(:disabled), html[data-theme="dark"] .bav-select-doc-btn:not(:disabled),
+html.dark .bav-book-btn:not(:disabled), html[data-theme="dark"] .bav-book-btn:not(:disabled) {
+  background-color: #0d9488 !important;
+  background: #0d9488 !important;
+  color: #ffffff !important;
+}
+
+html.dark .bav-select-doc-btn:not(:disabled):hover, html[data-theme="dark"] .bav-select-doc-btn:not(:disabled):hover,
+html.dark .bav-book-btn:not(:disabled):hover, html[data-theme="dark"] .bav-book-btn:not(:disabled):hover {
+  background-color: #0b7f71 !important;
+  background: #0b7f71 !important;
+  color: #ffffff !important;
+}
+
+html.dark .bav-select-doc-btn:disabled, html[data-theme="dark"] .bav-select-doc-btn:disabled {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #64748b !important;
+}

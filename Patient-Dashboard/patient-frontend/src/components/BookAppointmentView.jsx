@@ -70,7 +70,7 @@ const STEPS = [
 const TIME_GROUPS = [
   { label: '🌅 Morning',   slots: ['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM'] },
   { label: '☀️ Afternoon', slots: ['02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM'] },
-  { label: '🌆 Evening',   slots: ['05:00 PM', '05:30 PM', '06:00 PM'] },
+  { label: '🌆 Evening',   slots: ['05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM'] },
 ];
 
 // Generate 14 future dates starting today
@@ -576,7 +576,11 @@ export default function BookAppointmentView() {
             <div className="bav-empty">No doctors available in this department right now.</div>
           ) : (
             <div className="bav-doctor-list">
-              {doctors.map(doc => (
+              {[...doctors].sort((a, b) => {
+                if (a.availability === 'Available' && b.availability !== 'Available') return -1;
+                if (a.availability !== 'Available' && b.availability === 'Available') return 1;
+                return 0;
+              }).map(doc => (
                 <div key={doc.id} className="bav-doctor-card">
                   <img
                     src={getImageUrl(doc.avatar)}

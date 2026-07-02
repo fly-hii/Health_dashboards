@@ -25,6 +25,16 @@ export default function App() {
   const { token: authToken, isAuthenticated, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [profile, setProfile] = useState({});
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    if (savedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
   const [token, setToken] = useState(null);
   const [pastTokens, setPastTokens] = useState([]);
   const [appointments, setAppointments] = useState([]);

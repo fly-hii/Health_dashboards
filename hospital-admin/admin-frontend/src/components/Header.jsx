@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, MessageSquare, Menu } from 'lucide-react';
+import { Search, Bell, MessageSquare, Menu, Sun, Moon } from 'lucide-react';
 import socket from '../sockets/socket';
 import API from '../services/api';
 
@@ -10,6 +10,19 @@ export default function Header({ searchTerm, setSearchTerm, isSidebarMinimized, 
   const [notifications, setNotifications] = useState([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef(null);
+
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -109,6 +122,16 @@ export default function Header({ searchTerm, setSearchTerm, isSidebarMinimized, 
         <button className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
           <MessageSquare className="w-5 h-5" />
           <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-primary border-2 border-white rounded-full"></span>
+        </button>
+
+        {/* Dark Mode Toggle */}
+        <button
+          onClick={toggleTheme}
+          type="button"
+          className="relative p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
 
         {/* Notifications */}

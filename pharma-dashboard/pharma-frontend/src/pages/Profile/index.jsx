@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import { Camera, ShieldAlert, CheckCircle, Info, Lock, Settings, Bell, User, Eye, EyeOff } from 'lucide-react';
+import { Camera, ShieldAlert, CheckCircle, Info, Lock, Settings, Bell, User, Eye, EyeOff, X } from 'lucide-react';
 import api, { getImageUrl } from '../../services/api';
 
 import { toast } from 'react-toastify';
@@ -14,6 +14,7 @@ export default function Profile() {
   const [passwordChanged, setPasswordChanged] = useState(false);
   const fileInputRef = useRef(null);
   const [profilePhoto, setProfilePhoto] = useState('https://api.dicebear.com/7.x/avataaars/svg?seed=Pharmacist');
+  const [isEditMode, setIsEditMode] = useState(false);
   
   // React Hook Form for Profile
   const { register: regProfile, handleSubmit: submitProfile, reset: resetProfile, control: controlProfile } = useForm();
@@ -86,6 +87,7 @@ export default function Profile() {
     try {
       const res = await api.put('/api/pharmacy/profile', data);
       toast.success('Pharmacist profile updated successfully');
+      setIsEditMode(false);
       // Sync layout header with correct event name
       socket.emit('userProfileUpdated', res.data);
     } catch (err) {
@@ -241,20 +243,50 @@ export default function Profile() {
         {activeTab === 'Profile' && (
           <form onSubmit={submitProfile(onProfileSave)} className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-8 pt-4">
             
+            {/* Full-width Section Header with Edit Profile Button */}
+            <div className="flex justify-between items-center pb-3 border-b border-[#E5E7EB] col-span-full">
+              <div>
+                <h3 className="text-base font-extrabold text-[#374151] mb-1">Pharmacist Profile</h3>
+                <p className="text-xs text-gray-500 font-semibold">Update your professional details and credentials.</p>
+              </div>
+              {!isEditMode ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditMode(true)}
+                  className="px-4 py-2 border border-[#E5E7EB] hover:bg-slate-50 text-[#0F9D8A] font-semibold text-xs rounded-xl flex items-center gap-1.5 bg-transparent cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5" /> Edit Profile
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditMode(false);
+                    fetchProfile();
+                  }}
+                  className="px-4 py-2 border border-[#E5E7EB] hover:bg-slate-50 text-gray-500 font-semibold text-xs rounded-xl flex items-center gap-1.5 bg-transparent cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" /> Cancel
+                </button>
+              )}
+            </div>
+
             {/* Left circular Photo card */}
             <div className="flex flex-col items-center text-center space-y-4">
               <div 
-                onClick={() => fileInputRef.current.click()}
-                className="relative w-[140px] h-[140px] rounded-full overflow-hidden border-2 border-[#E5E7EB] hover:border-[#0F9D8A] transition-all cursor-pointer group shadow-sm bg-gray-50"
+                onClick={() => isEditMode && fileInputRef.current.click()}
+                className={`relative w-[140px] h-[140px] rounded-full overflow-hidden border-2 border-[#E5E7EB] ${isEditMode ? 'hover:border-[#0F9D8A] cursor-pointer group' : ''} transition-all shadow-sm bg-gray-50`}
               >
                 <img
                   className="w-full h-full object-cover"
                   src={profilePhoto}
                   alt="Pharmacist Profile Avatar"
                 />
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Camera className="w-6 h-6" />
-                </div>
+                {isEditMode && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera className="w-6 h-6" />
+                  </div>
+                )}
               </div>
 
               <input
@@ -263,15 +295,18 @@ export default function Profile() {
                 accept="image/png, image/jpeg, image/jpg"
                 onChange={handlePhotoUpload}
                 className="hidden"
+                disabled={!isEditMode}
               />
 
-              <button
-                type="button"
-                onClick={() => fileInputRef.current.click()}
-                className="px-4 py-2 border-2 border-[#0F9D8A] text-[#0F9D8A] hover:bg-[#0F9D8A]/5 font-bold text-xs rounded-[8px] transition-colors cursor-pointer bg-white"
-              >
-                Change Photo
-              </button>
+              {isEditMode && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current.click()}
+                  className="px-4 py-2 border-2 border-[#0F9D8A] text-[#0F9D8A] hover:bg-[#0F9D8A]/5 font-bold text-xs rounded-[8px] transition-colors cursor-pointer bg-white"
+                >
+                  Change Photo
+                </button>
+              )}
               <p className="text-[10px] text-gray-400 font-semibold leading-tight">JPG, PNG supported.<br/>Max size 2MB.</p>
             </div>
 
@@ -285,8 +320,13 @@ export default function Profile() {
                   <input
                     type="text"
                     required
+                    readOnly={!isEditMode}
                     {...regProfile('fullName')}
-                    className="w-full h-11 px-4 border border-[#D1D5DB] rounded-[10px] text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white transition-all shadow-sm"
+                    className={`w-full h-11 px-4 text-sm text-[#374151] transition-all outline-none rounded-[10px] ${
+                      isEditMode 
+                        ? 'border border-[#D1D5DB] focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white shadow-sm' 
+                        : 'border-0 bg-transparent font-semibold shadow-none pointer-events-none'
+                    }`}
                   />
                 </div>
 
@@ -297,7 +337,7 @@ export default function Profile() {
                     type="text"
                     readOnly
                     {...regProfile('employeeId')}
-                    className="w-full h-11 px-4 border border-[#D1D5DB] rounded-[10px] text-sm text-gray-400 bg-gray-50 focus:outline-none cursor-not-allowed shadow-sm"
+                    className="w-full h-11 px-4 border-0 bg-transparent text-sm text-gray-400 font-semibold outline-none cursor-not-allowed shadow-none pointer-events-none"
                   />
                 </div>
 
@@ -307,8 +347,13 @@ export default function Profile() {
                   <input
                     type="text"
                     required
+                    readOnly={!isEditMode}
                     {...regProfile('phone')}
-                    className="w-full h-11 px-4 border border-[#D1D5DB] rounded-[10px] text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white transition-all shadow-sm"
+                    className={`w-full h-11 px-4 text-sm text-[#374151] transition-all outline-none rounded-[10px] ${
+                      isEditMode 
+                        ? 'border border-[#D1D5DB] focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white shadow-sm' 
+                        : 'border-0 bg-transparent font-semibold shadow-none pointer-events-none'
+                    }`}
                   />
                 </div>
 
@@ -316,8 +361,13 @@ export default function Profile() {
                 <div>
                   <label className="block text-xs font-bold text-[#374151] uppercase mb-1.5">Role</label>
                   <select
+                    disabled={!isEditMode}
                     {...regProfile('role')}
-                    className="w-full h-11 px-4 border border-[#D1D5DB] rounded-[10px] text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white transition-all shadow-sm"
+                    className={`w-full h-11 px-4 text-sm text-[#374151] transition-all outline-none rounded-[10px] ${
+                      isEditMode 
+                        ? 'border border-[#D1D5DB] focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white shadow-sm cursor-pointer' 
+                        : 'border-0 bg-transparent font-semibold shadow-none pointer-events-none appearance-none'
+                    }`}
                   >
                     <option value="Pharmacist">Pharmacist</option>
                     <option value="Senior Pharmacist">Senior Pharmacist</option>
@@ -331,8 +381,13 @@ export default function Profile() {
                   <input
                     type="email"
                     required
+                    readOnly={!isEditMode}
                     {...regProfile('email')}
-                    className="w-full h-11 px-4 border border-[#D1D5DB] rounded-[10px] text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white transition-all shadow-sm"
+                    className={`w-full h-11 px-4 text-sm text-[#374151] transition-all outline-none rounded-[10px] ${
+                      isEditMode 
+                        ? 'border border-[#D1D5DB] focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white shadow-sm' 
+                        : 'border-0 bg-transparent font-semibold shadow-none pointer-events-none'
+                    }`}
                   />
                 </div>
 
@@ -342,22 +397,29 @@ export default function Profile() {
                   <input
                     type="text"
                     required
+                    readOnly={!isEditMode}
                     {...regProfile('storeLocation')}
-                    className="w-full h-11 px-4 border border-[#D1D5DB] rounded-[10px] text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white transition-all shadow-sm"
+                    className={`w-full h-11 px-4 text-sm text-[#374151] transition-all outline-none rounded-[10px] ${
+                      isEditMode 
+                        ? 'border border-[#D1D5DB] focus:ring-2 focus:ring-[#0F9D8A]/20 focus:border-[#0F9D8A] bg-white shadow-sm' 
+                        : 'border-0 bg-transparent font-semibold shadow-none pointer-events-none'
+                    }`}
                   />
                 </div>
 
               </div>
 
               {/* Action */}
-              <div className="flex justify-end pt-4 border-t border-gray-100">
-                <button
-                  type="submit"
-                  className="h-11 w-[160px] bg-[#0F9D8A] hover:bg-[#0B7F71] text-white font-bold text-sm rounded-[10px] transition-all shadow-sm shadow-[#0F9D8A]/10 cursor-pointer flex items-center justify-center"
-                >
-                  Save Changes
-                </button>
-              </div>
+              {isEditMode && (
+                <div className="flex justify-end pt-4 border-t border-gray-100">
+                  <button
+                    type="submit"
+                    className="h-11 w-[160px] bg-[#0F9D8A] hover:bg-[#0B7F71] text-white font-bold text-sm rounded-[10px] transition-all shadow-sm shadow-[#0F9D8A]/10 cursor-pointer flex items-center justify-center"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              )}
             </div>
 
           </form>

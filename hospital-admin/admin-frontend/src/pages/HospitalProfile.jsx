@@ -17,6 +17,19 @@ export default function HospitalProfile() {
   const [state, setState] = useState('');
   const [country, setCountry] = useState('India');
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoImage, setLogoImage] = useState('');
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoImage(reader.result);
+        setLogoUrl(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -33,6 +46,7 @@ export default function HospitalProfile() {
         setState(data.state || '');
         setCountry(data.country || 'India');
         setLogoUrl(data.logo_url || '');
+        setLogoImage('');
       }
     } catch (err) {
       console.error(err);
@@ -59,7 +73,8 @@ export default function HospitalProfile() {
         city,
         state,
         country,
-        logo_url: logoUrl
+        logo_url: logoUrl,
+        logoImage
       });
       if (res.data.success) {
         setProfile(res.data.data);
@@ -189,15 +204,22 @@ export default function HospitalProfile() {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hospital Logo URL</label>
-              <input
-                type="text"
-                disabled={!isEditing}
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="e.g. https://domain.com/logo.png"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed font-mono text-[11px]"
-              />
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Hospital Logo</label>
+              <div className="flex items-center gap-3 mt-1">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Hospital Logo" className="w-10 h-10 rounded border border-slate-200 object-contain bg-white shadow-sm" />
+                ) : (
+                  <div className="w-10 h-10 rounded border border-slate-200 bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase">No Logo</div>
+                )}
+                {isEditing && (
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                    className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/95 cursor-pointer focus:outline-none"
+                  />
+                )}
+              </div>
             </div>
           </div>
 

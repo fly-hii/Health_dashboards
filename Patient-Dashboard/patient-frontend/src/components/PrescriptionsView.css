@@ -96,13 +96,13 @@
 /* Modal classes */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
   background-color: rgba(15, 23, 42, 0.4);
   backdrop-filter: blur(4px);
-  z-index: 100;
+  z-index: 1000;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .modal-content {

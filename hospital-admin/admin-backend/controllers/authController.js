@@ -20,6 +20,23 @@ const { getHospitalConnection } = require('../services/databaseResolver');
 const { createModels }      = require('../services/modelFactory');
 const { decrypt } = require('../services/encryptionService');
 const { loginOtpStore } = require('./forgotPasswordController');
+const { getSignedDownloadUrl } = require('../services/s3Service');
+
+const signAvatarUrl = async (avatarUrl) => {
+  if (!avatarUrl) return avatarUrl;
+  if (avatarUrl.includes('s3.ap-south-1.amazonaws.com') || avatarUrl.includes('.s3.amazonaws.com')) {
+    const match = avatarUrl.match(/amazonaws\.com\/(.+)$/);
+    if (match && match[1]) {
+      try {
+        const signedUrl = await getSignedDownloadUrl(match[1]);
+        return signedUrl;
+      } catch (err) {
+        console.warn('⚠️ Warning: Failed to sign S3 URL:', err.message);
+      }
+    }
+  }
+  return avatarUrl;
+};
 
 const isValidLoginOtp = (email, otp) => {
   const record = loginOtpStore.get(email.toLowerCase());
@@ -221,12 +238,15 @@ const login = async (req, res) => {
 
     const token = genToken(user.id, hospitalId, user.role);
 
+    const signedProfileImage = await signAvatarUrl(user.profile_image);
     res.json({
       success: true, token,
       user: {
         id: user.id, name: user.name, email: user.email,
         role: user.role, department: user.department,
-        hospitalId, profile_image: user.profile_image,
+        hospitalId,
+        profile_image: signedProfileImage,
+        profileImage: signedProfileImage,
       },
     });
   } catch (error) {

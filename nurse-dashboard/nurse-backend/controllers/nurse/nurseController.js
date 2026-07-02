@@ -54,12 +54,30 @@ const getDashboardStats = async (req, res, next) => {
       return json;
     });
 
+    // Fetch doctor on duty (matching nurse's department first, then fallback to any active doctor in the hospital)
+    const nurseDept = req.user?.department;
+    let doctorOnDutyUser = null;
+    if (nurseDept) {
+      doctorOnDutyUser = await User.findOne({
+        where: { hospital_id: hospitalId, role: 'DOCTOR', department: nurseDept, status: 'Active' },
+        attributes: ['name']
+      });
+    }
+    if (!doctorOnDutyUser) {
+      doctorOnDutyUser = await User.findOne({
+        where: { hospital_id: hospitalId, role: 'DOCTOR', status: 'Active' },
+        attributes: ['name']
+      });
+    }
+    const doctorOnDuty = doctorOnDutyUser ? `Dr. ${doctorOnDutyUser.name}` : 'No Doctor On Duty';
+
     res.json({
       success: true,
       data: {
         stats: { totalPatientsToday, waitingForVitals, vitalsCompleted, activeAppointments, completedConsultations, missedAppointments },
         departmentWise: departmentData.map(d => ({ department: d.department, count: parseInt(d.dataValues.count) })),
         recentActivities: mappedActivities,
+        doctorOnDuty,
         opdTiming: process.env.OPD_TIMING || '09:00 AM - 06:00 PM',
       },
     });

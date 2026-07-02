@@ -13,6 +13,7 @@ const SuperAdmin = masterDb.define('SuperAdmin', {
   password:   { type: DataTypes.STRING(255), allowNull: false },
   is_active:  { type: DataTypes.BOOLEAN, defaultValue: true },
   last_login: DataTypes.DATE,
+  profile_image: { type: DataTypes.TEXT },
 }, {
   tableName:   'super_admin_users',
   timestamps:  true,

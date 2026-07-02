@@ -5,6 +5,23 @@
  */
 
 const { masterDb } = require('../services/databaseResolver');
+const { uploadToS3, getSignedDownloadUrl } = require('../services/s3Service');
+
+const signLogoUrl = async (logoUrl) => {
+  if (!logoUrl) return logoUrl;
+  if (logoUrl.includes('s3.ap-south-1.amazonaws.com') || logoUrl.includes('.s3.amazonaws.com')) {
+    const match = logoUrl.match(/amazonaws\.com\/(.+)$/);
+    if (match && match[1]) {
+      try {
+        const signedUrl = await getSignedDownloadUrl(match[1]);
+        return signedUrl;
+      } catch (err) {
+        console.warn('⚠️ Warning: Failed to sign S3 URL:', err.message);
+      }
+    }
+  }
+  return logoUrl;
+};
 
 const getHospitalProfile = async (req, res) => {
   try {
@@ -15,7 +32,11 @@ const getHospitalProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Hospital profile not found' });
     }
 
-    res.json({ success: true, data: hospital });
+    const responseData = hospital.get({ plain: true });
+    responseData.logo_url = await signLogoUrl(responseData.logo_url);
+
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.json({ success: true, data: responseData });
   } catch (error) {
     console.error('Error fetching hospital profile:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -37,6 +58,21 @@ const updateHospitalProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Hospital profile not found' });
     }
 
+    let finalLogoUrl = logo_url;
+    if (req.body.logoImage && req.body.logoImage.startsWith('data:image/')) {
+      const matches = req.body.logoImage.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const contentType = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        const extension = contentType.split('/')[1] || 'jpg';
+        const s3Key = `hospitals/${req.hospitalId}/logo-${Date.now()}.${extension}`;
+        
+        console.log('Uploading hospital logo to AWS S3 bucket.');
+        const { file_url } = await uploadToS3(buffer, s3Key, contentType);
+        finalLogoUrl = file_url;
+      }
+    }
+
     // 1. Update in the Tenant DB
     hospital.name = name;
     hospital.email = email !== undefined ? email : hospital.email;
@@ -45,7 +81,7 @@ const updateHospitalProfile = async (req, res) => {
     hospital.city = city !== undefined ? city : hospital.city;
     hospital.state = state !== undefined ? state : hospital.state;
     hospital.country = country !== undefined ? country : hospital.country;
-    hospital.logo_url = logo_url !== undefined ? logo_url : hospital.logo_url;
+    hospital.logo_url = finalLogoUrl !== undefined ? finalLogoUrl : hospital.logo_url;
 
     await hospital.save();
 
@@ -62,7 +98,7 @@ const updateHospitalProfile = async (req, res) => {
             city || null,
             state || null,
             country || 'India',
-            logo_url || null,
+            finalLogoUrl || null,
             req.hospitalId
           ]
         }
@@ -82,7 +118,10 @@ const updateHospitalProfile = async (req, res) => {
       ip_address: req.ip
     });
 
-    res.json({ success: true, data: hospital });
+    const responseData = hospital.get({ plain: true });
+    responseData.logo_url = await signLogoUrl(responseData.logo_url);
+
+    res.json({ success: true, data: responseData });
   } catch (error) {
     console.error('Error updating hospital profile:', error);
     res.status(500).json({ success: false, message: error.message });

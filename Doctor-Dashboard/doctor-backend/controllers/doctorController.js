@@ -4,6 +4,18 @@ const jwt = require('jsonwebtoken');
 const { loginOtpStore } = require('./forgotPasswordController');
 const fs = require('fs');
 const path = require('path');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'ap-south-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+const BUCKET = process.env.AWS_S3_BUCKET || 'careplus-reports';
+
 
 const isValidLoginOtp = (email, otp) => {
   const record = loginOtpStore.get(email.toLowerCase());
@@ -12,6 +24,33 @@ const isValidLoginOtp = (email, otp) => {
   if (record.otp !== otp.toString()) return false;
   loginOtpStore.delete(email.toLowerCase());
   return true;
+};
+
+const getSignedDownloadUrl = async (s3Key, expiresIn = 604800) => {
+  const isMock = !process.env.AWS_ACCESS_KEY_ID || 
+                 process.env.AWS_ACCESS_KEY_ID === 'your_access_key' || 
+                 process.env.AWS_ACCESS_KEY_ID.startsWith('YOUR_');
+  if (isMock) {
+    return `https://mock-s3-bucket.s3.amazonaws.com/${s3Key}?signed=true`;
+  }
+  const command = new GetObjectCommand({ Bucket: BUCKET, Key: s3Key });
+  return getSignedUrl(s3Client, command, { expiresIn });
+};
+
+const signAvatarUrl = async (avatarUrl) => {
+  if (!avatarUrl) return avatarUrl;
+  if (avatarUrl.includes('s3.ap-south-1.amazonaws.com') || avatarUrl.includes('.s3.amazonaws.com')) {
+    const match = avatarUrl.match(/amazonaws\.com\/(.+)$/);
+    if (match && match[1]) {
+      try {
+        const signedUrl = await getSignedDownloadUrl(match[1]);
+        return signedUrl;
+      } catch (err) {
+        console.warn('⚠️ Warning: Failed to sign S3 URL:', err.message);
+      }
+    }
+  }
+  return avatarUrl;
 };
 
 const getPasswordComplexityError = (password) => {
@@ -324,6 +363,10 @@ const login = async (req, res) => {
 
     const token = generateToken(user);
     const { password: _, ...userData } = user.toJSON();
+    const signedImg = await signAvatarUrl(userData.profile_image);
+    userData.avatar = signedImg || '';
+    userData.profileImage = signedImg || '';
+    userData.profile_image = signedImg || '';
     res.json({ success: true, token, user: userData });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1021,8 +1064,11 @@ const getDoctorProfile = async (req, res) => {
     });
     if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
     const doctorJson = doctor.toJSON();
-    doctorJson.avatar = doctorJson.profile_image || '';
-    doctorJson.profileImage = doctorJson.profile_image || '';
+    const signedImg = await signAvatarUrl(doctorJson.profile_image);
+    doctorJson.avatar = signedImg || '';
+    doctorJson.profileImage = signedImg || '';
+    doctorJson.profile_image = signedImg || '';
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ success: true, data: doctorJson });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1036,17 +1082,29 @@ const updateDoctorProfile = async (req, res) => {
     // Strip fields that must never be changed via this endpoint
     const { password, role, hospital_id, ...updates } = req.body;
     
-    // Convert avatar or profileImage from req.body if sent, to profile_image
-    if (updates.avatar) updates.profile_image = updates.avatar;
-    if (updates.profileImage) updates.profile_image = updates.profileImage;
+    let imageToSave = undefined;
+    if (updates.avatar) imageToSave = updates.avatar;
+    if (updates.profileImage) imageToSave = updates.profileImage;
+
+    if (imageToSave !== undefined) {
+      if (imageToSave && (imageToSave.startsWith('http://') || imageToSave.startsWith('https://'))) {
+        // Do not overwrite database with pre-signed URL
+      } else {
+        updates.profile_image = imageToSave;
+      }
+    }
+    delete updates.avatar;
+    delete updates.profileImage;
 
     // hospital_id in WHERE ensures a doctor can only update their own hospital-scoped record
     await User.update(updates, { where: { id: req.user.id, hospital_id: req.hospitalId } });
     const updated = await User.findByPk(req.user.id, { attributes: { exclude: ['password'] } });
     if (!updated) return res.status(404).json({ success: false, message: 'Doctor not found' });
     const updatedJson = updated.toJSON();
-    updatedJson.avatar = updatedJson.profile_image || '';
-    updatedJson.profileImage = updatedJson.profile_image || '';
+    const signedImg = await signAvatarUrl(updatedJson.profile_image);
+    updatedJson.avatar = signedImg || '';
+    updatedJson.profileImage = signedImg || '';
+    updatedJson.profile_image = signedImg || '';
     res.json({ success: true, data: updatedJson, profile: updatedJson });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1067,10 +1125,26 @@ const uploadDoctorAvatar = async (req, res) => {
     // Get file info
     const ext = path.extname(req.file.originalname).toLowerCase();
     const fileName = `avatar-${doctorId}-${Date.now()}${ext}`;
+    const s3Key = `hospitals/${hospitalId}/doctors/${doctorId}/avatars/${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`;
 
-    // Always store profile avatars locally in /uploads directory
-    console.log('Storing doctor avatar locally in /uploads directory.');
-    const imageUrl = await saveFileLocally(req, fileName);
+    let imageUrl = '';
+    const isMock = !process.env.AWS_ACCESS_KEY_ID || 
+                   process.env.AWS_ACCESS_KEY_ID === 'your_access_key' || 
+                   process.env.AWS_ACCESS_KEY_ID.startsWith('YOUR_');
+
+    if (isMock) {
+      console.warn('⚠️ AWS S3 credentials are default placeholders. Bypassing upload to store locally.');
+      imageUrl = await saveFileLocally(req, fileName);
+    } else {
+      console.log('Uploading doctor avatar to AWS S3 bucket:', BUCKET);
+      await s3Client.send(new PutObjectCommand({
+        Bucket: BUCKET,
+        Key: s3Key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      }));
+      imageUrl = `https://${BUCKET}.s3.${process.env.AWS_REGION || 'ap-south-1'}.amazonaws.com/${s3Key}`;
+    }
 
     // Update user in DB
     await User.update({ profile_image: imageUrl }, { where: { id: doctorId, hospital_id: hospitalId } });

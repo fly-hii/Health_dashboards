@@ -94,15 +94,30 @@ export default function Sidebar({ isOpen, setIsOpen, isCollapsed, onToggleCollap
 
         <div className="sidebar-footer">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: 'var(--gradient)',
-              display: 'flex', alignItems: 'center', justify-content: 'center',
-              fontWeight: 700, color: 'white', fontSize: 14,
-              flexShrink: 0
-            }}>
-              {user?.name?.[0] || 'S'}
-            </div>
+            {user?.profile_image ? (
+              <img 
+                src={user.profile_image} 
+                alt="Avatar" 
+                style={{ 
+                  width: 36, 
+                  height: 36, 
+                  borderRadius: '50%', 
+                  objectFit: 'cover', 
+                  flexShrink: 0,
+                  border: '1px solid rgba(255,255,255,0.2)' 
+                }} 
+              />
+            ) : (
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: 'var(--gradient)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, color: 'white', fontSize: 14,
+                flexShrink: 0
+              }}>
+                {user?.name?.[0] || 'S'}
+              </div>
+            )}
             <div className="user-details">
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{user?.name || 'Super Admin'}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Super Administrator</div>
