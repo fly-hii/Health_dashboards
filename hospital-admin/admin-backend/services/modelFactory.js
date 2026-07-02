@@ -15,7 +15,12 @@
  *   const models = createModels(db);
  *   const { Patient, Appointment } = models;
  */
-const { DataTypes } = require('sequelize');
+let DataTypes;
+try {
+  DataTypes = require('sequelize').DataTypes;
+} catch (err) {
+  DataTypes = require.main.require('sequelize').DataTypes;
+}
 
 // Model cache: WeakMap<sequelizeInstance, models>
 // WeakMap allows garbage-collection when the Sequelize instance is evicted
